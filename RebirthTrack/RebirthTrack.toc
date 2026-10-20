@@ -1,8 +1,8 @@
 ## Interface: 120001, 50501, 20505, 11508
 ## Title: Rebirth Track
-## Notes: Prende el registro de combate avanzado al entrar a una banda y anota la sesión (F0: medición).
+## Notes: Prende el registro de combate avanzado al entrar a una banda o mazmorra y anota la sesión.
 ## Author: Rebirth Knights
-## Version: 0.0.2
+## Version: 0.0.3
 ## SavedVariables: RebirthTrackDB
 
 RebirthTrack.lua

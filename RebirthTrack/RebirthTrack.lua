@@ -17,7 +17,10 @@ local function say(msg) print(PREFIX .. msg) end
 local function db()
   RebirthTrackDB = RebirthTrackDB or {}
   RebirthTrackDB.sessions = RebirthTrackDB.sessions or {}
-  RebirthTrackDB.settings = RebirthTrackDB.settings or { dungeons = false }
+  RebirthTrackDB.settings = RebirthTrackDB.settings or {}
+  -- Desde 0.0.3 las mazmorras se registran por defecto (la app ya las sube); /rt dungeons las apaga.
+  local s = RebirthTrackDB.settings
+  if (s.v or 0) < 3 then s.dungeons, s.v = true, 3 end
   return RebirthTrackDB
 end
 
@@ -210,6 +213,6 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().sessions = {}
     say("sesiones borradas.")
   else
-    say("comandos: /rt status · /rt start · /rt stop · /rt dungeons (incluir mazmorras) · /rt reset")
+    say("comandos: /rt status · /rt start · /rt stop · /rt dungeons (mazmorras sí/no) · /rt reset")
   end
 end

@@ -3,7 +3,7 @@
 Addon de la guild **Rebirth Knights** para [Rebirth Track](https://rebirthknights.fun). Por ahora el
 addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet):
 
-- prende el registro de combate avanzado al entrar a una banda;
+- prende el registro de combate avanzado al entrar a una banda o mazmorra;
 - anota la sesión;
 - sirve para medir qué datos deja el juego y cuántos.
 
@@ -41,7 +41,7 @@ addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet)
   |---|---|
   | `/rt` | Estado: registro prendido, modo avanzado, eventos, personajes, encuentros. |
   | `/rt start` / `/rt stop` | Sesión manual en cualquier lado (para probar en el mundo). |
-  | `/rt dungeons` | Incluye también las mazmorras de 5 (para probar sin armar una banda). |
+  | `/rt dungeons` | Prende o apaga el registro en mazmorras (desde 0.0.3 vienen prendidas). |
   | `/rt reset` | Borra las sesiones guardadas. |
 
 - El juego escribe lo anotado en
