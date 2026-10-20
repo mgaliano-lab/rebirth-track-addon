@@ -1,6 +1,7 @@
 # Addon Rebirth Track — F0 (medición)
 
-Primer paso del [plan del addon](../docs/PLAN-ADDON.md). Por ahora el addon **no sube nada**:
+Addon de la guild **Rebirth Knights** para [Rebirth Track](https://rebirthknights.fun). Por ahora el
+addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet):
 
 - prende el registro de combate avanzado al entrar a una banda;
 - anota la sesión;
@@ -86,10 +87,14 @@ Con eso cerramos la F0 y respondemos:
 - ¿Cada cuánto hay posición de cada jugador? Define si el mapa de movimiento vale la pena.
 - ¿Las tres versiones Classic escriben el mismo formato? Define si el parser es uno solo.
 
+La subida de los registros la hace la app
+[Rebirth Track Uploader](https://github.com/mgaliano-lab/rebirth-track-uploader), que además
+instala y actualiza este addon sola.
+
 ## Publicar una versión
 
 1. Subí `## Version:` en `RebirthTrack/RebirthTrack.toc`.
-2. Corré `scripts/release-addon.sh`. Arma dos zip:
+2. Corré `scripts/release.sh` (con `AWS_PROFILE=mgaliano`). Arma dos zip:
    - el de instalar, con `RebirthTrack/` en la raíz;
    - el de herramientas.
 
