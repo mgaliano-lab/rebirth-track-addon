@@ -86,13 +86,53 @@ local function startSession(reason)
     name or "?", difficultyName or "", advancedOn() and "|cff3fbf3fACTIVO|r" or "|cffff4040INACTIVO|r"))
 end
 
+local function fmtDuration(sec)
+  sec = math.max(0, math.floor(sec))
+  local h, m = math.floor(sec / 3600), math.floor((sec % 3600) / 60)
+  if h > 0 then return ("%d h %02d min"):format(h, m) end
+  return ("%d min"):format(m)
+end
+
+local function fmtNumber(n)
+  local s = tostring(math.floor(n))
+  while true do
+    local r, k = s:gsub("^(%d+)(%d%d%d)", "%1.%2")
+    s = r
+    if k == 0 then break end
+  end
+  return s
+end
+
+-- Resumen de lo registrado en la sesión (al salir de la banda y con /rt status).
+local function summary(sess, title)
+  local finished = sess.endedAt or time()
+  local players, kills, wipes = 0, 0, 0
+  for _ in pairs(sess.roster) do players = players + 1 end
+  for _, e in ipairs(sess.encounters) do
+    if e.kill then kills = kills + 1 elseif e.finish then wipes = wipes + 1 end
+  end
+  say(("%s |cffffffff%s|r · %s · %d jugadores · %s eventos de combate"):format(
+    title, sess.instance.name or "?", fmtDuration(finished - sess.startedAt), players, fmtNumber(sess.events.total)))
+  if #sess.encounters == 0 then
+    say("  sin encuentros con jefes.")
+  else
+    say(("  jefes: |cff3fbf3f%d muertos|r, |cffff4040%d wipes|r"):format(kills, wipes))
+    for i, e in ipairs(sess.encounters) do
+      if i > 12 then say(("  ... y %d más"):format(#sess.encounters - 12)) break end
+      local res = e.kill and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14|t" or (e.finish and "|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14|t" or "|TInterface\\RAIDFRAME\\ReadyCheck-Waiting:14|t")
+      local dur = e.finish and (" (%s)"):format(fmtDuration(e.finish - e.start)) or ""
+      say(("  %s %s%s"):format(res, e.name or "?", dur))
+    end
+  end
+  say("  El registro de combate lo sube la app Rebirth Track Uploader (si está abierta) a rebirthknights.fun.")
+end
+
 local function stopSession(why)
   if not session then return end
   session.endedAt = time()
   session.endReason = why
-  local mins = math.max(1, (session.endedAt - session.startedAt) / 60)
-  say(("sesión cerrada: %d eventos en %.0f min (%.0f por minuto). Hacé /reload para guardarla."):format(
-    session.events.total, mins, session.events.total / mins))
+  summary(session, "Resumen de")
+  say("Hacé /reload o salí del juego para que WoW guarde el resumen en disco.")
   session = nil
   disableLogging()
 end
@@ -143,12 +183,25 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_
 end
 
 SLASH_REBIRTHTRACK1 = "/rt"
+local function status()
+  say(("registro de combate %s · modo avanzado %s"):format(
+    LoggingCombat() and "|cff3fbf3fPRENDIDO|r" or "apagado", advancedOn() and "|cff3fbf3fsí|r" or "|cffff4040no|r"))
+  if session then
+    summary(session, "Registrando")
+  else
+    local last = db().sessions[#db().sessions]
+    if last then summary(last, "Última banda:") else say("todavía no se registró ninguna banda.") end
+  end
+end
+
 SlashCmdList.REBIRTHTRACK = function(msg)
   local cmd = (msg or ""):lower():match("^%s*(%S*)")
   if cmd == "start" then
     startSession("manual")
   elseif cmd == "stop" then
     stopSession("manual")
+  elseif cmd == "status" or cmd == "estado" or cmd == "" then
+    status()
   elseif cmd == "dungeons" or cmd == "mazmorras" then
     db().settings.dungeons = not db().settings.dungeons
     say("mazmorras " .. (db().settings.dungeons and "INCLUIDAS" or "excluidas") .. ".")
@@ -157,13 +210,6 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().sessions = {}
     say("sesiones borradas.")
   else
-    local n = 0
-    if session then for _ in pairs(session.roster) do n = n + 1 end end
-    say(("registro de combate %s · modo avanzado %s · %s"):format(
-      LoggingCombat() and "|cff3fbf3fPRENDIDO|r" or "apagado",
-      advancedOn() and "|cff3fbf3fsí|r" or "|cffff4040no|r",
-      session and ("sesión en |cffffffff%s|r: %d eventos, %d personajes, %d encuentros"):format(
-        session.instance.name or "?", session.events.total, n, #session.encounters) or "sin sesión"))
-    say("comandos: /rt start · /rt stop · /rt dungeons (incluir mazmorras) · /rt reset")
+    say("comandos: /rt status · /rt start · /rt stop · /rt dungeons (incluir mazmorras) · /rt reset")
   end
 end

@@ -2,7 +2,7 @@
 ## Title: Rebirth Track
 ## Notes: Prende el registro de combate avanzado al entrar a una banda y anota la sesión (F0: medición).
 ## Author: Rebirth Knights
-## Version: 0.0.1
+## Version: 0.0.2
 ## SavedVariables: RebirthTrackDB
 
 RebirthTrack.lua
