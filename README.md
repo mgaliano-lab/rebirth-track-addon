@@ -85,3 +85,13 @@ Con eso cerramos la F0 y respondemos:
 - ¿Cuánto pesa una noche y un lote? Define el almacenamiento.
 - ¿Cada cuánto hay posición de cada jugador? Define si el mapa de movimiento vale la pena.
 - ¿Las tres versiones Classic escriben el mismo formato? Define si el parser es uno solo.
+
+## Publicar una versión
+
+1. Subí `## Version:` en `RebirthTrack/RebirthTrack.toc`.
+2. Corré `scripts/release-addon.sh`. Arma dos zip:
+   - el de instalar, con `RebirthTrack/` en la raíz;
+   - el de herramientas.
+
+   Los sube a `ast.rebirthknights.fun/addon/` y actualiza `latest.json`, que es lo que ofrece la
+   pantalla de Raids. Una versión ya publicada no se pisa.
