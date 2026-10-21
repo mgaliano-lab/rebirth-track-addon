@@ -1,0 +1,8 @@
+## Interface: 11508
+## Title: |TInterface\AddOns\RebirthTrack\icon:16:16|t Rebirth Track
+## Notes: Prende el registro de combate avanzado al entrar a una banda o mazmorra y anota la sesión.
+## Author: Rebirth Knights
+## Version: 0.0.7
+## SavedVariables: RebirthTrackDB
+
+RebirthTrack.lua
