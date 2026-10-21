@@ -185,6 +185,58 @@ for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_
   f:RegisterEvent(e)
 end
 
+-- ── Vincular el personaje a la cuenta de Rebirth Track ─────────────────────────────────────
+-- WoW no deja que un addon se conecte a internet: el pedido queda anotado en RebirthTrackDB.links
+-- y Rebirth Track Uploader (la app de la PC, ya vinculada a tu Discord) lo manda al sitio cuando el
+-- juego guarda (al /reload o al salir). Formato: v1|región|reino|nombre|clase|nivel|guid|proyecto|build|hora
+local REGIONS = { [1] = "us", [2] = "kr", [3] = "eu", [4] = "tw", [5] = "cn" }
+local function linkCharacter()
+  local name = UnitName("player")
+  local realm = GetRealmName()
+  local _, class = UnitClass("player")
+  local build = select(1, GetBuildInfo())
+  local region = REGIONS[GetCurrentRegion and GetCurrentRegion() or 1] or "us"
+  local rec = table.concat({ "v1", region, realm, name, class or "", UnitLevel("player") or 0, UnitGUID("player") or "",
+    WOW_PROJECT_ID or 0, build or "", time() }, "|")
+  local d = db()
+  d.links = d.links or {}
+  for i = #d.links, 1, -1 do -- uno por personaje: el último pedido reemplaza al anterior
+    if d.links[i]:find("|" .. realm .. "|" .. name .. "|", 1, true) then table.remove(d.links, i) end
+  end
+  table.insert(d.links, rec)
+  say(("|cff3fbf3f%s-%s|r anotado para vincular. La app lo sube al sitio cuando el juego guarde (al recargar o al salir)."):format(name, realm))
+  StaticPopup_Show("REBIRTHTRACK_LINK_RELOAD")
+end
+
+StaticPopupDialogs["REBIRTHTRACK_LINK_RELOAD"] = {
+  text = "Rebirth Track: personaje anotado para vincular a tu cuenta.\n\n¿Recargar la interfaz ahora para que la app lo suba ya?",
+  button1 = "Recargar ahora", button2 = "Después",
+  OnAccept = function() ReloadUI() end,
+  timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+}
+
+-- Botón en la ventana del personaje (C).
+local linkButton
+local function createLinkButton()
+  if linkButton or not CharacterFrame then return end
+  linkButton = CreateFrame("Button", "RebirthTrackLinkButton", CharacterFrame, "UIPanelButtonTemplate")
+  linkButton:SetSize(150, 22)
+  linkButton:SetPoint("TOPRIGHT", CharacterFrame, "BOTTOMRIGHT", 0, -2)
+  linkButton:SetText("Vincular a Rebirth Track")
+  linkButton:SetScript("OnClick", linkCharacter)
+  linkButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine("Rebirth Track")
+    GameTooltip:AddLine("Vincula este personaje (reino, región, clase y versión) a tu usuario de Discord en rebirthknights.fun.", 1, 1, 1, true)
+    GameTooltip:AddLine("Necesita Rebirth Track Uploader vinculado en esta PC.", 0.7, 0.7, 0.7, true)
+    GameTooltip:Show()
+  end)
+  linkButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
+local lf = CreateFrame("Frame")
+lf:RegisterEvent("PLAYER_LOGIN")
+lf:SetScript("OnEvent", createLinkButton)
+
 SLASH_REBIRTHTRACK1 = "/rt"
 local function status()
   say(("registro de combate %s · modo avanzado %s"):format(
@@ -209,10 +261,12 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().settings.dungeons = not db().settings.dungeons
     say("mazmorras " .. (db().settings.dungeons and "INCLUIDAS" or "excluidas") .. ".")
     checkZone()
+  elseif cmd == "vincular" or cmd == "link" then
+    linkCharacter()
   elseif cmd == "reset" then
     db().sessions = {}
     say("sesiones borradas.")
   else
-    say("comandos: /rt status · /rt start · /rt stop · /rt dungeons (mazmorras sí/no) · /rt reset")
+    say("comandos: /rt status · /rt vincular · /rt start · /rt stop · /rt dungeons (mazmorras sí/no) · /rt reset")
   end
 end
