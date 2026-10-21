@@ -47,6 +47,7 @@ addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet)
   | `/rt registrar` · `start` / `/rt detener` · `stop` | Sesión manual en cualquier lado (para probar en el mundo). |
   | `/rt mazmorras` · `dungeons` | Prende o apaga el registro en mazmorras (desde 0.0.3 vienen prendidas). |
   | `/rt borrar` · `reset` | Borra las sesiones guardadas. |
+  | `/rt minimapa` · `minimap` | Muestra u oculta el botón del minimapa (clic: ventana · clic derecho: vincular · arrastrar: mover). |
 
 - El juego escribe lo anotado en
   `WTF/Account/<CUENTA>/SavedVariables/RebirthTrack.lua` **recién al hacer `/reload`, al salir o al
@@ -104,3 +105,7 @@ instala y actualiza este addon sola.
 
    Los sube a `ast.rebirthknights.fun/addon/` y actualiza `latest.json`, que es lo que ofrece la
    pantalla de Raids. Una versión ya publicada no se pisa.
+
+## Pruebas
+
+`lua tests/run.lua` corre el addon con una simulación mínima de la API de WoW (ventana, botones, comandos y que `/rt` quede registrado).

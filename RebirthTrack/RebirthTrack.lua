@@ -244,6 +244,7 @@ local HELP = table.concat({
   "/rt vincular · link   /rt estado · status",
   "/rt registrar · start   /rt detener · stop",
   "/rt mazmorras · dungeons   /rt borrar · reset",
+  "/rt minimapa · minimap (mostrar u ocultar el botón)",
   "/rt ayuda · help",
 }, "\n")
 
@@ -294,8 +295,12 @@ local function createUI()
   ui:SetPoint(u.point or "CENTER", UIParent, u.rel or "CENTER", u.x or 300, u.y or 120)
 
   local title = ui:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("TOP", 0, -14)
+  title:SetPoint("TOP", 8, -14)
   title:SetText("Rebirth Track")
+  local logo = ui:CreateTexture(nil, "OVERLAY")
+  logo:SetSize(18, 18)
+  logo:SetPoint("RIGHT", title, "LEFT", -4, 0)
+  logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
   local close = CreateFrame("Button", nil, ui, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -2, -2)
   close:SetScript("OnClick", function() ui:Hide(); ui_db().shown = false; say("ventana cerrada: /rt mostrar para volver a abrirla.") end)
@@ -350,12 +355,67 @@ local function openUI(help)
   refreshUI()
 end
 
+-- ── Botón en el minimapa ─────────────────────────────────────────────────────────────────
+-- Clic: abre/cierra la ventana · arrastrar: lo mueve alrededor del minimapa · /rt minimapa lo oculta.
+local ICON = "Interface\\AddOns\\RebirthTrack\\icon"
+local mm
+local function placeMinimap(angle)
+  local r = (Minimap:GetWidth() / 2) + 6
+  mm:ClearAllPoints()
+  mm:SetPoint("CENTER", Minimap, "CENTER", math.cos(angle) * r, math.sin(angle) * r)
+end
+local function createMinimapButton()
+  if mm or not Minimap then return end
+  mm = CreateFrame("Button", "RebirthTrackMinimapButton", Minimap)
+  mm:SetSize(31, 31)
+  mm:SetFrameStrata("MEDIUM")
+  mm:SetFrameLevel(8)
+  mm:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  mm:RegisterForDrag("LeftButton")
+  local icon = mm:CreateTexture(nil, "BACKGROUND")
+  icon:SetSize(20, 20)
+  icon:SetPoint("CENTER", 0, 1)
+  icon:SetTexture(ICON)
+  local border = mm:CreateTexture(nil, "OVERLAY")
+  border:SetSize(53, 53)
+  border:SetPoint("TOPLEFT")
+  border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+  mm:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight")
+  mm:SetScript("OnClick", function(_, button)
+    if button == "RightButton" then linkCharacter(); return end
+    if ui and ui:IsShown() then ui:Hide(); ui_db().shown = false else openUI(false) end
+  end)
+  mm:SetScript("OnDragStart", function(self)
+    self:SetScript("OnUpdate", function()
+      local mx, my = Minimap:GetCenter()
+      local cx, cy = GetCursorPosition()
+      local s = Minimap:GetEffectiveScale()
+      local a = math.atan2(cy / s - my, cx / s - mx)
+      ui_db().minimapAngle = a
+      placeMinimap(a)
+    end)
+  end)
+  mm:SetScript("OnDragStop", function(self) self:SetScript("OnUpdate", nil) end)
+  mm:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+    GameTooltip:AddLine("Rebirth Track")
+    GameTooltip:AddLine("Clic: abrir o cerrar la ventana", 1, 1, 1)
+    GameTooltip:AddLine("Clic derecho: vincular este personaje", 1, 1, 1)
+    GameTooltip:AddLine("Arrastrar: moverlo · /rt minimapa: ocultarlo", 0.7, 0.7, 0.7)
+    GameTooltip:Show()
+  end)
+  mm:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  placeMinimap(ui_db().minimapAngle or math.rad(200))
+  mm:SetShown(ui_db().minimap ~= false)
+end
+
 local uf = CreateFrame("Frame")
 uf:RegisterEvent("PLAYER_LOGIN")
 uf:RegisterEvent("PLAYER_ENTERING_WORLD")
 uf:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" then
     createUI()
+    createMinimapButton()
     if ui_db().shown == false then ui:Hide() end
   end
   C_Timer.After(1.5, refreshUI)
@@ -372,8 +432,11 @@ local COMMANDS = {
   detener = "stop", parar = "stop", stop = "stop",
   mazmorras = "dungeons", dungeons = "dungeons",
   borrar = "reset", reset = "reset",
+  minimapa = "minimap", minimap = "minimap",
 }
 
+SLASH_REBIRTHTRACK1 = "/rt"
+SLASH_REBIRTHTRACK2 = "/rebirthtrack"
 SlashCmdList.REBIRTHTRACK = function(msg)
   local word = (msg or ""):lower():match("^%s*(%S*)")
   local cmd = word == "" and "toggle" or COMMANDS[word]
@@ -390,6 +453,10 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().settings.dungeons = not db().settings.dungeons
     say("mazmorras " .. (db().settings.dungeons and "INCLUIDAS" or "excluidas") .. ".")
     checkZone()
+  elseif cmd == "minimap" then
+    ui_db().minimap = ui_db().minimap == false
+    if mm then mm:SetShown(ui_db().minimap) end
+    say("botón del minimapa " .. (ui_db().minimap and "visible" or "oculto (/rt minimapa para mostrarlo)") .. ".")
   elseif cmd == "reset" then
     db().sessions = {}
     say("sesiones borradas.")
