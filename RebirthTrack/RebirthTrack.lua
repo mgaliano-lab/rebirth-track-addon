@@ -14,6 +14,132 @@ local startedLogging = false -- si el /combatlog lo prendimos nosotros
 
 local function say(msg) print(PREFIX .. msg) end
 
+-- ── Textos en español (por defecto) e inglés ───────────────────────────────────────────
+-- El idioma se elige con el botón ES/EN de la ventana o /rt idioma (language) y queda guardado.
+local TEXTS = {
+  es = {
+    recording = "registrando |cffffffff%s|r (%s) · registro de combate avanzado %s.",
+    ACTIVE = "|cff3fbf3fACTIVO|r", INACTIVE = "|cffff4040INACTIVO|r",
+    hm = "%d h %02d min", m = "%d min",
+    sumLine = "%s |cffffffff%s|r · %s · %d jugadores · %s eventos de combate",
+    noBosses = "  sin encuentros con jefes.",
+    bosses = "  jefes: |cff3fbf3f%d muertos|r, |cffff4040%d wipes|r",
+    more = "  ... y %d más",
+    uploadedBy = "  El registro de combate lo sube la app Rebirth Track Uploader (si está abierta) a rebirthknights.fun.",
+    summaryOf = "Resumen de", recordingTitle = "Registrando", lastRaid = "Última banda:",
+    reloadToSave = "Hacé /reload o salí del juego para que WoW guarde el resumen en disco.",
+    leftInstance = "salió de la instancia",
+    linked = "|cff3fbf3f%s-%s|r anotado para vincular. La app lo sube al sitio cuando el juego guarde (al recargar o al salir).",
+    linkPopup = "Rebirth Track: personaje anotado para vincular a tu cuenta.\n\n¿Recargar la interfaz ahora para que la app lo suba ya?",
+    reloadNow = "Recargar ahora", later = "Después",
+    statusLine = "registro de combate %s · modo avanzado %s",
+    ON = "|cff3fbf3fPRENDIDO|r", off = "apagado", yes = "|cff3fbf3fsí|r", no = "|cffff4040no|r",
+    noneYet = "todavía no se registró ninguna banda.",
+    stop = "Detener registro", start = "Registrar ahora", dungeons = "Mazmorras: ",
+    stateOn = "|cff3fbf3fRegistrando|r", stateOff = "|cff999999Registro apagado|r",
+    closed = "ventana cerrada: /rt mostrar para volver a abrirla.",
+    bLink = "Vincular personaje", tLink = "Asocia este personaje a tu usuario de Discord en rebirthknights.fun (/rt vincular).",
+    bStatus = "Estado", tStatus = "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).",
+    tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
+    bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
+    bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).",
+    back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
+    mmOpen = "Clic: abrir o cerrar la ventana", mmLink = "Clic derecho: vincular este personaje",
+    mmMove = "Arrastrar: moverlo · /rt minimapa: ocultarlo", tResize = "Arrastrar para cambiar el tamaño",
+    dungeonsSay = "mazmorras %s.", included = "INCLUIDAS", excluded = "excluidas",
+    mmSay = "botón del minimapa %s.", visible = "visible", hidden = "oculto (/rt minimapa para mostrarlo)",
+    resetSay = "sesiones borradas.", unknown = "no conozco «%s». Probá /rt ayuda (o /rt help).",
+    langSay = "idioma: español.",
+    help = {
+      "|cffe3a42cQué hace|r",
+      "Al entrar a una banda o mazmorra prende el registro de combate avanzado del juego. Rebirth Track Uploader (la app de tu PC) sube esos registros a rebirthknights.fun.",
+      "",
+      "|cffe3a42cBotones|r",
+      "• |cffffffffVincular personaje|r: lo asocia a tu usuario de Discord en el sitio (reino, región, clase y versión). La app lo manda cuando el juego guarda: al recargar o salir.",
+      "• |cffffffffEstado|r: si el registro está prendido y qué se anotó.",
+      "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
+      "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
+      "• |cffffffffES / EN|r: idioma del addon.",
+      "",
+      "|cffe3a42cComandos|r (español o inglés)",
+      "/rt mostrar · show",
+      "/rt ocultar · hide",
+      "/rt vincular · link",
+      "/rt estado · status",
+      "/rt registrar · start",
+      "/rt detener · stop",
+      "/rt mazmorras · dungeons",
+      "/rt borrar · reset",
+      "/rt minimapa · minimap",
+      "/rt idioma · language (es / en)",
+      "/rt ayuda · help",
+    },
+  },
+  en = {
+    recording = "recording |cffffffff%s|r (%s) · advanced combat logging %s.",
+    ACTIVE = "|cff3fbf3fON|r", INACTIVE = "|cffff4040OFF|r",
+    hm = "%d h %02d min", m = "%d min",
+    sumLine = "%s |cffffffff%s|r · %s · %d players · %s combat events",
+    noBosses = "  no boss encounters.",
+    bosses = "  bosses: |cff3fbf3f%d killed|r, |cffff4040%d wipes|r",
+    more = "  ... and %d more",
+    uploadedBy = "  The combat log is uploaded to rebirthknights.fun by the Rebirth Track Uploader app (if it is running).",
+    summaryOf = "Summary of", recordingTitle = "Recording", lastRaid = "Last raid:",
+    reloadToSave = "Type /reload or log out so WoW saves the summary to disk.",
+    leftInstance = "left the instance",
+    linked = "|cff3fbf3f%s-%s|r queued for linking. The app uploads it when the game saves (on reload or logout).",
+    linkPopup = "Rebirth Track: character queued for linking to your account.\n\nReload the UI now so the app uploads it right away?",
+    reloadNow = "Reload now", later = "Later",
+    statusLine = "combat logging %s · advanced mode %s",
+    ON = "|cff3fbf3fON|r", off = "off", yes = "|cff3fbf3fyes|r", no = "|cffff4040no|r",
+    noneYet = "no raid recorded yet.",
+    stop = "Stop recording", start = "Record now", dungeons = "Dungeons: ",
+    stateOn = "|cff3fbf3fRecording|r", stateOff = "|cff999999Logging off|r",
+    closed = "window closed: /rt show to open it again.",
+    bLink = "Link character", tLink = "Links this character to your Discord user on rebirthknights.fun (/rt link).",
+    bStatus = "Status", tStatus = "Shows in chat whether logging is on and what was recorded (/rt status).",
+    tRec = "Turn logging on or off manually (/rt start · /rt stop).",
+    bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
+    bHelp = "Help", tHelp = "How to use it (/rt help).",
+    back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
+    mmOpen = "Click: open or close the window", mmLink = "Right-click: link this character",
+    mmMove = "Drag: move it · /rt minimap: hide it", tResize = "Drag to resize",
+    dungeonsSay = "dungeons %s.", included = "INCLUDED", excluded = "excluded",
+    mmSay = "minimap button %s.", visible = "visible", hidden = "hidden (/rt minimap to show it)",
+    resetSay = "sessions cleared.", unknown = "unknown command «%s». Try /rt help (or /rt ayuda).",
+    langSay = "language: English.",
+    help = {
+      "|cffe3a42cWhat it does|r",
+      "When you enter a raid or dungeon it turns on the game's advanced combat logging. Rebirth Track Uploader (the app on your PC) uploads those logs to rebirthknights.fun.",
+      "",
+      "|cffe3a42cButtons|r",
+      "• |cffffffffLink character|r: links it to your Discord user on the site (realm, region, class and version). The app sends it when the game saves: on reload or logout.",
+      "• |cffffffffStatus|r: whether logging is on and what was recorded.",
+      "• |cffffffffRecord / Stop|r: manually, if you want to record outside an instance.",
+      "• |cffffffffDungeons|r: include dungeons or not (included by default).",
+      "• |cffffffffES / EN|r: addon language.",
+      "",
+      "|cffe3a42cCommands|r (English or Spanish)",
+      "/rt show · mostrar",
+      "/rt hide · ocultar",
+      "/rt link · vincular",
+      "/rt status · estado",
+      "/rt start · registrar",
+      "/rt stop · detener",
+      "/rt dungeons · mazmorras",
+      "/rt reset · borrar",
+      "/rt minimap · minimapa",
+      "/rt language · idioma (es / en)",
+      "/rt help · ayuda",
+    },
+  },
+}
+local function lang()
+  local s = RebirthTrackDB and RebirthTrackDB.settings
+  return (s and TEXTS[s.lang or ""]) and s.lang or "es"
+end
+local function L(key) return TEXTS[lang()][key] or TEXTS.es[key] or key end
+
 local function db()
   RebirthTrackDB = RebirthTrackDB or {}
   RebirthTrackDB.sessions = RebirthTrackDB.sessions or {}
@@ -85,15 +211,14 @@ local function startSession(reason)
   table.insert(s, session)
   while #s > MAX_SESSIONS do table.remove(s, 1) end
   snapshotRoster()
-  say(("registrando |cffffffff%s|r (%s) · registro de combate avanzado %s."):format(
-    name or "?", difficultyName or "", advancedOn() and "|cff3fbf3fACTIVO|r" or "|cffff4040INACTIVO|r"))
+  say(L("recording"):format(name or "?", difficultyName or "", advancedOn() and L("ACTIVE") or L("INACTIVE")))
 end
 
 local function fmtDuration(sec)
   sec = math.max(0, math.floor(sec))
   local h, m = math.floor(sec / 3600), math.floor((sec % 3600) / 60)
-  if h > 0 then return ("%d h %02d min"):format(h, m) end
-  return ("%d min"):format(m)
+  if h > 0 then return L("hm"):format(h, m) end
+  return L("m"):format(m)
 end
 
 local function fmtNumber(n)
@@ -114,28 +239,28 @@ local function summary(sess, title)
   for _, e in ipairs(sess.encounters) do
     if e.kill then kills = kills + 1 elseif e.finish then wipes = wipes + 1 end
   end
-  say(("%s |cffffffff%s|r · %s · %d jugadores · %s eventos de combate"):format(
+  say(L("sumLine"):format(
     title, sess.instance.name or "?", fmtDuration(finished - sess.startedAt), players, fmtNumber(sess.events.total)))
   if #sess.encounters == 0 then
-    say("  sin encuentros con jefes.")
+    say(L("noBosses"))
   else
-    say(("  jefes: |cff3fbf3f%d muertos|r, |cffff4040%d wipes|r"):format(kills, wipes))
+    say(L("bosses"):format(kills, wipes))
     for i, e in ipairs(sess.encounters) do
-      if i > 12 then say(("  ... y %d más"):format(#sess.encounters - 12)) break end
+      if i > 12 then say(L("more"):format(#sess.encounters - 12)) break end
       local res = e.kill and "|TInterface\\RAIDFRAME\\ReadyCheck-Ready:14|t" or (e.finish and "|TInterface\\RAIDFRAME\\ReadyCheck-NotReady:14|t" or "|TInterface\\RAIDFRAME\\ReadyCheck-Waiting:14|t")
       local dur = e.finish and (" (%s)"):format(fmtDuration(e.finish - e.start)) or ""
       say(("  %s %s%s"):format(res, e.name or "?", dur))
     end
   end
-  say("  El registro de combate lo sube la app Rebirth Track Uploader (si está abierta) a rebirthknights.fun.")
+  say(L("uploadedBy"))
 end
 
 local function stopSession(why)
   if not session then return end
   session.endedAt = time()
   session.endReason = why
-  summary(session, "Resumen de")
-  say("Hacé /reload o salí del juego para que WoW guarde el resumen en disco.")
+  summary(session, L("summaryOf"))
+  say(L("reloadToSave"))
   session = nil
   disableLogging()
 end
@@ -149,7 +274,7 @@ local function checkZone()
   if wanted() then
     startSession("auto")
   elseif session and session.reason == "auto" then
-    stopSession("salió de la instancia")
+    stopSession("left")
   end
 end
 
@@ -204,51 +329,36 @@ local function linkCharacter()
     if d.links[i]:find("|" .. realm .. "|" .. name .. "|", 1, true) then table.remove(d.links, i) end
   end
   table.insert(d.links, rec)
-  say(("|cff3fbf3f%s-%s|r anotado para vincular. La app lo sube al sitio cuando el juego guarde (al recargar o al salir)."):format(name, realm))
+  say(L("linked"):format(name, realm))
+  local p = StaticPopupDialogs["REBIRTHTRACK_LINK_RELOAD"] -- textos en el idioma elegido
+  p.text, p.button1, p.button2 = L("linkPopup"), L("reloadNow"), L("later")
   StaticPopup_Show("REBIRTHTRACK_LINK_RELOAD")
 end
 
 StaticPopupDialogs["REBIRTHTRACK_LINK_RELOAD"] = {
-  text = "Rebirth Track: personaje anotado para vincular a tu cuenta.\n\n¿Recargar la interfaz ahora para que la app lo suba ya?",
-  button1 = "Recargar ahora", button2 = "Después",
+  text = "", button1 = "", button2 = "",
   OnAccept = function() ReloadUI() end,
   timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
 }
 
 local function status()
-  say(("registro de combate %s · modo avanzado %s"):format(
-    LoggingCombat() and "|cff3fbf3fPRENDIDO|r" or "apagado", advancedOn() and "|cff3fbf3fsí|r" or "|cffff4040no|r"))
+  say(L("statusLine"):format(LoggingCombat() and L("ON") or L("off"), advancedOn() and L("yes") or L("no")))
   if session then
-    summary(session, "Registrando")
+    summary(session, L("recordingTitle"))
   else
     local last = db().sessions[#db().sessions]
-    if last then summary(last, "Última banda:") else say("todavía no se registró ninguna banda.") end
+    if last then summary(last, L("lastRaid")) else say(L("noneYet")) end
   end
 end
 
 -- ── Ventana del addon ───────────────────────────────────────────────────────────────────
--- Chica, se puede mover (arrastrando el título) y cerrar; recuerda dónde estaba y si estaba abierta.
--- /rt mostrar (show) la vuelve a abrir; /rt ayuda (help) la abre con la explicación.
-local HELP = table.concat({
-  "|cffe3a42cQué hace|r",
-  "Al entrar a una banda o mazmorra prende el registro de combate avanzado del juego. Rebirth Track Uploader (la app de tu PC) sube esos registros a rebirthknights.fun.",
-  "",
-  "|cffe3a42cBotones|r",
-  "• |cffffffffVincular personaje|r: lo asocia a tu usuario de Discord en el sitio (reino, región, clase y versión). La app lo manda cuando el juego guarda: al recargar o salir.",
-  "• |cffffffffEstado|r: si el registro está prendido y qué se anotó.",
-  "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
-  "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
-  "",
-  "|cffe3a42cComandos|r (español o inglés)",
-  "/rt mostrar · show   /rt ocultar · hide",
-  "/rt vincular · link   /rt estado · status",
-  "/rt registrar · start   /rt detener · stop",
-  "/rt mazmorras · dungeons   /rt borrar · reset",
-  "/rt minimapa · minimap (mostrar u ocultar el botón)",
-  "/rt ayuda · help",
-}, "\n")
+-- Se puede mover (arrastrando), cerrar y cambiar de tamaño (esquina inferior derecha); los botones
+-- se estiran con el ancho y la ayuda va en un área con scroll. Recuerda posición, tamaño y si estaba
+-- abierta. /rt mostrar (show) la vuelve a abrir; /rt ayuda (help) la abre con la explicación.
+local MIN_W, MIN_H, MAX_W, MAX_H = 220, 230, 600, 700
+local BTN_TOP, BTN_STEP = 52, 28
 
-local ui
+local ui, layout
 local function ui_db()
   local d = db()
   d.ui = d.ui or { shown = true }
@@ -257,41 +367,70 @@ end
 
 local function refreshUI()
   if not ui then return end
-  ui.rec:SetText(session and "Detener registro" or "Registrar ahora")
-  ui.dun:SetText("Mazmorras: " .. (db().settings.dungeons and "|cff3fbf3fsí|r" or "|cffff4040no|r"))
-  ui.state:SetText(LoggingCombat() and "|cff3fbf3fRegistrando|r" .. (session and session.instance and (" · " .. session.instance.name) or "") or "|cff999999Registro apagado|r")
+  ui.rec:SetText(session and L("stop") or L("start"))
+  ui.dun:SetText(L("dungeons") .. (db().settings.dungeons and L("yes") or L("no")))
+  ui.state:SetText(LoggingCombat() and L("stateOn") .. (session and session.instance and (" · " .. session.instance.name) or "") or L("stateOff"))
+  ui.lang:SetText(lang() == "es" and "EN" or "ES")
+  for _, b in ipairs(ui.buttons) do b:SetText(b.label and L(b.label) or b:GetText()) end
+  ui.back:SetText(L("back"))
+  ui.help:SetText(table.concat(L("help"), "\n"))
+  layout()
+end
+
+-- Alto mínimo para que entren todos los botones; la ventana nunca queda más chica que su contenido.
+local function minHeight() return BTN_TOP + #ui.buttons * BTN_STEP + 14 end
+
+function layout()
+  if not ui then return end
+  local w = ui:GetWidth()
+  for _, b in ipairs(ui.buttons) do b:SetWidth(math.max(120, w - 36)) end
+  ui.helpText:SetWidth(math.max(100, w - 58))
+  ui.help:SetWidth(math.max(100, w - 58))
+  ui.helpText:SetHeight((ui.help:GetStringHeight() or 0) + 8)
 end
 
 local function showHelp(on)
   ui.helpOn = on
-  ui.help:SetShown(on)
+  ui.scroll:SetShown(on)
   for _, b in ipairs(ui.buttons) do b:SetShown(not on) end
   ui.state:SetShown(not on)
   ui.back:SetShown(on)
-  ui:SetHeight(on and 420 or 222)
+  local u = ui_db()
+  local h = math.max(u.h or 0, minHeight())
+  if on then h = math.max(h, u.helpH or 380) end
+  ui:SetHeight(math.min(h, MAX_H))
+  layout()
+end
+
+local function setMinMax(frame)
+  if frame.SetResizeBounds then frame:SetResizeBounds(MIN_W, MIN_H, MAX_W, MAX_H)
+  elseif frame.SetMinResize then frame:SetMinResize(MIN_W, MIN_H); frame:SetMaxResize(MAX_W, MAX_H) end
 end
 
 local function createUI()
   if ui then return ui end
   ui = CreateFrame("Frame", "RebirthTrackFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  ui:SetSize(230, 222)
+  local u = ui_db()
+  ui:SetSize(math.max(u.w or 240, MIN_W), math.max(u.h or MIN_H, MIN_H))
   ui:SetFrameStrata("MEDIUM")
   ui:SetClampedToScreen(true)
   ui:SetMovable(true)
+  ui:SetResizable(true)
+  setMinMax(ui)
   ui:EnableMouse(true)
   ui:RegisterForDrag("LeftButton")
   ui:SetScript("OnDragStart", ui.StartMoving)
   ui:SetScript("OnDragStop", function(self)
     self:StopMovingOrSizing()
     local point, _, rel, x, y = self:GetPoint()
-    local u = ui_db()
-    u.point, u.rel, u.x, u.y = point, rel, x, y
+    local d = ui_db()
+    d.point, d.rel, d.x, d.y = point, rel, x, y
   end)
+  ui:SetScript("OnSizeChanged", layout)
   if ui.SetBackdrop then
     ui:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
       tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
   end
-  local u = ui_db()
   ui:SetPoint(u.point or "CENTER", UIParent, u.rel or "CENTER", u.x or 300, u.y or 120)
 
   local title = ui:CreateFontString(nil, "OVERLAY", "GameFontNormal")
@@ -303,47 +442,90 @@ local function createUI()
   logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
   local close = CreateFrame("Button", nil, ui, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", -2, -2)
-  close:SetScript("OnClick", function() ui:Hide(); ui_db().shown = false; say("ventana cerrada: /rt mostrar para volver a abrirla.") end)
+  close:SetScript("OnClick", function() ui:Hide(); ui_db().shown = false; say(L("closed")) end)
+
+  local function tip(frame, key)
+    frame:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L(key), 1, 1, 1, true); GameTooltip:Show() end)
+    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  end
+
+  -- Selector de idioma (arriba a la izquierda): muestra el idioma al que cambia.
+  ui.lang = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
+  ui.lang:SetSize(34, 20)
+  ui.lang:SetPoint("TOPLEFT", 10, -9)
+  ui.lang:SetScript("OnClick", function()
+    db().settings.lang = lang() == "es" and "en" or "es"
+    say(L("langSay"))
+    refreshUI()
+  end)
+  tip(ui.lang, "tLang")
 
   ui.state = ui:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  ui.state:SetPoint("TOP", title, "BOTTOM", 0, -6)
+  ui.state:SetPoint("TOPLEFT", 16, -34)
+  ui.state:SetPoint("TOPRIGHT", -16, -34)
+  ui.state:SetJustifyH("CENTER")
 
   ui.buttons = {}
-  local function button(text, tip, onClick)
+  local function button(label, tipKey, onClick)
     local b = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
-    b:SetSize(190, 24)
-    b:SetPoint("TOP", 0, -48 - #ui.buttons * 28)
-    b:SetText(text)
+    b:SetHeight(24)
+    b:SetWidth(200)
+    b:SetPoint("TOP", 0, -BTN_TOP - #ui.buttons * BTN_STEP)
+    b.label = label
+    b:SetText(label and L(label) or "")
     b:SetScript("OnClick", function() onClick(); refreshUI() end)
-    b:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(tip, 1, 1, 1, true); GameTooltip:Show() end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    tip(b, tipKey)
     table.insert(ui.buttons, b)
     return b
   end
-  button("Vincular personaje", "Asocia este personaje a tu usuario de Discord en rebirthknights.fun (/rt vincular).", linkCharacter)
-  button("Estado", "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).", function() status() end)
-  ui.rec = button("Registrar ahora", "Prende o apaga el registro a mano (/rt registrar · /rt detener).", function()
+  button("bLink", "tLink", linkCharacter)
+  button("bStatus", "tStatus", function() status() end)
+  ui.rec = button(nil, "tRec", function()
     if session then stopSession("manual") else startSession("manual") end
   end)
-  ui.dun = button("Mazmorras", "Incluir o no las mazmorras (/rt mazmorras).", function()
+  ui.dun = button(nil, "tDungeons", function()
     db().settings.dungeons = not db().settings.dungeons
     checkZone()
   end)
-  button("Ayuda", "Cómo se usa (/rt ayuda).", function() showHelp(true) end)
+  button("bHelp", "tHelp", function() showHelp(true) end)
 
-  ui.help = ui:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  ui.help:SetPoint("TOPLEFT", 16, -34)
-  ui.help:SetPoint("RIGHT", -14, 0)
+  -- Ayuda: texto largo dentro de un área con scroll que ocupa el alto disponible.
+  ui.scroll = CreateFrame("ScrollFrame", "RebirthTrackHelpScroll", ui, "UIPanelScrollFrameTemplate")
+  ui.scroll:SetPoint("TOPLEFT", 14, -34)
+  ui.scroll:SetPoint("BOTTOMRIGHT", -32, 42)
+  ui.helpText = CreateFrame("Frame", nil, ui.scroll)
+  ui.helpText:SetSize(180, 400)
+  ui.scroll:SetScrollChild(ui.helpText)
+  ui.help = ui.helpText:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ui.help:SetPoint("TOPLEFT", 2, -2)
   ui.help:SetJustifyH("LEFT")
-  ui.help:SetText(HELP)
+  ui.help:SetJustifyV("TOP")
+  if ui.help.SetWordWrap then ui.help:SetWordWrap(true) end
+
   ui.back = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
   ui.back:SetSize(100, 22)
-  ui.back:SetPoint("BOTTOM", 0, 12)
-  ui.back:SetText("Volver")
+  ui.back:SetPoint("BOTTOM", 0, 14)
   ui.back:SetScript("OnClick", function() showHelp(false) end)
 
-  showHelp(false)
+  -- Agarre para cambiar el tamaño (esquina inferior derecha); guarda el tamaño de cada vista.
+  local grip = CreateFrame("Button", nil, ui)
+  grip:SetSize(16, 16)
+  grip:SetPoint("BOTTOMRIGHT", -6, 6)
+  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
+  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
+  grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
+  grip:SetScript("OnMouseDown", function() ui:StartSizing("BOTTOMRIGHT") end)
+  grip:SetScript("OnMouseUp", function()
+    ui:StopMovingOrSizing()
+    local d = ui_db()
+    d.w = math.floor(ui:GetWidth())
+    if ui.helpOn then d.helpH = math.floor(ui:GetHeight()) else d.h = math.max(math.floor(ui:GetHeight()), minHeight()) end
+    showHelp(ui.helpOn)
+  end)
+  tip(grip, "tResize")
+
   refreshUI()
+  showHelp(false)
   return ui
 end
 
@@ -351,8 +533,8 @@ local function openUI(help)
   createUI()
   ui:Show()
   ui_db().shown = true
-  showHelp(help and true or false)
   refreshUI()
+  showHelp(help and true or false)
 end
 
 -- ── Botón en el minimapa ─────────────────────────────────────────────────────────────────
@@ -399,9 +581,9 @@ local function createMinimapButton()
   mm:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_LEFT")
     GameTooltip:AddLine("Rebirth Track")
-    GameTooltip:AddLine("Clic: abrir o cerrar la ventana", 1, 1, 1)
-    GameTooltip:AddLine("Clic derecho: vincular este personaje", 1, 1, 1)
-    GameTooltip:AddLine("Arrastrar: moverlo · /rt minimapa: ocultarlo", 0.7, 0.7, 0.7)
+    GameTooltip:AddLine(L("mmOpen"), 1, 1, 1)
+    GameTooltip:AddLine(L("mmLink"), 1, 1, 1)
+    GameTooltip:AddLine(L("mmMove"), 0.7, 0.7, 0.7)
     GameTooltip:Show()
   end)
   mm:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -433,12 +615,13 @@ local COMMANDS = {
   mazmorras = "dungeons", dungeons = "dungeons",
   borrar = "reset", reset = "reset",
   minimapa = "minimap", minimap = "minimap",
+  idioma = "lang", language = "lang", lang = "lang",
 }
 
 SLASH_REBIRTHTRACK1 = "/rt"
 SLASH_REBIRTHTRACK2 = "/rebirthtrack"
 SlashCmdList.REBIRTHTRACK = function(msg)
-  local word = (msg or ""):lower():match("^%s*(%S*)")
+  local word, arg = (msg or ""):lower():match("^%s*(%S*)%s*(%S*)")
   local cmd = word == "" and "toggle" or COMMANDS[word]
   if cmd == "toggle" then
     if ui and ui:IsShown() then status() else openUI(false) end
@@ -451,17 +634,23 @@ SlashCmdList.REBIRTHTRACK = function(msg)
   elseif cmd == "stop" then stopSession("manual")
   elseif cmd == "dungeons" then
     db().settings.dungeons = not db().settings.dungeons
-    say("mazmorras " .. (db().settings.dungeons and "INCLUIDAS" or "excluidas") .. ".")
+    say(L("dungeonsSay"):format(db().settings.dungeons and L("included") or L("excluded")))
     checkZone()
   elseif cmd == "minimap" then
     ui_db().minimap = ui_db().minimap == false
     if mm then mm:SetShown(ui_db().minimap) end
-    say("botón del minimapa " .. (ui_db().minimap and "visible" or "oculto (/rt minimapa para mostrarlo)") .. ".")
+    say(L("mmSay"):format(ui_db().minimap and L("visible") or L("hidden")))
   elseif cmd == "reset" then
     db().sessions = {}
-    say("sesiones borradas.")
+    say(L("resetSay"))
+  elseif cmd == "lang" then
+    local want = (arg == "en" or arg == "english" or arg == "ingles" or arg == "inglés") and "en"
+      or (arg == "es" or arg == "spanish" or arg == "español" or arg == "espanol") and "es"
+      or (lang() == "es" and "en" or "es")
+    db().settings.lang = want
+    say(L("langSay"))
   else
-    say("no conozco «" .. word .. "». Probá /rt ayuda (o /rt help).")
+    say(L("unknown"):format(word))
   end
   refreshUI()
 end

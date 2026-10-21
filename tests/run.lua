@@ -18,3 +18,12 @@ print("comando /rt registrado OK")
 local mmb
 for _, fr in ipairs(__frames or {}) do end
 print("minimapa:", RebirthTrackDB.ui.minimap)
+
+-- Idioma: por defecto español, /rt idioma en lo pasa a inglés y el botón ES/EN alterna.
+assert(click("Vincular personaje"), "por defecto en español")
+rt("idioma en"); assert(RebirthTrackDB.settings.lang == "en")
+assert(click("Link character"), "botones en inglés")
+rt("language es"); assert(RebirthTrackDB.settings.lang == "es")
+click("EN"); assert(RebirthTrackDB.settings.lang == "en", "el botón EN cambia a inglés")
+click("ES"); assert(RebirthTrackDB.settings.lang == "es")
+print("idioma OK")

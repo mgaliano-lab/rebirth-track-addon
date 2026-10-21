@@ -3,10 +3,11 @@ local handlers, frames = {}, {}
 local function newObj()
   local o = { shown = true, scripts = {}, text = "" }
   return setmetatable(o, { __index = function(t, k)
+    if not k:match("^%u") then return nil end -- como en WoW: solo los métodos existen, los campos propios no
     return function(self, ...)
       if k == "SetScript" then local name, fn = ...; self.scripts[name] = fn
       elseif k == "RegisterEvent" then table.insert(handlers, self)
-      elseif k == "SetText" then self.text = ...
+      elseif k == "SetText" then local v = ...; if v == nil then error("SetText(nil)") end; self.text = v
       elseif k == "GetText" then return self.text
       elseif k == "Show" then self.shown = true
       elseif k == "Hide" then self.shown = false
@@ -49,5 +50,5 @@ function CombatLogGetCurrentEventInfo() return nil end
 function time() return 1792530000 end
 SlashCmdList = {}
 function fire(event, ...) for _, f in ipairs(handlers) do if f.scripts.OnEvent then f.scripts.OnEvent(f, event, ...) end end end
-function click(label) for _, f in ipairs(frames) do if f.text:find(label, 1, true) and f.scripts.OnClick then f.scripts.OnClick(f); return true end end error("no hay botón " .. label) end
+function click(label) for _, f in ipairs(frames) do if type(f.text) == "string" and f.text:find(label, 1, true) and f.scripts.OnClick then f.scripts.OnClick(f); return true end end error("no hay botón " .. label) end
 function shownWindow() return _G.__ui end

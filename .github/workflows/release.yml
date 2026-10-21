@@ -1,0 +1,51 @@
+# Al pushear un tag vX.Y.Z: corre las pruebas, arma el zip y lo publica en CurseForge y en un
+# GitHub Release, con la sección de esa versión de CHANGELOG.md como notas.
+# La versión del tag tiene que coincidir con "## Version:" del .toc.
+# El CDN de rebirthknights.fun se sigue publicando a mano con scripts/release.sh.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pruebas
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq lua5.4 >/dev/null
+          lua5.4 tests/run.lua
+
+      - name: Versión
+        id: v
+        run: |
+          v=$(sed -n 's/^## Version: *//p' RebirthTrack/RebirthTrack.toc | tr -d '\r')
+          if [[ "$GITHUB_REF_TYPE" == tag && "${GITHUB_REF_NAME#v}" != "$v" ]]; then
+            echo "El tag $GITHUB_REF_NAME no coincide con ## Version: $v del .toc" >&2; exit 1
+          fi
+          scripts/changelog.sh "$v" > notes.md
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Zip
+        run: |
+          mkdir -p dist
+          zip -qrX "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" RebirthTrack -x '*.DS_Store'
+
+      - name: CurseForge
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: scripts/curseforge.sh "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip"
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v${{ steps.v.outputs.version }}" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" \
+            --title "Rebirth Track ${{ steps.v.outputs.version }}" --notes-file notes.md
