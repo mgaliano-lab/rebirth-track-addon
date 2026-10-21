@@ -3,6 +3,11 @@
 Cada versión, en español y en inglés. La sección de la versión que se publica es la que CI sube a
 CurseForge como notas del archivo (`scripts/changelog.sh`).
 
+## 0.0.10
+
+- Ícono nuevo: el estandarte de guerra de Rebirth Knights (lista de addons y botón del minimapa).
+- *EN:* New icon: the Rebirth Knights war banner (addon list and minimap button).
+
 ## 0.0.9
 
 - Anota el **grupo de banda** de cada jugador al entrar a la instancia y en cada jefe, para agrupar a la gente en el replay del sitio.
