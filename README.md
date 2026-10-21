@@ -39,10 +39,14 @@ addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet)
 
   | Comando | Qué hace |
   |---|---|
-  | `/rt` | Estado: registro prendido, modo avanzado, eventos, personajes, encuentros. |
-  | `/rt start` / `/rt stop` | Sesión manual en cualquier lado (para probar en el mundo). |
-  | `/rt dungeons` | Prende o apaga el registro en mazmorras (desde 0.0.3 vienen prendidas). |
-  | `/rt reset` | Borra las sesiones guardadas. |
+  | `/rt` | Abre la ventana del addon (si ya está abierta, muestra el estado). |
+  | `/rt mostrar` · `show` / `/rt ocultar` · `hide` | Abre o cierra la ventana (se puede mover y recuerda dónde quedó). |
+  | `/rt ayuda` · `help` | Abre la ventana con la explicación de cómo usarlo. |
+  | `/rt vincular` · `link` | Vincula el personaje a tu usuario de Discord en el sitio (la app lo sube al recargar o salir). |
+  | `/rt estado` · `status` | Estado: registro prendido, modo avanzado, eventos, personajes, encuentros. |
+  | `/rt registrar` · `start` / `/rt detener` · `stop` | Sesión manual en cualquier lado (para probar en el mundo). |
+  | `/rt mazmorras` · `dungeons` | Prende o apaga el registro en mazmorras (desde 0.0.3 vienen prendidas). |
+  | `/rt borrar` · `reset` | Borra las sesiones guardadas. |
 
 - El juego escribe lo anotado en
   `WTF/Account/<CUENTA>/SavedVariables/RebirthTrack.lua` **recién al hacer `/reload`, al salir o al

@@ -215,29 +215,6 @@ StaticPopupDialogs["REBIRTHTRACK_LINK_RELOAD"] = {
   timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
 }
 
--- Botón en la ventana del personaje (C).
-local linkButton
-local function createLinkButton()
-  if linkButton or not CharacterFrame then return end
-  linkButton = CreateFrame("Button", "RebirthTrackLinkButton", CharacterFrame, "UIPanelButtonTemplate")
-  linkButton:SetSize(150, 22)
-  linkButton:SetPoint("TOPRIGHT", CharacterFrame, "BOTTOMRIGHT", 0, -2)
-  linkButton:SetText("Vincular a Rebirth Track")
-  linkButton:SetScript("OnClick", linkCharacter)
-  linkButton:SetScript("OnEnter", function(self)
-    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    GameTooltip:AddLine("Rebirth Track")
-    GameTooltip:AddLine("Vincula este personaje (reino, región, clase y versión) a tu usuario de Discord en rebirthknights.fun.", 1, 1, 1, true)
-    GameTooltip:AddLine("Necesita Rebirth Track Uploader vinculado en esta PC.", 0.7, 0.7, 0.7, true)
-    GameTooltip:Show()
-  end)
-  linkButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
-end
-local lf = CreateFrame("Frame")
-lf:RegisterEvent("PLAYER_LOGIN")
-lf:SetScript("OnEvent", createLinkButton)
-
-SLASH_REBIRTHTRACK1 = "/rt"
 local function status()
   say(("registro de combate %s · modo avanzado %s"):format(
     LoggingCombat() and "|cff3fbf3fPRENDIDO|r" or "apagado", advancedOn() and "|cff3fbf3fsí|r" or "|cffff4040no|r"))
@@ -249,24 +226,175 @@ local function status()
   end
 end
 
+-- ── Ventana del addon ───────────────────────────────────────────────────────────────────
+-- Chica, se puede mover (arrastrando el título) y cerrar; recuerda dónde estaba y si estaba abierta.
+-- /rt mostrar (show) la vuelve a abrir; /rt ayuda (help) la abre con la explicación.
+local HELP = table.concat({
+  "|cffe3a42cQué hace|r",
+  "Al entrar a una banda o mazmorra prende el registro de combate avanzado del juego. Rebirth Track Uploader (la app de tu PC) sube esos registros a rebirthknights.fun.",
+  "",
+  "|cffe3a42cBotones|r",
+  "• |cffffffffVincular personaje|r: lo asocia a tu usuario de Discord en el sitio (reino, región, clase y versión). La app lo manda cuando el juego guarda: al recargar o salir.",
+  "• |cffffffffEstado|r: si el registro está prendido y qué se anotó.",
+  "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
+  "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
+  "",
+  "|cffe3a42cComandos|r (español o inglés)",
+  "/rt mostrar · show   /rt ocultar · hide",
+  "/rt vincular · link   /rt estado · status",
+  "/rt registrar · start   /rt detener · stop",
+  "/rt mazmorras · dungeons   /rt borrar · reset",
+  "/rt ayuda · help",
+}, "\n")
+
+local ui
+local function ui_db()
+  local d = db()
+  d.ui = d.ui or { shown = true }
+  return d.ui
+end
+
+local function refreshUI()
+  if not ui then return end
+  ui.rec:SetText(session and "Detener registro" or "Registrar ahora")
+  ui.dun:SetText("Mazmorras: " .. (db().settings.dungeons and "|cff3fbf3fsí|r" or "|cffff4040no|r"))
+  ui.state:SetText(LoggingCombat() and "|cff3fbf3fRegistrando|r" .. (session and session.instance and (" · " .. session.instance.name) or "") or "|cff999999Registro apagado|r")
+end
+
+local function showHelp(on)
+  ui.helpOn = on
+  ui.help:SetShown(on)
+  for _, b in ipairs(ui.buttons) do b:SetShown(not on) end
+  ui.state:SetShown(not on)
+  ui.back:SetShown(on)
+  ui:SetHeight(on and 420 or 222)
+end
+
+local function createUI()
+  if ui then return ui end
+  ui = CreateFrame("Frame", "RebirthTrackFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  ui:SetSize(230, 222)
+  ui:SetFrameStrata("MEDIUM")
+  ui:SetClampedToScreen(true)
+  ui:SetMovable(true)
+  ui:EnableMouse(true)
+  ui:RegisterForDrag("LeftButton")
+  ui:SetScript("OnDragStart", ui.StartMoving)
+  ui:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, rel, x, y = self:GetPoint()
+    local u = ui_db()
+    u.point, u.rel, u.x, u.y = point, rel, x, y
+  end)
+  if ui.SetBackdrop then
+    ui:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+  end
+  local u = ui_db()
+  ui:SetPoint(u.point or "CENTER", UIParent, u.rel or "CENTER", u.x or 300, u.y or 120)
+
+  local title = ui:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("TOP", 0, -14)
+  title:SetText("Rebirth Track")
+  local close = CreateFrame("Button", nil, ui, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -2, -2)
+  close:SetScript("OnClick", function() ui:Hide(); ui_db().shown = false; say("ventana cerrada: /rt mostrar para volver a abrirla.") end)
+
+  ui.state = ui:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ui.state:SetPoint("TOP", title, "BOTTOM", 0, -6)
+
+  ui.buttons = {}
+  local function button(text, tip, onClick)
+    local b = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
+    b:SetSize(190, 24)
+    b:SetPoint("TOP", 0, -48 - #ui.buttons * 28)
+    b:SetText(text)
+    b:SetScript("OnClick", function() onClick(); refreshUI() end)
+    b:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(tip, 1, 1, 1, true); GameTooltip:Show() end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    table.insert(ui.buttons, b)
+    return b
+  end
+  button("Vincular personaje", "Asocia este personaje a tu usuario de Discord en rebirthknights.fun (/rt vincular).", linkCharacter)
+  button("Estado", "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).", function() status() end)
+  ui.rec = button("Registrar ahora", "Prende o apaga el registro a mano (/rt registrar · /rt detener).", function()
+    if session then stopSession("manual") else startSession("manual") end
+  end)
+  ui.dun = button("Mazmorras", "Incluir o no las mazmorras (/rt mazmorras).", function()
+    db().settings.dungeons = not db().settings.dungeons
+    checkZone()
+  end)
+  button("Ayuda", "Cómo se usa (/rt ayuda).", function() showHelp(true) end)
+
+  ui.help = ui:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  ui.help:SetPoint("TOPLEFT", 16, -34)
+  ui.help:SetPoint("RIGHT", -14, 0)
+  ui.help:SetJustifyH("LEFT")
+  ui.help:SetText(HELP)
+  ui.back = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
+  ui.back:SetSize(100, 22)
+  ui.back:SetPoint("BOTTOM", 0, 12)
+  ui.back:SetText("Volver")
+  ui.back:SetScript("OnClick", function() showHelp(false) end)
+
+  showHelp(false)
+  refreshUI()
+  return ui
+end
+
+local function openUI(help)
+  createUI()
+  ui:Show()
+  ui_db().shown = true
+  showHelp(help and true or false)
+  refreshUI()
+end
+
+local uf = CreateFrame("Frame")
+uf:RegisterEvent("PLAYER_LOGIN")
+uf:RegisterEvent("PLAYER_ENTERING_WORLD")
+uf:SetScript("OnEvent", function(_, event)
+  if event == "PLAYER_LOGIN" then
+    createUI()
+    if ui_db().shown == false then ui:Hide() end
+  end
+  C_Timer.After(1.5, refreshUI)
+end)
+
+-- Comandos en español o inglés.
+local COMMANDS = {
+  mostrar = "show", abrir = "show", show = "show", open = "show",
+  ocultar = "hide", cerrar = "hide", hide = "hide", close = "hide",
+  ayuda = "help", help = "help", ["?"] = "help",
+  vincular = "link", link = "link",
+  estado = "status", status = "status",
+  registrar = "start", empezar = "start", iniciar = "start", start = "start",
+  detener = "stop", parar = "stop", stop = "stop",
+  mazmorras = "dungeons", dungeons = "dungeons",
+  borrar = "reset", reset = "reset",
+}
+
 SlashCmdList.REBIRTHTRACK = function(msg)
-  local cmd = (msg or ""):lower():match("^%s*(%S*)")
-  if cmd == "start" then
-    startSession("manual")
-  elseif cmd == "stop" then
-    stopSession("manual")
-  elseif cmd == "status" or cmd == "estado" or cmd == "" then
-    status()
-  elseif cmd == "dungeons" or cmd == "mazmorras" then
+  local word = (msg or ""):lower():match("^%s*(%S*)")
+  local cmd = word == "" and "toggle" or COMMANDS[word]
+  if cmd == "toggle" then
+    if ui and ui:IsShown() then status() else openUI(false) end
+  elseif cmd == "show" then openUI(false)
+  elseif cmd == "hide" then if ui then ui:Hide() end; ui_db().shown = false
+  elseif cmd == "help" then openUI(true)
+  elseif cmd == "link" then linkCharacter()
+  elseif cmd == "status" then status()
+  elseif cmd == "start" then startSession("manual")
+  elseif cmd == "stop" then stopSession("manual")
+  elseif cmd == "dungeons" then
     db().settings.dungeons = not db().settings.dungeons
     say("mazmorras " .. (db().settings.dungeons and "INCLUIDAS" or "excluidas") .. ".")
     checkZone()
-  elseif cmd == "vincular" or cmd == "link" then
-    linkCharacter()
   elseif cmd == "reset" then
     db().sessions = {}
     say("sesiones borradas.")
   else
-    say("comandos: /rt status · /rt vincular · /rt start · /rt stop · /rt dungeons (mazmorras sí/no) · /rt reset")
+    say("no conozco «" .. word .. "». Probá /rt ayuda (o /rt help).")
   end
+  refreshUI()
 end
