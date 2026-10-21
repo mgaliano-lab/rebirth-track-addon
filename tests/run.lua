@@ -27,3 +27,8 @@ rt("language es"); assert(RebirthTrackDB.settings.lang == "es")
 click("EN"); assert(RebirthTrackDB.settings.lang == "en", "el botón EN cambia a inglés")
 click("ES"); assert(RebirthTrackDB.settings.lang == "es")
 print("idioma OK")
+
+-- Grupos: al entrar a la instancia queda anotado el grupo (sin «|», que WoW escapa al guardar).
+assert(RebirthTrackDB.groups and #RebirthTrackDB.groups > 0, "anota los grupos")
+assert(RebirthTrackDB.groups[1]:match("^g1;%d+;Player%-[%w%-]+=1$"), RebirthTrackDB.groups[1])
+print("grupos OK", RebirthTrackDB.groups[1])

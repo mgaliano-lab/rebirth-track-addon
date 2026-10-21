@@ -193,6 +193,31 @@ local function snapshotRoster()
   end
 end
 
+-- Grupos de banda (el registro de combate no los trae): al entrar a la instancia y en cada jefe se
+-- anota "g1;hora;GUID=grupo,GUID=grupo…" en RebirthTrackDB.groups, y la app lo sube al sitio para
+-- agrupar a los jugadores en el replay. Sin «|» a propósito: WoW lo escapa al guardar.
+local MAX_GROUPS = 300
+local function snapshotGroups()
+  local members = {}
+  if IsInRaid() then
+    for i = 1, GetNumGroupMembers() do
+      local _, _, subgroup = GetRaidRosterInfo(i)
+      local guid = UnitGUID("raid" .. i)
+      if guid and subgroup then members[#members + 1] = guid .. "=" .. subgroup end
+    end
+  else
+    for _, unit in ipairs({ "player", "party1", "party2", "party3", "party4" }) do
+      local guid = UnitGUID(unit)
+      if guid then members[#members + 1] = guid .. "=1" end
+    end
+  end
+  if #members == 0 then return end
+  local d = db()
+  d.groups = d.groups or {}
+  table.insert(d.groups, "g1;" .. time() .. ";" .. table.concat(members, ","))
+  while #d.groups > MAX_GROUPS do table.remove(d.groups, 1) end
+end
+
 local function startSession(reason)
   if session then return end
   local name, instanceType, difficultyID, difficultyName, maxPlayers, _, _, instanceID = GetInstanceInfo()
@@ -211,6 +236,7 @@ local function startSession(reason)
   table.insert(s, session)
   while #s > MAX_SESSIONS do table.remove(s, 1) end
   snapshotRoster()
+  snapshotGroups()
   say(L("recording"):format(name or "?", difficultyName or "", advancedOn() and L("ACTIVE") or L("INACTIVE")))
 end
 
@@ -289,6 +315,7 @@ f:SetScript("OnEvent", function(_, event, ...)
     local id, name, difficultyID, size = ...
     table.insert(session.encounters, { id = id, name = name, difficultyID = difficultyID, size = size, start = time() })
     snapshotRoster()
+    snapshotGroups()
   elseif event == "ENCOUNTER_END" and session then
     local id, _, _, _, success = ...
     for i = #session.encounters, 1, -1 do

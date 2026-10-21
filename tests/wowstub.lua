@@ -37,7 +37,7 @@ function UnitName() return "Roguebash", nil end
 function GetRealmName() return "Nightslayer" end
 function UnitClass() return "Pícaro", "ROGUE" end
 function UnitLevel() return 60 end
-function UnitGUID() return "Player-6065-044C2423" end
+function UnitGUID(u) if u and u ~= "player" then return nil end return "Player-6065-044C2423" end -- como en WoW: sin grupo, party1… no existen
 function GetBuildInfo() return "2.5.6", "1", "", 20506 end
 function GetCurrentRegion() return 1 end
 WOW_PROJECT_ID = 5
