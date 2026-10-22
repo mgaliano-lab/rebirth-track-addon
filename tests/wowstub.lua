@@ -64,6 +64,12 @@ local roster = {
 function GetNumGuildMembers() return #roster end
 function GetGuildRosterInfo(i) return table.unpack(roster[i]) end
 function GetGuildRosterLastOnline(i) return 0, 0, 2, 3 end
+promoted, demoted = {}, {}
+function CanGuildPromote() return true end
+function CanGuildDemote() return true end
+function GuildPromote(n) table.insert(promoted, n) end
+function GuildDemote(n) table.insert(demoted, n) end
+function GuildControlGetRankName(i) return ({ "Guild Master", "Oficial", "Caballero", "Miembro", "Recluta" })[i] end
 C_GuildInfo = { GuildRoster = function() end }
 sentAddon = {}
 C_ChatInfo = {
