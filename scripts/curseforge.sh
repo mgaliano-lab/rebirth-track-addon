@@ -29,7 +29,7 @@ done
 metadata=$(jq -n --arg log "$(scripts/changelog.sh "$VERSION")" --arg name "$VERSION" --argjson ids "$ids" \
   '{ changelog: $log, changelogType: "markdown", displayName: $name, gameVersions: $ids, releaseType: "release" }')
 curl -sS --fail-with-body -X POST -H "X-Api-Token: $CF_API_TOKEN" \
-  -F "metadata=$metadata" -F "file=@$ZIP" \
+  --form-string "metadata=$metadata" -F "file=@$ZIP" \
   "$API/projects/$PROJECT_ID/upload-file"
 echo
 echo "Subido a CurseForge: Rebirth Track $VERSION"
