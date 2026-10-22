@@ -3,6 +3,11 @@
 Cada versión, en español y en inglés. La sección de la versión que se publica es la que CI sube a
 CurseForge como notas del archivo (`scripts/changelog.sh`).
 
+## 0.0.13
+
+- **Ventana de Rangos para oficiales** (botón «Rangos (oficiales)» o `/rt rangos`): pegás el código que copia el sitio en Miembros › Guild del juego y aparece la lista de la guild con el rango actual de cada uno. Los que tienen que cambiar según sus roles de Discord tienen su propio botón («Subir a…» / «Bajar a…»): cada clic hace un solo ascenso o descenso, como permite el juego. Al Guild Master no lo toca.
+- *EN:* **Ranks window for officers** («Ranks (officers)» button or `/rt ranks`): paste the code the site copies in Members › In-game guild and you get the guild list with each member's current rank. Those who should change according to their Discord roles get their own button («Promote to…» / «Demote to…»): each click does a single promotion or demotion, as the game allows. The Guild Master is never touched.
+
 ## 0.0.12
 
 - Funciona en **WoW Forever** (interfaz 16001): el juego ya no lo marca como desactualizado. Forever no deja a los addons leer el registro de combate, así que esa parte se saltea sin errores; la lista de la guild, los anuncios y la vinculación andan igual.
