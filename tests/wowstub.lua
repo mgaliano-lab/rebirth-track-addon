@@ -52,3 +52,24 @@ SlashCmdList = {}
 function fire(event, ...) for _, f in ipairs(handlers) do if f.scripts.OnEvent then f.scripts.OnEvent(f, event, ...) end end end
 function click(label) for _, f in ipairs(frames) do if type(f.text) == "string" and f.text:find(label, 1, true) and f.scripts.OnClick then f.scripts.OnClick(f); return true end end error("no hay botón " .. label) end
 function shownWindow() return _G.__ui end
+-- Guild y canal de addons
+function IsInGuild() return true end
+function GetGuildInfo() return "Rebirth Knights", "Oficial", 1, nil end
+function GetNormalizedRealmName() return "Nightslayer" end
+local roster = {
+  { "Roguebash-Nightslayer", "Oficial", 1, 60, "Pícaro", "Orgrimmar", "", "", true, 0, "ROGUE", 0, 0, false, false, 0, "Player-6065-044C2423" },
+  { "Healz-Nightslayer", "Miembro", 3, 58, "Sacerdote", "", "", "", false, 0, "PRIEST", 0, 0, false, false, 0, "Player-6065-0411" },
+  { "Otro-Dreamscythe", "Recluta", 4, 20, "Mago", "", "", "", false, 0, "MAGE", 0, 0, false, false, 0, "Player-6066-0099" },
+}
+function GetNumGuildMembers() return #roster end
+function GetGuildRosterInfo(i) return table.unpack(roster[i]) end
+function GetGuildRosterLastOnline(i) return 0, 0, 2, 3 end
+C_GuildInfo = { GuildRoster = function() end }
+sentAddon = {}
+C_ChatInfo = {
+  RegisterAddonMessagePrefix = function(p) registeredPrefix = p end,
+  SendAddonMessage = function(p, msg, chan) table.insert(sentAddon, { p, msg, chan }) end,
+}
+function InCombatLockdown() return false end
+function Ambiguate(n) return (n:gsub("%-.*", "")) end
+local clock = 100; function GetTime() clock = clock + 1; return clock end

@@ -3,6 +3,13 @@
 Cada versión, en español y en inglés. La sección de la versión que se publica es la que CI sube a
 CurseForge como notas del archivo (`scripts/changelog.sh`).
 
+## 0.0.11
+
+- Anota la **lista de miembros de la guild** (nombre, reino, clase, nivel, rango y última conexión) para que la app la suba al sitio: aparecen todos los miembros, aunque no tengan la app ni el addon.
+- Por el **canal de addons de la guild** cada addon anuncia su personaje y los que se vinculan, y los demás lo guardan: con que uno solo tenga la app, llega al sitio. La vinculación con Discord se pide en rebirthknights.fun.
+- *EN:* Records the **guild member list** (name, realm, class, level, rank and last online) so the app uploads it to the site: every member shows up, even without the app or the addon.
+- *EN:* Over the **guild addon channel** each addon announces its character and the ones being linked, and the others store it: if just one member has the app, it reaches the site. Linking to Discord is requested on rebirthknights.fun.
+
 ## 0.0.10
 
 - Ícono nuevo: el estandarte de guerra de Rebirth Knights (lista de addons y botón del minimapa).

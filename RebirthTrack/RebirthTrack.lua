@@ -61,6 +61,9 @@ local TEXTS = {
       "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
       "• |cffffffffES / EN|r: idioma del addon.",
       "",
+      "|cffe3a42cGuild|r",
+      "Anota la lista de miembros de la guild y la comparte por el canal de addons con los demás que tengan Rebirth Track. Con que uno solo tenga la app, todos aparecen en el sitio; cada uno pide vincular su personaje en rebirthknights.fun.",
+      "",
       "|cffe3a42cComandos|r (español o inglés)",
       "/rt mostrar · show",
       "/rt ocultar · hide",
@@ -118,6 +121,9 @@ local TEXTS = {
       "• |cffffffffRecord / Stop|r: manually, if you want to record outside an instance.",
       "• |cffffffffDungeons|r: include dungeons or not (included by default).",
       "• |cffffffffES / EN|r: addon language.",
+      "",
+      "|cffe3a42cGuild|r",
+      "Records the guild member list and shares it over the addon channel with everyone else running Rebirth Track. If just one member has the app, everyone shows up on the site; each player requests linking their character on rebirthknights.fun.",
       "",
       "|cffe3a42cCommands|r (English or Spanish)",
       "/rt show · mostrar",
@@ -342,6 +348,198 @@ end
 -- y Rebirth Track Uploader (la app de la PC, ya vinculada a tu Discord) lo manda al sitio cuando el
 -- juego guarda (al /reload o al salir). Formato: v1|región|reino|nombre|clase|nivel|guid|proyecto|build|hora
 local REGIONS = { [1] = "us", [2] = "kr", [3] = "eu", [4] = "tw", [5] = "cn" }
+
+-- ── Guild: lista de miembros y anuncios por el canal de addons ─────────────────────────────
+-- El juego le muestra a cada miembro la lista completa de la guild (nombre, rango, nivel, clase,
+-- última conexión): el addon la anota en RebirthTrackDB.guild y la app de cualquiera que la tenga la
+-- sube al sitio, así quedan anunciados todos los miembros aunque no tengan ni la app ni el addon.
+-- Además, por el canal de addons de la guild (prefijo RTK1) cada addon anuncia su personaje y los
+-- que se vinculan; los demás lo guardan y lo sube cualquiera que tenga la app. Solo se anuncia: la
+-- vinculación con Discord se pide en el sitio (y la aprueba un admin).
+-- Lo guardado va sin «|» (WoW lo escapa) y sin «;» en los textos (es el separador):
+--   info     "gi1;guild;reino;región;proyecto;hora"
+--   members  "m1;nombre;reino;clase;nivel;rango;nombre del rango;guid;segundos desde la última conexión"
+--   known    "k1;hora;S|L;región;reino;nombre;clase;nivel;guid;proyecto"  (S = se anunció, L = pidió vincular)
+-- Por el canal: "H;hora más nueva que tengo" (al entrar) y "K;…" (un personaje, mismos campos que known).
+local COMM = "RTK1"
+local MAX_KNOWN, MAX_REPLY = 1000, 60
+local function clean(s) return (tostring(s or ""):gsub("[|;\n]", " ")) end
+local function regionCode() return REGIONS[GetCurrentRegion and GetCurrentRegion() or 1] or "us" end
+local function split(s)
+  local out = {}
+  for part in (s .. ";"):gmatch("([^;]*);") do out[#out + 1] = part end
+  return out
+end
+
+local function guildDB()
+  local d = db()
+  d.guild = d.guild or {}
+  d.guild.known = d.guild.known or {}
+  return d.guild
+end
+
+-- Índice de los personajes conocidos (guid → posición en known) y cuándo se oyó cada uno por el canal.
+local knownIdx, heardAt
+local function keyOf(f) return f[9] ~= "" and f[9] or (f[5] .. "-" .. f[6]) end
+local function index()
+  if knownIdx then return knownIdx end
+  knownIdx, heardAt = {}, {}
+  for i, rec in ipairs(guildDB().known) do knownIdx[keyOf(split(rec))] = i end
+  return knownIdx
+end
+
+-- Guarda un personaje si es nuevo o más reciente. f son los campos de "k1;…" (f[1] = "k1").
+local function remember(f)
+  local ts, level = tonumber(f[2]), tonumber(f[8])
+  if #f < 10 or not ts or not level or (f[3] ~= "S" and f[3] ~= "L") or f[6] == "" or f[5] == "" then return false end
+  if f[9] ~= "" and not f[9]:match("^Player%-[%w%-]+$") then return false end
+  local g, idx = guildDB(), index()
+  local key = keyOf(f)
+  local at = idx[key]
+  if at then
+    local old = split(g.known[at])
+    if (tonumber(old[2]) or 0) >= ts then return false end
+    if old[3] == "L" then f[3] = "L" end -- quien pidió vincular queda marcado
+    g.known[at] = table.concat(f, ";")
+  else
+    table.insert(g.known, table.concat(f, ";"))
+    idx[key] = #g.known
+    if #g.known > MAX_KNOWN then table.remove(g.known, 1); knownIdx = nil end
+  end
+  return true
+end
+
+local function selfRecord(kind)
+  local _, class = UnitClass("player")
+  return { "k1", time(), kind, regionCode(), clean(GetRealmName()), clean(UnitName("player")), class or "",
+    UnitLevel("player") or 0, UnitGUID("player") or "", WOW_PROJECT_ID or 0 }
+end
+
+-- Cola de envío: de a un mensaje cada medio segundo (el juego limita los mensajes de addons) y en
+-- pausa durante el combate; en Retail también dentro de instancias, donde Blizzard los restringe.
+local queue, pumping = {}, false
+local function paused()
+  if InCombatLockdown and InCombatLockdown() then return true end
+  return WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1) and IsInInstance and IsInInstance() and true or false
+end
+local function rawSend(msg)
+  if C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(COMM, msg, "GUILD")
+  elseif SendAddonMessage then SendAddonMessage(COMM, msg, "GUILD") end
+end
+local pump
+function pump()
+  if #queue == 0 then pumping = false; return end
+  if paused() then C_Timer.After(5, pump); return end
+  rawSend(table.remove(queue, 1))
+  C_Timer.After(0.5, pump)
+end
+local function send(msg)
+  if not IsInGuild() or #queue >= 200 then return end
+  queue[#queue + 1] = msg
+  if not pumping then pumping = true; C_Timer.After(0, pump) end
+end
+
+local function announce(f)
+  remember(f)
+  send("K;" .. table.concat(f, ";", 2))
+end
+
+local function newestKnown()
+  local newest = 0
+  for _, rec in ipairs(guildDB().known) do newest = math.max(newest, tonumber(split(rec)[2]) or 0) end
+  return newest
+end
+
+-- Alguien entró y dijo hasta qué hora tiene datos: tras una espera al azar se le mandan (por el
+-- canal, así lo ven todos) los que tenga más nuevos, salvo los que ya mandó otro mientras tanto.
+local function reply(since)
+  local asked = GetTime and GetTime() or time()
+  C_Timer.After(1 + math.random() * 4, function()
+    local sent = 0
+    for _, rec in ipairs(guildDB().known) do
+      local f = split(rec)
+      local key = keyOf(f)
+      if (tonumber(f[2]) or 0) > since and not ((heardAt or {})[key] and heardAt[key] >= asked) then
+        send("K;" .. table.concat(f, ";", 2))
+        sent = sent + 1
+        if sent >= MAX_REPLY then break end
+      end
+    end
+  end)
+end
+
+local function onAddonMessage(prefix, msg, channel, sender)
+  if prefix ~= COMM or channel ~= "GUILD" or type(msg) ~= "string" then return end
+  if sender and Ambiguate and Ambiguate(sender, "none") == UnitName("player") then return end
+  local kind, rest = msg:match("^(%a);(.*)$")
+  if kind == "K" then
+    local f = split("k1;" .. rest)
+    index()
+    if remember(f) then heardAt[keyOf(f)] = GetTime and GetTime() or time() end
+  elseif kind == "H" then
+    local since = tonumber(rest)
+    if since and newestKnown() > since then reply(since) end
+  end
+end
+
+-- Foto de la lista de miembros (como mucho una por minuto; el juego avisa con GUILD_ROSTER_UPDATE).
+local rosterAt = 0
+local function requestRoster()
+  if not IsInGuild() then return end
+  if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() elseif GuildRoster then GuildRoster() end
+end
+local function lastOnline(i)
+  if not GetGuildRosterLastOnline then return 0 end
+  local y, m, d, h = GetGuildRosterLastOnline(i)
+  return ((((y or 0) * 365 + (m or 0) * 30 + (d or 0)) * 24) + (h or 0)) * 3600
+end
+local function snapshotGuild()
+  if not IsInGuild() or time() - rosterAt < 60 then return end
+  local guildName = GetGuildInfo("player")
+  local n = GetNumGuildMembers()
+  if not guildName or not n or n == 0 then return end
+  rosterAt = time()
+  local home = GetRealmName()
+  local homeKey = GetNormalizedRealmName and GetNormalizedRealmName() or home:gsub("[%s%-']", "")
+  local members = {}
+  for i = 1, n do
+    local full, rankName, rankIndex, level, _, _, _, _, online, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+    if full then
+      local name, realm = full:match("^([^%-]+)%-(.+)$")
+      if not realm or realm == homeKey then realm = home end
+      members[#members + 1] = table.concat({ "m1", clean(name or full), clean(realm), class or "", level or 0, rankIndex or 0,
+        clean(rankName), guid or "", online and 0 or lastOnline(i) }, ";")
+    end
+  end
+  local g = guildDB()
+  local info = table.concat({ "gi1", clean(guildName), clean(home), regionCode(), WOW_PROJECT_ID or 0, time() }, ";")
+  if g.info and split(g.info)[2] ~= clean(guildName) then g.known, knownIdx = {}, nil end -- otra guild: lo anunciado era de la anterior
+  g.info, g.members = info, members
+end
+
+local gf = CreateFrame("Frame")
+for _, e in ipairs({ "PLAYER_LOGIN", "GUILD_ROSTER_UPDATE", "PLAYER_GUILD_UPDATE", "CHAT_MSG_ADDON" }) do gf:RegisterEvent(e) end
+gf:SetScript("OnEvent", function(_, event, ...)
+  if event == "CHAT_MSG_ADDON" then
+    onAddonMessage(...)
+  elseif event == "GUILD_ROSTER_UPDATE" then
+    snapshotGuild()
+  elseif event == "PLAYER_GUILD_UPDATE" then
+    requestRoster()
+  elseif event == "PLAYER_LOGIN" then
+    if C_ChatInfo and C_ChatInfo.RegisterAddonMessagePrefix then C_ChatInfo.RegisterAddonMessagePrefix(COMM)
+    elseif RegisterAddonMessagePrefix then RegisterAddonMessagePrefix(COMM) end
+    -- La guild tarda unos segundos en cargarse después de entrar.
+    C_Timer.After(10, function()
+      if not IsInGuild() then return end
+      requestRoster()
+      send("H;" .. newestKnown())
+      announce(selfRecord("S"))
+    end)
+    if C_Timer.NewTicker then C_Timer.NewTicker(300, requestRoster) end
+  end
+end)
+
 local function linkCharacter()
   local name = UnitName("player")
   local realm = GetRealmName()
@@ -356,6 +554,7 @@ local function linkCharacter()
     if d.links[i]:find("|" .. realm .. "|" .. name .. "|", 1, true) then table.remove(d.links, i) end
   end
   table.insert(d.links, rec)
+  if IsInGuild() then announce(selfRecord("L")) end -- los demás lo anotan como miembro (no lo vinculan)
   say(L("linked"):format(name, realm))
   local p = StaticPopupDialogs["REBIRTHTRACK_LINK_RELOAD"] -- textos en el idioma elegido
   p.text, p.button1, p.button2 = L("linkPopup"), L("reloadNow"), L("later")
