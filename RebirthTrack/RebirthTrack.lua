@@ -329,7 +329,8 @@ f:SetScript("OnEvent", function(_, event, ...)
       if e.id == id and not e.finish then e.finish = time(); e.kill = success == 1; break end
     end
   elseif event == "COMBAT_LOG_EVENT_UNFILTERED" and session then
-    local _, sub = CombatLogGetCurrentEventInfo()
+    local ok, _, sub = pcall(CombatLogGetCurrentEventInfo)
+    if not ok or not sub then return end
     local ev = session.events
     ev.total = ev.total + 1
     ev.byType[sub] = (ev.byType[sub] or 0) + 1
@@ -338,9 +339,11 @@ f:SetScript("OnEvent", function(_, event, ...)
   end
 end)
 
+-- WoW Forever (y Retail 12.0) no dejan a los addons leer el registro de combate: el evento se
+-- registra con pcall para que el resto del addon ande igual (el archivo lo sigue escribiendo el juego).
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "GROUP_ROSTER_UPDATE",
   "ENCOUNTER_START", "ENCOUNTER_END", "COMBAT_LOG_EVENT_UNFILTERED" }) do
-  f:RegisterEvent(e)
+  pcall(f.RegisterEvent, f, e)
 end
 
 -- ── Vincular el personaje a la cuenta de Rebirth Track ─────────────────────────────────────
@@ -420,7 +423,9 @@ end
 local queue, pumping = {}, false
 local function paused()
   if InCombatLockdown and InCombatLockdown() then return true end
-  return WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1) and IsInInstance and IsInInstance() and true or false
+  -- Retail y WoW Forever (WOW_PROJECT_CAMELOT) restringen los mensajes de addons en instancias.
+  local restricted = WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1) or WOW_PROJECT_ID == (WOW_PROJECT_CAMELOT or 18)
+  return restricted and IsInInstance and IsInInstance() and true or false
 end
 local function rawSend(msg)
   if C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(COMM, msg, "GUILD")

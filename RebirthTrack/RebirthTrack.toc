@@ -1,9 +1,9 @@
-## Interface: 120001, 50501, 20506, 20505, 11508
+## Interface: 120001, 50501, 20506, 20505, 11508, 16001
 ## Title: Rebirth Track
 ## IconTexture: Interface\AddOns\RebirthTrack\icon
 ## Notes: Prende el registro de combate avanzado al entrar a una banda o mazmorra y anota la sesión.
 ## Author: Rebirth Knights
-## Version: 0.0.11
+## Version: 0.0.12
 ## X-Curse-Project-ID: 1757092
 ## SavedVariables: RebirthTrackDB
 

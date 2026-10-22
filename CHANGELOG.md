@@ -3,6 +3,11 @@
 Cada versión, en español y en inglés. La sección de la versión que se publica es la que CI sube a
 CurseForge como notas del archivo (`scripts/changelog.sh`).
 
+## 0.0.12
+
+- Funciona en **WoW Forever** (interfaz 16001): el juego ya no lo marca como desactualizado. Forever no deja a los addons leer el registro de combate, así que esa parte se saltea sin errores; la lista de la guild, los anuncios y la vinculación andan igual.
+- *EN:* Works on **WoW Forever** (interface 16001): the game no longer flags it as out of date. Forever doesn't let addons read the combat log, so that part is skipped without errors; the guild list, announcements and linking work the same.
+
 ## 0.0.11
 
 - Anota la **lista de miembros de la guild** (nombre, reino, clase, nivel, rango y última conexión) para que la app la suba al sitio: aparecen todos los miembros, aunque no tengan la app ni el addon.
