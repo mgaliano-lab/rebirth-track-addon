@@ -841,21 +841,24 @@ end)
 
 -- ── Rangos de la guild (oficiales) ───────────────────────────────────────────────────────────
 -- El sitio arma un código con el rango que le toca a cada uno según sus roles de Discord
--- (Miembros › Guild del juego › «Copiar para el addon»): «RTR1:Nombre=2,Otro=4». Pegado en el chat
--- (/rt rangos RTR1:…) o en este panel, el addon muestra quién está en otro rango y aplica un paso por
--- clic: el juego no deja que un addon cambie rangos solo, cada ascenso o descenso necesita un clic.
+-- (Miembros › Guild del juego › «Copiar para el addon»): «RTR1:Nombre=2,Otro=4». Se pega en esta
+-- ventana (o /rt rangos RTR1:…) y la lista de la guild muestra, en cada miembro que tiene que
+-- cambiar, un botón propio. Cada clic hace un solo ascenso o descenso con GuildPromote/GuildDemote,
+-- que es lo que el juego permite: nada se aplica solo ni en lote.
 local RT = {
   es = {
-    title = "Rangos de la guild", paste = "Código del sitio (Miembros › Guild del juego › Copiar para el addon):",
-    read = "Leer", apply = "Aplicar siguiente", none = "|cff3fbf3fTodos tienen el rango que les toca.|r",
+    title = "Rangos de la guild", paste = "Pegá acá lo que copiaste del sitio (Miembros › Guild del juego › Copiar para el addon):",
+    read = "Leer", none = "|cff3fbf3fTodos tienen el rango que les toca.|r", noCode = "Pegá el código del sitio para ver qué cambiar.",
     noPerm = "necesitás ser oficial o Guild Master para cambiar rangos.", bad = "el código no es válido: copialo de nuevo del sitio.",
-    pending = "%d cambios pendientes:", missing = "%s: no está en la guild", done = "%s: %s → %s.",
+    pending = "%d por cambiar · un clic por paso", missing = "no está en la guild", ok = "|cff3fbf3f✓|r",
+    promote = "Subir a %s", demote = "Bajar a %s", done = "%s: %s → %s.", onlyChanges = "Solo los que cambian",
   },
   en = {
-    title = "Guild ranks", paste = "Code from the site (Members › In-game guild › Copy for the addon):",
-    read = "Read", apply = "Apply next", none = "|cff3fbf3fEveryone has the right rank.|r",
+    title = "Guild ranks", paste = "Paste what you copied from the site (Members › In-game guild › Copy for the addon):",
+    read = "Read", none = "|cff3fbf3fEveryone has the right rank.|r", noCode = "Paste the site's code to see what to change.",
     noPerm = "you need to be an officer or Guild Master to change ranks.", bad = "the code isn't valid: copy it again from the site.",
-    pending = "%d pending changes:", missing = "%s: not in the guild", done = "%s: %s → %s.",
+    pending = "%d to change · one click per step", missing = "not in the guild", ok = "|cff3fbf3f✓|r",
+    promote = "Promote to %s", demote = "Demote to %s", done = "%s: %s → %s.", onlyChanges = "Only the ones that change",
   },
 }
 local function RL(k) return (RT[lang()] or RT.es)[k] or RT.es[k] end
@@ -869,82 +872,122 @@ local function parseRanks(code)
 end
 
 local function rankName(idx) return GuildControlGetRankName and GuildControlGetRankName(idx + 1) or ("#" .. idx) end
+local function rerequestRoster() if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() elseif GuildRoster then GuildRoster() end end
 
--- Quién no tiene el rango que le toca (y en qué rango está), según la lista de la guild del juego.
-local function pendingRanks(want)
-  local have, list = {}, {}
+-- La guild del juego con el rango que le toca a cada uno según el código: primero los que tienen que
+-- cambiar, después los que están bien y al final los del código que ya no están en la guild.
+local function rankRows(want)
+  local rows, seen = {}, {}
   for i = 1, GetNumGuildMembers() do
-    local full, _, rankIndex = GetGuildRosterInfo(i)
-    if full then have[full:match("^[^-]+")] = { full = full, rank = rankIndex } end
+    local full, _, rankIndex, _, _, _, _, _, online, _, class = GetGuildRosterInfo(i)
+    if full then
+      local short = full:match("^[^-]+")
+      seen[short] = true
+      local target = want and want[short]
+      -- El Guild Master (0) no se toca: ni se asciende a nadie a GM ni se lo baja.
+      local change = target and target > 0 and rankIndex > 0 and target ~= rankIndex
+      table.insert(rows, { name = short, full = full, rank = rankIndex, to = change and target or nil, online = online, class = class })
+    end
   end
-  for name, target in pairs(want or {}) do
-    local m = have[name]
-    if not m then table.insert(list, { name = name, missing = true })
-    elseif m.rank ~= target and target > 0 then table.insert(list, { name = name, full = m.full, from = m.rank, to = target }) end
-  end
-  table.sort(list, function(a, b) return (a.missing and 1 or 0) < (b.missing and 1 or 0) or ((a.missing and 1 or 0) == (b.missing and 1 or 0) and a.name < b.name) end)
-  return list
+  for name in pairs(want or {}) do if not seen[name] then table.insert(rows, { name = name, missing = true }) end end
+  local order = function(r) return r.to and 0 or r.missing and 2 or 1 end
+  table.sort(rows, function(a, b) if order(a) ~= order(b) then return order(a) < order(b) end return a.name < b.name end)
+  return rows
 end
 
-local rk
-local function ranksDB() local d = db(); return d end
+local rk, ROW_H = nil, 22
+local function rankCode() return db().rankCode end
+
+-- Un paso para ese miembro (ascender = índice más chico). Lo dispara el clic en su botón.
+local function stepRank(row)
+  local up = row.to < row.rank
+  if (up and not CanGuildPromote()) or (not up and not CanGuildDemote()) then say(RL("noPerm")); return end
+  if up then GuildPromote(row.full) else GuildDemote(row.full) end
+  say(RL("done"):format(row.name, rankName(row.rank), rankName(up and row.rank - 1 or row.rank + 1)))
+  rerequestRoster()
+end
+
 local function refreshRanks()
   if not rk then return end
-  local list = pendingRanks(ranksDB().rankCode and parseRanks(ranksDB().rankCode))
-  local lines = {}
-  local actionable = 0
-  for _, p in ipairs(list) do
-    if p.missing then table.insert(lines, "|cff999999" .. RL("missing"):format(p.name) .. "|r")
-    else actionable = actionable + 1; table.insert(lines, ("|cffffffff%s|r: %s → |cffe3a42c%s|r"):format(p.name, rankName(p.from), rankName(p.to))) end
+  rk.title:SetText(RL("title")); rk.hint:SetText(RL("paste")); rk.read:SetText(RL("read")); rk.onlyLbl:SetText(RL("onlyChanges"))
+  local want = rankCode() and parseRanks(rankCode())
+  local rows, pending = rankRows(want), 0
+  for _, r in ipairs(rows) do if r.to then pending = pending + 1 end end
+  rk.status:SetText(not want and RL("noCode") or pending > 0 and RL("pending"):format(pending) or RL("none"))
+  local shown = {}
+  for _, r in ipairs(rows) do if not db().rankOnlyChanges or r.to or r.missing then table.insert(shown, r) end end
+  for i, r in ipairs(shown) do
+    local line = rk.rows[i]
+    if not line then
+      line = CreateFrame("Frame", nil, rk.list)
+      line:SetHeight(ROW_H)
+      line:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H); line:SetPoint("TOPRIGHT", 0, -(i - 1) * ROW_H)
+      line.name = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.name:SetPoint("LEFT", 4, 0); line.name:SetWidth(110); line.name:SetJustifyH("LEFT")
+      line.rank = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.rank:SetPoint("LEFT", 116, 0); line.rank:SetWidth(90); line.rank:SetJustifyH("LEFT")
+      line.btn = CreateFrame("Button", nil, line, "UIPanelButtonTemplate"); line.btn:SetSize(130, 20); line.btn:SetPoint("RIGHT", -2, 0)
+      line.btn:SetScript("OnClick", function(b) if b.row then b:Disable(); stepRank(b.row) end end)
+      line.state = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.state:SetPoint("RIGHT", -6, 0)
+      rk.rows[i] = line
+    end
+    local color = r.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[r.class]
+    line.name:SetText(color and ("|c" .. (color.colorStr or "ffffffff") .. r.name .. "|r") or r.name)
+    line.rank:SetText(r.missing and ("|cff999999" .. RL("missing") .. "|r") or rankName(r.rank))
+    line.btn.row = r.to and r or nil
+    if r.to then
+      local up = r.to < r.rank
+      line.btn:SetText((up and RL("promote") or RL("demote")):format(rankName(up and r.rank - 1 or r.rank + 1)))
+      line.btn:Enable(); line.btn:Show(); line.state:SetText("")
+    else
+      line.btn:SetText(""); line.btn:Hide()
+      line.state:SetText((want and not r.missing and want[r.name]) and RL("ok") or "")
+    end
+    line:Show()
   end
-  rk.list:SetText(ranksDB().rankCode and (actionable > 0 and (RL("pending"):format(actionable) .. "\n" .. table.concat(lines, "\n")) or (RL("none") .. (#lines > 0 and ("\n" .. table.concat(lines, "\n")) or ""))) or "")
-  rk.apply:SetEnabled(actionable > 0)
-  rk.title:SetText(RL("title")); rk.hint:SetText(RL("paste")); rk.read:SetText(RL("read")); rk.apply:SetText(RL("apply"))
+  for i = #shown + 1, #rk.rows do rk.rows[i].btn.row = nil; rk.rows[i].btn:SetText(""); rk.rows[i]:Hide() end
+  rk.list:SetHeight(math.max(1, #shown * ROW_H))
 end
 
 local function loadRanks(code)
   if not parseRanks(code) then say(RL("bad")); return false end
-  ranksDB().rankCode = code
-  if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() elseif GuildRoster then GuildRoster() end
+  db().rankCode = code
+  rerequestRoster()
   refreshRanks()
   return true
-end
-
--- Un paso hacia el rango que le toca al primero de la lista (ascender = índice más chico).
-local function applyNextRank()
-  for _, p in ipairs(pendingRanks(parseRanks(ranksDB().rankCode or ""))) do
-    if not p.missing then
-      local up = p.to < p.from
-      if (up and not CanGuildPromote()) or (not up and not CanGuildDemote()) then say(RL("noPerm")); return end
-      if up then GuildPromote(p.full) else GuildDemote(p.full) end
-      say(RL("done"):format(p.name, rankName(p.from), rankName(up and p.from - 1 or p.from + 1)))
-      if C_GuildInfo and C_GuildInfo.GuildRoster then C_GuildInfo.GuildRoster() elseif GuildRoster then GuildRoster() end
-      return
-    end
-  end
 end
 
 local function openRanks(code)
   if not rk then
     rk = CreateFrame("Frame", "RebirthTrackRanksFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    rk:SetSize(360, 320)
+    rk:SetSize(400, 440)
     rk:SetPoint("CENTER")
+    rk:SetFrameStrata("DIALOG")
     rk:SetMovable(true); rk:EnableMouse(true); rk:RegisterForDrag("LeftButton")
     rk:SetScript("OnDragStart", rk.StartMoving); rk:SetScript("OnDragStop", rk.StopMovingOrSizing)
     if rk.SetBackdrop then rk:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }) end
     rk.title = rk:CreateFontString(nil, "OVERLAY", "GameFontNormal"); rk.title:SetPoint("TOP", 0, -14)
     local close = CreateFrame("Button", nil, rk, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -4, -4)
     rk.hint = rk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); rk.hint:SetPoint("TOPLEFT", 16, -36); rk.hint:SetPoint("TOPRIGHT", -16, -36); rk.hint:SetJustifyH("LEFT")
-    rk.code = CreateFrame("EditBox", nil, rk, "InputBoxTemplate"); rk.code:SetSize(240, 22); rk.code:SetPoint("TOPLEFT", 22, -62); rk.code:SetAutoFocus(false)
+    rk.code = CreateFrame("EditBox", nil, rk, "InputBoxTemplate"); rk.code:SetSize(280, 22); rk.code:SetPoint("TOPLEFT", 22, -66); rk.code:SetAutoFocus(false)
+    if rk.code.SetMaxLetters then rk.code:SetMaxLetters(0) end
+    rk.code:SetScript("OnEnterPressed", function(e) loadRanks(e:GetText() or ""); e:ClearFocus() end)
     rk.read = CreateFrame("Button", nil, rk, "UIPanelButtonTemplate"); rk.read:SetSize(70, 22); rk.read:SetPoint("LEFT", rk.code, "RIGHT", 8, 0)
     rk.read:SetScript("OnClick", function() loadRanks(rk.code:GetText() or "") end)
-    rk.list = rk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); rk.list:SetPoint("TOPLEFT", 16, -96); rk.list:SetPoint("BOTTOMRIGHT", -16, 46); rk.list:SetJustifyH("LEFT"); rk.list:SetJustifyV("TOP")
-    rk.apply = CreateFrame("Button", nil, rk, "UIPanelButtonTemplate"); rk.apply:SetSize(160, 24); rk.apply:SetPoint("BOTTOM", 0, 14)
-    rk.apply:SetScript("OnClick", function() applyNextRank() end)
-    rk:RegisterEvent("GUILD_ROSTER_UPDATE"); rk:SetScript("OnEvent", function() refreshRanks() end)
+    rk.status = rk:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); rk.status:SetPoint("TOPLEFT", 16, -96); rk.status:SetJustifyH("LEFT")
+    rk.only = CreateFrame("CheckButton", nil, rk, "UICheckButtonTemplate"); rk.only:SetSize(22, 22); rk.only:SetPoint("TOPRIGHT", -150, -92)
+    rk.only:SetChecked(db().rankOnlyChanges and true or false)
+    rk.only:SetScript("OnClick", function(b) db().rankOnlyChanges = b:GetChecked() and true or false; refreshRanks() end)
+    rk.onlyLbl = rk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); rk.onlyLbl:SetPoint("LEFT", rk.only, "RIGHT", 2, 0)
+    -- La lista con scroll: una fila por miembro (nombre, rango actual y su botón si tiene que cambiar).
+    rk.scroll = CreateFrame("ScrollFrame", "RebirthTrackRanksScroll", rk, "UIPanelScrollFrameTemplate")
+    rk.scroll:SetPoint("TOPLEFT", 14, -120); rk.scroll:SetPoint("BOTTOMRIGHT", -32, 16)
+    rk.list = CreateFrame("Frame", nil, rk.scroll); rk.list:SetSize(350, 1)
+    rk.scroll:SetScrollChild(rk.list)
+    rk.rows = {}
+    rk:RegisterEvent("GUILD_ROSTER_UPDATE"); rk:SetScript("OnEvent", function() if rk:IsShown() then refreshRanks() end end)
   end
-  if code and code ~= "" then rk.code:SetText(code); loadRanks(code) end
+  if code and code ~= "" then rk.code:SetText(code); loadRanks(code) else rk.code:SetText(rankCode() or "") end
   rk:Show()
+  rerequestRoster()
   refreshRanks()
 end
 

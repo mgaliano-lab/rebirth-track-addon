@@ -73,12 +73,18 @@ fire("CHAT_MSG_ADDON", "RTK1", "H;9999999999", "GUILD", "Nuevo-Nightslayer")
 assert(#sentAddon == 0, "si ya está al día no responde")
 print("canal de addons OK", #g.known)
 
--- Rangos (oficiales): /rt rangos con el código del sitio lista los cambios y aplica uno por clic.
+-- Rangos (oficiales): con el código del sitio, cada miembro que cambia tiene su botón y cada clic
+-- hace un solo paso (como exige el juego).
+rt("rangos")
 rt("rangos RTR1:Healz=2,Otro=3,Nadie=4,Roguebash=1")
 assert(RebirthTrackDB.rankCode == "RTR1:Healz=2,Otro=3,Nadie=4,Roguebash=1", "guarda el código tal cual (con mayúsculas)")
-click("Aplicar siguiente")
-assert(promoted[1] == "Healz-Nightslayer", "asciende a Healz (3 → 2)")
-click("Aplicar siguiente")
-assert(#promoted == 2 and promoted[2] == "Healz-Nightslayer", "sin refrescar la lista, vuelve a intentar con el primero")
+click("Subir a Caballero")
+assert(promoted[1] == "Healz-Nightslayer", "Healz sube un paso (Miembro → Caballero)")
+assert(#promoted == 1 and #demoted == 0, "un clic, un cambio")
+click("Subir a Miembro")
+assert(promoted[2] == "Otro-Dreamscythe", "Otro sube un paso (Recluta → Miembro)")
+rt("rangos RTR1:Healz=4")
+click("Bajar a Recluta")
+assert(demoted[1] == "Healz-Nightslayer", "bajar también es de a un paso")
 rt("rangos nada")
 print("rangos OK", #promoted, #demoted)
