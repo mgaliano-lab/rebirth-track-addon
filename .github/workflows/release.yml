@@ -1,5 +1,6 @@
-# Al pushear un tag vX.Y.Z: corre las pruebas, arma el zip y lo publica en CurseForge y en un
-# GitHub Release, con la sección de esa versión de CHANGELOG.md como notas.
+# Al pushear un tag vX.Y.Z: corre las pruebas, valida CHANGELOG.md, arma el zip y lo publica en
+# CurseForge (notas: «Para todos») y en un GitHub Release (notas: la versión entera), y lo anuncia
+# en el canal de novedades de Discord.
 # La versión del tag tiene que coincidir con "## Version:" del .toc.
 # El CDN de rebirthknights.fun se sigue publicando a mano con scripts/release.sh.
 name: release
@@ -11,6 +12,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # token OIDC para anunciar en el sitio (scripts/announce-release.sh)
 
 jobs:
   release:
@@ -30,7 +32,8 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag && "${GITHUB_REF_NAME#v}" != "$v" ]]; then
             echo "El tag $GITHUB_REF_NAME no coincide con ## Version: $v del .toc" >&2; exit 1
           fi
-          scripts/changelog.sh "$v" > notes.md
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then scripts/changelog-check.sh "$v"; else scripts/changelog-check.sh; fi
+          scripts/changelog-section.sh "$v" all > notes.md
           echo "version=$v" >> "$GITHUB_OUTPUT"
 
       - name: Zip
@@ -49,3 +52,7 @@ jobs:
         run: |
           gh release create "v${{ steps.v.outputs.version }}" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" \
             --title "Rebirth Track ${{ steps.v.outputs.version }}" --notes-file notes.md
+
+      - name: Anunciar en Discord
+        if: github.ref_type == 'tag'
+        run: scripts/announce-release.sh addon "${{ steps.v.outputs.version }}"

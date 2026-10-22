@@ -1,0 +1,17 @@
+# CHANGELOG.md tiene que cumplir el formato obligatorio en cada push y PR (scripts/changelog-check.sh).
+name: changelog
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/changelog-check.sh

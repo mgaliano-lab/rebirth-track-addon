@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sube el zip del addon a CurseForge (proyecto 1757092) con la sección de CHANGELOG.md como notas.
+# Sube el zip del addon a CurseForge (proyecto 1757092) con lo de «Para todos» de CHANGELOG.md como notas.
 # Las versiones del juego salen de "## Interface:" del .toc (120001 → 12.0.1, 20505 → 2.5.5…) y se
 # buscan en la API de CurseForge; las que todavía no existan allá se saltean con un aviso.
 #   CF_API_TOKEN=… scripts/curseforge.sh dist/RebirthTrack-0.0.8.zip
@@ -26,7 +26,7 @@ for n in $names; do
 done
 [[ $(jq length <<<"$ids") -gt 0 ]] || { echo "ninguna versión del juego reconocida por CurseForge: $names" >&2; exit 1; }
 
-metadata=$(jq -n --arg log "$(scripts/changelog.sh "$VERSION")" --arg name "$VERSION" --argjson ids "$ids" \
+metadata=$(jq -n --arg log "$(scripts/changelog-section.sh "$VERSION" public)" --arg name "$VERSION" --argjson ids "$ids" \
   '{ changelog: $log, changelogType: "markdown", displayName: $name, gameVersions: $ids, releaseType: "release" }')
 curl -sS --fail-with-body -X POST -H "X-Api-Token: $CF_API_TOKEN" \
   --form-string "metadata=$metadata" -F "file=@$ZIP" \

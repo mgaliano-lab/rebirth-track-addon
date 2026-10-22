@@ -98,11 +98,14 @@ instala y actualiza este addon sola.
 
 ## Publicar una versión
 
-1. Subí `## Version:` en **todos** los `RebirthTrack/*.toc` y agregá la sección `## X.Y.Z` en
-   `CHANGELOG.md` (español + inglés): sin ella CI no publica.
+1. Subí `## Version:` en **todos** los `RebirthTrack/*.toc` y agregá arriba de todo en
+   `CHANGELOG.md` la sección `## [X.Y.Z] - AAAA-MM-DD` con `### Para todos` (lo que se anuncia en
+   Discord y va a CurseForge, sin tecnicismos) y `### Técnico`. Sin eso CI no publica
+   (`scripts/changelog-check.sh`).
 2. CurseForge: pusheá el tag `vX.Y.Z`. El workflow `release` corre las pruebas, arma el zip y lo sube a
    [CurseForge](https://legacy.curseforge.com/wow/addons/rebirth-track) (proyecto 1757092) y a un
-   GitHub Release, con la sección del changelog como notas. Necesita el secret `CF_API_TOKEN`
+   GitHub Release con las notas del changelog, y lo anuncia en el canal de novedades de Discord
+   (`scripts/announce-release.sh`, con el token OIDC de GitHub). Necesita el secret `CF_API_TOKEN`
    (token de https://legacy.curseforge.com/account/api-tokens).
 3. CDN del sitio: corré `scripts/release.sh` (con `AWS_PROFILE=mgaliano`). Arma dos zip:
    - el de instalar, con `RebirthTrack/` en la raíz;
