@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.3.1] - 2026-10-23
+
+### Para todos
+
+- **Tu balance, solo si querés**: el balance de tus personajes se anota únicamente si tenés la app Rebirth Track Uploader con la casilla **«Enviar mi balance»** activada. Sin la app, o si la desactivás, no se anota y se borra el que había. El balance del banco de la guild se anota igual.
+
+### Técnico
+
+- `AppSettings.lua` nuevo (en todos los `.toc`, antes de `Collect.lua`): `RebirthTrackApp = { balance = false }`; la app (v0.5.0) lo reescribe según su panel. `mo1` solo con `RebirthTrackApp.balance == true`; si no, en `PLAYER_LOGIN` se borra de `RebirthTrackDB.data`.
+
 ## [0.3.0] - 2026-10-23
 
 ### Para todos

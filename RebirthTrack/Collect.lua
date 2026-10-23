@@ -1,5 +1,5 @@
 -- Rebirth Track · Lo que el juego le muestra al jugador, anotado para el sitio
--- Personaje, oro, profesiones (niveles, recetas y cooldowns), equipo, talentos, bolsas y banco,
+-- Personaje, balance, profesiones (niveles, recetas y cooldowns), equipo, talentos, bolsas y banco,
 -- reputaciones, misiones completadas, subasta (solo lo que publicás y lo que comprás o vendés), banco
 -- de la guild, historial de la guild, y en bandas y mazmorras el botín, los buffs al empezar cada jefe
 -- y el equipo del resto (inspeccionando, fuera de combate). WoW no deja a los addons salir a internet:
@@ -17,11 +17,12 @@
 --     cd1  profesión;receta=hora en que vuelve a estar lista,…                  (se comparte)
 --     eq1  ranura=ítem[:encantamiento],…  (propio o de alguien inspeccionado)   (se comparte el propio)
 --     t1   grupo;rama~puntos~fila.columna.rango,…/…  (talentos, salvo Retail)  (se comparte)
---     mo1  oro en cobre · pt1 tiempo jugado;en el nivel (al usar /played)
+--     mo1  balance en cobre (solo con la app y «Enviar mi balance» activada: AppSettings.lua)
+--     pt1  tiempo jugado;en el nivel (al usar /played)
 --     inv1 lugar;ítem:cantidad,…  (bags, bank, reagents)
 --     rep1 facción=nivel:valor,… · q1 misión,… (completadas)
 --     aho1 ítem:cantidad:oferta mínima:compra:oferta actual:tiempo:vendida,…  (lo que tenés publicado)
---     gb1  pestaña;nombre;ítem:cantidad,… · gbm1 oro · gx1 mensaje del día;información  (de la guild)
+--     gb1  pestaña;nombre;ítem:cantidad,… · gbm1 balance · gx1 mensaje del día;información  (de la guild)
 --   RebirthTrackDB.events = lo que pasa una vez (la hora es la del hecho):
 --     lt1  botín en instancias (raro o mejor): quién;instancia;dificultad;ítem;cantidad;nombre de la instancia
 --     bf1  buffs al empezar un jefe: encuentro;jefe;hechizo,…  (uno por jugador)
@@ -31,7 +32,7 @@
 --
 -- Lo que no es privado y le sirve a la guild (personaje, profesiones, cooldowns, equipo y talentos)
 -- se comparte por el canal de addons (RTK1), así lo sube cualquiera que tenga la app aunque vos no
--- la tengas. Lo recibido se guarda con «@remitente;» adelante. Oro, bolsas, banco, reputaciones,
+-- la tengas. Lo recibido se guarda con «@remitente;» adelante. Balance, bolsas, banco, reputaciones,
 -- misiones y subasta no se comparten: solo los sube tu app, a tu cuenta.
 --
 -- Por el canal (mensajes de hasta 255 caracteres):
@@ -55,6 +56,9 @@ local function J(...)
   return table.concat(out, ";", 1, n)
 end
 local function me() return UnitGUID("player") end
+-- El balance de cada personaje se anota solo si la app está y su casilla «Enviar mi balance» está
+-- activada: la app lo deja en AppSettings.lua (RebirthTrackApp.balance).
+local function balanceOn() return type(RebirthTrackApp) == "table" and RebirthTrackApp.balance == true end
 
 local function store()
   local d = ns.db()
@@ -83,6 +87,11 @@ local function put(owner, t, payload, doShare)
   c[key] = line
   if doShare and SHARED[t] then share(line) end
   return true
+end
+
+local function saveBalance()
+  local g = me()
+  if g and GetMoney and balanceOn() then put(g, "mo1", tostring(GetMoney() or 0)) end
 end
 
 local function event(t, owner, payload, at)
@@ -186,7 +195,7 @@ local function collectPlayer()
   local guild = IsInGuild and IsInGuild() and GetGuildInfo("player") or ""
   put(g, "p1", J(tok(UnitName("player")), tok(GetRealmName()), ns.regionCode(), WOW_PROJECT_ID or 0, class or "",
     race or "", UnitLevel("player") or 0, UnitFactionGroup and UnitFactionGroup("player") or "", tok(guild)), true)
-  if GetMoney then put(g, "mo1", tostring(GetMoney() or 0)) end
+  saveBalance()
 end
 
 local function collectSkills()
@@ -395,7 +404,7 @@ local function collectBags()
       put(g, "inv1", J("reagents", fmtCounts(counts({ REAGENTBANK_CONTAINER }))))
     end
   end
-  if GetMoney then put(g, "mo1", tostring(GetMoney() or 0)) end
+  saveBalance()
 end
 
 -- ── Reputaciones y misiones ────────────────────────────────────────────────────────────
@@ -686,6 +695,8 @@ end
 
 local ON = {
   PLAYER_LOGIN = function()
+    -- Sin la app o con «Enviar mi balance» desactivada, se borra el que haya quedado anotado.
+    if not balanceOn() then for _, c in pairs(store().data) do c.mo1 = nil end end
     C_Timer.After(15, function()
       for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectBags, collectReputation, collectQuests }) do pcall(fn) end
       if ns.send then ns.send("E;" .. math.max(0, (store().syncAt or 0) - 86400)) end
@@ -702,7 +713,7 @@ local ON = {
   end,
   PLAYER_LEVEL_UP = function() soon("player", collectPlayer) end,
   PLAYER_GUILD_UPDATE = function() soon("player", collectPlayer) end,
-  PLAYER_MONEY = function() soon("money", function() local g = me(); if g and GetMoney then put(g, "mo1", tostring(GetMoney() or 0)) end end, 5) end,
+  PLAYER_MONEY = function() soon("money", saveBalance, 5) end,
   SKILL_LINES_CHANGED = function() soon("skills", collectSkills) end,
   TRADE_SKILL_SHOW = function()
     pcall(function() if ExpandTradeSkillSubClass then ExpandTradeSkillSubClass(0) end end)
