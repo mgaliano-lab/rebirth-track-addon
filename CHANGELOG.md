@@ -13,6 +13,21 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.3.0] - 2026-10-23
+
+### Para todos
+
+- **Anota más del juego para el sitio**: tus profesiones (niveles, recetas y cooldowns), equipo, talentos, oro, bolsas y banco, reputaciones y misiones; de la subasta, solo lo que publicás y lo que comprás o vendés. En bandas y mazmorras, el botín y los buffs al empezar cada jefe, y el equipo del resto de la banda. De la guild, el banco (si lo abrís), las notas, el mensaje del día y el historial.
+- **Con que algunos tengan la app alcanza**: profesiones, equipo y talentos se comparten entre los addons de la guild y los sube cualquiera que tenga la app. Lo privado (oro, bolsas, banco, subasta) no sale de tu PC más que por tu app.
+- **`/rt datos`**: muestra en el chat qué hay anotado.
+- Banco, correo, subasta y recetas solo se anotan cuando abrís esa ventana. Nunca lee tu chat.
+
+### Técnico
+
+- `Collect.lua` nuevo (en todos los `.toc`): líneas `tipo;dueño;hora;…` en `RebirthTrackDB.data[dueño][clave]` (último estado, la hora es la del último cambio) y `RebirthTrackDB.events` (hechos, hasta 1500). Detalle de cada tipo en el encabezado del archivo. Todo con detección de API y `pcall`: en la versión que no tiene una función, lo demás se sigue anotando.
+- Canal de addons `RTK1`: `D;id;parte;partes;texto` (líneas de hasta ~16 KB en partes de 200) y `E;desde` al entrar (los demás responden con lo que cambió desde esa hora, sin repetir lo que ya mandó otro). Solo viajan `p1`, `sk1`, `r1`, `cd1`, `eq1` y `t1`; lo recibido se guarda con `@remitente;`. Cola a un mensaje por segundo.
+- `m1` suma la nota pública y la de oficiales (si el rango la ve). El archivo principal comparte `db`, `send` y `regionCode` con `Collect.lua` por la tabla del addon. Los textos ya no llevan comillas.
+
 ## [0.2.2] - 2026-10-23
 
 ### Para todos

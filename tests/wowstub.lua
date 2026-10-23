@@ -6,7 +6,7 @@ local function newObj()
     if not k:match("^%u") then return nil end -- como en WoW: solo los métodos existen, los campos propios no
     return function(self, ...)
       if k == "SetScript" then local name, fn = ...; self.scripts[name] = fn
-      elseif k == "RegisterEvent" then table.insert(handlers, self)
+      elseif k == "RegisterEvent" then if not self.registered then self.registered = true; table.insert(handlers, self) end
       elseif k == "SetText" then local v = ...; if v == nil then error("SetText(nil)") end; self.text = v
       elseif k == "GetText" then return self.text
       elseif k == "Show" then self.shown = true
@@ -58,7 +58,7 @@ function GetGuildInfo() return "Rebirth Knights", "Oficial", 1, nil end
 function GetNormalizedRealmName() return "Nightslayer" end
 local roster = {
   { "Roguebash-Nightslayer", "Oficial", 1, 60, "Pícaro", "Orgrimmar", "", "", true, 0, "ROGUE", 0, 0, false, false, 0, "Player-6065-044C2423" },
-  { "Healz-Nightslayer", "Miembro", 3, 58, "Sacerdote", "", "", "", false, 0, "PRIEST", 0, 0, false, false, 0, "Player-6065-0411" },
+  { "Healz-Nightslayer", "Miembro", 3, 58, "Sacerdote", "", "Alt de Roguebash", "Nota de oficial", false, 0, "PRIEST", 0, 0, false, false, 0, "Player-6065-0411" },
   { "Otro-Dreamscythe", "Recluta", 4, 20, "Mago", "", "", "", false, 0, "MAGE", 0, 0, false, false, 0, "Player-6066-0099" },
 }
 function GetNumGuildMembers() return #roster end
@@ -79,3 +79,6 @@ C_ChatInfo = {
 function InCombatLockdown() return false end
 function Ambiguate(n) return (n:gsub("%-.*", "")) end
 local clock = 100; function GetTime() clock = clock + 1; return clock end
+-- Subasta (Classic): hooksecurefunc llama a la función original y después al gancho.
+function PlaceAuctionBid() end
+function hooksecurefunc(name, fn) local orig = _G[name]; _G[name] = function(...) orig(...); fn(...) end end
