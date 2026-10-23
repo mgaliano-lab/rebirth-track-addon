@@ -48,6 +48,7 @@ addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet)
   | `/rt mazmorras` · `dungeons` | Prende o apaga el registro en mazmorras (desde 0.0.3 vienen prendidas). |
   | `/rt borrar` · `reset` | Borra las sesiones guardadas. |
   | `/rt minimapa` · `minimap` | Muestra u oculta el botón del minimapa (clic: ventana · clic derecho: vincular · arrastrar: mover). |
+  | `/rt datos` · `data` | Cuenta qué datos del juego hay anotados (personajes, profesiones, eventos) para que la app los suba. Ver el encabezado de `RebirthTrack/Collect.lua`. |
 
 - El juego escribe lo anotado en
   `WTF/Account/<CUENTA>/SavedVariables/RebirthTrack.lua` **recién al hacer `/reload`, al salir o al

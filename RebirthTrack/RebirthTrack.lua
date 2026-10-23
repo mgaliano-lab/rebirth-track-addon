@@ -4,7 +4,8 @@
 -- de combate hubo por tipo y por minuto. Al salir, apaga el registro si lo prendió el addon.
 -- El juego escribe RebirthTrackDB a disco al hacer /reload, al desloguear o al desconectarse.
 
-local ADDON = ...
+local ADDON, ns = ...
+ns = ns or {} -- lo comparten los archivos del addon (Collect.lua)
 local MAX_SESSIONS = 20
 local PREFIX = "|cffe3a42cRebirth Track|r: "
 
@@ -51,6 +52,7 @@ local TEXTS = {
     mmSay = "botón del minimapa %s.", visible = "visible", hidden = "oculto (/rt minimapa para mostrarlo)",
     resetSay = "sesiones borradas.", unknown = "no conozco «%s». Probá /rt ayuda (o /rt help).",
     langSay = "idioma: español.",
+    dataSay = "datos anotados: %d personajes tuyos, %d de la guild (recibidos por el canal del addon), %d profesiones y %d eventos. La app los sube cuando el juego guarda (/reload o al salir).",
     help = {
       "|cffe3a42cQué hace|r",
       "Al entrar a una banda o mazmorra prende el registro de combate avanzado del juego. Rebirth Track Uploader (la app de tu PC) sube esos registros a rebirthknights.fun.",
@@ -76,6 +78,7 @@ local TEXTS = {
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
+      "/rt datos · data",
       "/rt ayuda · help",
     },
   },
@@ -113,6 +116,7 @@ local TEXTS = {
     mmSay = "minimap button %s.", visible = "visible", hidden = "hidden (/rt minimap to show it)",
     resetSay = "sessions cleared.", unknown = "unknown command «%s». Try /rt help (or /rt ayuda).",
     langSay = "language: English.",
+    dataSay = "recorded data: %d of your characters, %d from the guild (received over the addon channel), %d professions and %d events. The app uploads them when the game saves (/reload or logout).",
     help = {
       "|cffe3a42cWhat it does|r",
       "When you enter a raid or dungeon it turns on the game's advanced combat logging. Rebirth Track Uploader (the app on your PC) uploads those logs to rebirthknights.fun.",
@@ -138,6 +142,7 @@ local TEXTS = {
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
+      "/rt data · datos",
       "/rt help · ayuda",
     },
   },
@@ -157,6 +162,7 @@ local function db()
   if (s.v or 0) < 3 then s.dungeons, s.v = true, 3 end
   return RebirthTrackDB
 end
+ns.db = db
 
 local function advancedOn() return GetCVar("advancedCombatLogging") == "1" end
 
@@ -368,8 +374,9 @@ local REGIONS = { [1] = "us", [2] = "kr", [3] = "eu", [4] = "tw", [5] = "cn" }
 -- Por el canal: "H;hora más nueva que tengo" (al entrar) y "K;…" (un personaje, mismos campos que known).
 local COMM = "RTK1"
 local MAX_KNOWN, MAX_REPLY = 1000, 60
-local function clean(s) return (tostring(s or ""):gsub("[|;\n]", " ")) end
+local function clean(s) return (tostring(s or ""):gsub("[|;\n\"]", " ")) end
 local function regionCode() return REGIONS[GetCurrentRegion and GetCurrentRegion() or 1] or "us" end
+ns.regionCode = regionCode
 local function split(s)
   local out = {}
   for part in (s .. ";"):gmatch("([^;]*);") do out[#out + 1] = part end
@@ -438,13 +445,14 @@ function pump()
   if #queue == 0 then pumping = false; return end
   if paused() then C_Timer.After(5, pump); return end
   rawSend(table.remove(queue, 1))
-  C_Timer.After(0.5, pump)
+  C_Timer.After(1, pump)
 end
 local function send(msg)
-  if not IsInGuild() or #queue >= 200 then return end
+  if not IsInGuild() or #queue >= 600 then return end
   queue[#queue + 1] = msg
   if not pumping then pumping = true; C_Timer.After(0, pump) end
 end
+ns.send = send
 
 local function announce(f)
   remember(f)
@@ -483,6 +491,8 @@ local function onAddonMessage(prefix, msg, channel, sender)
     local f = split("k1;" .. rest)
     index()
     if remember(f) then heardAt[keyOf(f)] = GetTime and GetTime() or time() end
+  elseif kind and ns.onComm and ns.onComm[kind] then -- datos (Collect.lua)
+    ns.onComm[kind](rest, sender or "")
   elseif kind == "H" then
     local since = tonumber(rest)
     if since and newestKnown() > since then reply(since) end
@@ -510,12 +520,13 @@ local function snapshotGuild()
   local homeKey = GetNormalizedRealmName and GetNormalizedRealmName() or home:gsub("[%s%-']", "")
   local members = {}
   for i = 1, n do
-    local full, rankName, rankIndex, level, _, _, _, _, online, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
+    local full, rankName, rankIndex, level, _, _, note, officerNote, online, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
     if full then
       local name, realm = full:match("^([^%-]+)%-(.+)$")
       if not realm or realm == homeKey then realm = home end
       members[#members + 1] = table.concat({ "m1", clean(name or full), clean(realm), class or "", level or 0, rankIndex or 0,
-        clean(rankName), guid or "", online and 0 or lastOnline(i) }, ";")
+        clean(rankName), guid or "", online and 0 or lastOnline(i), clean(note),
+        (CanViewOfficerNote and CanViewOfficerNote()) and clean(officerNote) or "" }, ";")
     end
   end
   local g = guildDB()
@@ -1004,6 +1015,7 @@ local COMMANDS = {
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
   rangos = "ranks", ranks = "ranks",
+  datos = "data", data = "data",
 }
 
 SLASH_REBIRTHTRACK1 = "/rt"
@@ -1034,6 +1046,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().sessions = {}
     say(L("resetSay"))
   elseif cmd == "ranks" then openRanks(raw)
+  elseif cmd == "data" then
+    if ns.dataSummary then say(L("dataSay"):format(ns.dataSummary())) end
   elseif cmd == "lang" then
     local want = (arg == "en" or arg == "english" or arg == "ingles" or arg == "inglés") and "en"
       or (arg == "es" or arg == "spanish" or arg == "español" or arg == "espanol") and "es"
