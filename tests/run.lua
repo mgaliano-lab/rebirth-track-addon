@@ -2,6 +2,7 @@ dofile(arg[1] or "tests/wowstub.lua") -- stubs de la API de WoW
 local chunk = assert(loadfile(arg[2] or "RebirthTrack/RebirthTrack.lua"))
 local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/AppSettings.lua"))("RebirthTrack", ns) -- como viene en el zip (sin la app)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
@@ -105,8 +106,8 @@ sentAddon = {}
 C.put(ME, "p1", "Roguebash;Nightslayer;us;5;ROGUE;Orc;61;Horde;Rebirth Knights", true)
 assert(sentWith("^D;%x+;1;1;p1;Player%-6065%-044C2423;%d+;Roguebash;"), "comparte el personaje")
 sentAddon = {}
-C.put(ME, "mo1", "123456")
-assert(#sentAddon == 0, "el oro no sale por el canal")
+C.put(ME, "inv1", "bags;6948:1")
+assert(#sentAddon == 0, "las bolsas no salen por el canal")
 -- Sin cambios no se vuelve a anotar ni a mandar.
 assert(C.put(ME, "p1", "Roguebash;Nightslayer;us;5;ROGUE;Orc;61;Horde;Rebirth Knights", true) == false)
 print("personaje OK", D[ME].p1)
@@ -130,7 +131,7 @@ sentAddon = {}
 fire("CHAT_MSG_ADDON", "RTK1", "E;0", "GUILD", "Nuevo-Nightslayer")
 assert(sentWith("^D;%x+;%d+;%d+;sk1;Player%-6065%-0411;1792530100;Alquimia"), "reenvía lo recibido")
 assert(sentWith("^D;%x+;1;1;p1;" .. ME:gsub("%-", "%%-")), "manda lo propio")
-assert(not sentWith(";mo1;"), "lo privado no")
+assert(not sentWith(";inv1;"), "lo privado no")
 print("canal de datos OK")
 
 -- Profesiones (Classic): recetas, cooldowns y las que se ven después se suman.
@@ -170,7 +171,13 @@ assert(D[ME]["inv1:bags"]:match(";bags;6948:1,13443:8$"), D[ME]["inv1:bags"])
 assert(not D[ME]["inv1:bank"], "sin abrir el banco no se lee")
 fire("BANKFRAME_OPENED")
 assert(D[ME]["inv1:bank"]:match(";bank;2589:20,12360:2$"), D[ME]["inv1:bank"])
-assert(D[ME].mo1:match(";5000000$"))
+assert(not D[ME].mo1, "sin la app no se anota el balance")
+RebirthTrackApp = { balance = true } -- la app con «Enviar mi balance» activada
+fire("PLAYER_MONEY")
+assert(D[ME].mo1:match(";5000000$"), "con la app y la casilla activada, sí")
+RebirthTrackApp = { balance = false } -- la desactivó: al entrar se borra
+fire("PLAYER_LOGIN")
+assert(not D[ME].mo1, "desactivada, se borra lo anotado")
 print("bolsas y banco OK")
 
 -- Subasta: lo publicado, la compra al precio de compra y las facturas del correo (una vez cada una).
