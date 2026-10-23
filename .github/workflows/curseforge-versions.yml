@@ -1,0 +1,32 @@
+# Solo lectura: lista los tipos y versiones de juego de WoW que tiene CurseForge (para mapear las
+# interfaces del .toc, por ejemplo la de WoW Forever). No sube nada.
+name: curseforge-versions
+
+on:
+  workflow_dispatch:
+    inputs:
+      filtro:
+        description: 'Texto a buscar en el nombre del tipo o de la versión (ej. forever)'
+        default: 'forever'
+
+permissions:
+  contents: read
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tipos y versiones
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          FILTRO: ${{ inputs.filtro }}
+        run: |
+          API=https://wow.curseforge.com/api
+          types=$(curl -sS --fail-with-body -H "X-Api-Token: $CF_API_TOKEN" "$API/game/version-types")
+          versions=$(curl -sS --fail-with-body -H "X-Api-Token: $CF_API_TOKEN" "$API/game/versions")
+          echo "== Tipos de versión:"; jq -r '.[] | "\(.id)\t\(.slug)\t\(.name)"' <<<"$types"
+          echo "== Tipos que coinciden con «$FILTRO» y sus versiones:"
+          for t in $(jq -r --arg f "$FILTRO" '.[] | select((.name + " " + .slug) | test($f; "i")) | .id' <<<"$types"); do
+            jq -r --argjson t "$t" '.[] | select(.gameVersionTypeID == $t) | "\(.gameVersionTypeID)\t\(.id)\t\(.name)\t\(.slug)"' <<<"$versions"
+          done
+          echo "== Versiones con «$FILTRO» en el nombre:"; jq -r --arg f "$FILTRO" '.[] | select((.name + " " + .slug) | test($f; "i")) | "\(.gameVersionTypeID)\t\(.id)\t\(.name)"' <<<"$versions"
