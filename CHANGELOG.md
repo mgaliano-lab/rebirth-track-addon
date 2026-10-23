@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.2.1] - 2026-10-23
+
+### Para todos
+
+- En CurseForge ahora figura como compatible con **WoW Forever**, así lo encontrás y lo instalás también desde ahí.
+
+### Técnico
+
+- `scripts/curseforge.sh` ya no saltea la interfaz 16001: CurseForge tiene el tipo «WoW Forever» (88568) con la versión 1.60.1, que es lo que da la conversión de 16001. Workflow manual de solo lectura `curseforge-versions` para consultar las versiones de juego de CurseForge.
+
 ## [0.2.0] - 2026-10-22
 
 ### Para todos

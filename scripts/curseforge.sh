@@ -14,9 +14,9 @@ TOC=RebirthTrack/RebirthTrack.toc
 VERSION=$(sed -n 's/^## Version: *//p' "$TOC" | tr -d '\r')
 INTERFACES=$(sed -n 's/^## Interface: *//p' "$TOC" | tr -d '\r ')
 
-# 120001 → 12.0.1 · 50501 → 5.5.1 · 11508 → 1.15.8
-# 16001 (WoW Forever) no sigue ese esquema y CurseForge todavía no la tiene: se omite.
-names=$(echo "$INTERFACES" | tr ',' '\n' | awk '{ n = $1 + 0; if (n >= 16000 && n < 17000) next; printf "%d.%d.%d\n", int(n / 10000), int(n / 100) % 100, n % 100 }')
+# 120001 → 12.0.1 · 50501 → 5.5.1 · 11508 → 1.15.8 · 16001 → 1.60.1 (WoW Forever: en CurseForge es
+# el tipo «WoW Forever», con la versión 1.60.1; ver el workflow curseforge-versions).
+names=$(echo "$INTERFACES" | tr ',' '\n' | awk '{ n = $1 + 0; printf "%d.%d.%d\n", int(n / 10000), int(n / 100) % 100, n % 100 }')
 versions=$(curl -sS --fail-with-body -H "X-Api-Token: $CF_API_TOKEN" "$API/game/versions")
 ids=$(jq -n --argjson all "$versions" --arg names "$names" '
   ($names | split("\n") | map(select(length > 0))) as $want
