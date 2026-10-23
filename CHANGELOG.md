@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.2.2] - 2026-10-23
+
+### Para todos
+
+- **Arreglado en WoW Forever**: la app de CurseForge ya no lo marca como «posiblemente dañado (pertenece a Classic)» cuando lo instalás para Forever.
+
+### Técnico
+
+- WoW Forever carga `RebirthTrack_Camelot.toc` (sufijo del proyecto `WOW_PROJECT_CAMELOT`, el que reconoce el packager de BigWigs): nuevo `.toc` con `## Interface: 16001`. `RebirthTrack_Vanilla.toc` queda solo con 11508 (Classic Era): tener 16001 ahí hacía que CurseForge lo tomara como de Classic.
+
 ## [0.2.1] - 2026-10-23
 
 ### Para todos
