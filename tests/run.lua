@@ -2,7 +2,6 @@ dofile(arg[1] or "tests/wowstub.lua") -- stubs de la API de WoW
 local chunk = assert(loadfile(arg[2] or "RebirthTrack/RebirthTrack.lua"))
 local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
-assert(loadfile("RebirthTrack/AppSettings.lua"))("RebirthTrack", ns) -- como viene en el zip (sin la app)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
@@ -106,8 +105,8 @@ sentAddon = {}
 C.put(ME, "p1", "Roguebash;Nightslayer;us;5;ROGUE;Orc;61;Horde;Rebirth Knights", true)
 assert(sentWith("^D;%x+;1;1;p1;Player%-6065%-044C2423;%d+;Roguebash;"), "comparte el personaje")
 sentAddon = {}
-C.put(ME, "inv1", "bags;6948:1")
-assert(#sentAddon == 0, "las bolsas no salen por el canal")
+C.put(ME, "rep1", "529=4:1200")
+assert(#sentAddon == 0, "las reputaciones no salen por el canal")
 -- Sin cambios no se vuelve a anotar ni a mandar.
 assert(C.put(ME, "p1", "Roguebash;Nightslayer;us;5;ROGUE;Orc;61;Horde;Rebirth Knights", true) == false)
 print("personaje OK", D[ME].p1)
@@ -131,7 +130,7 @@ sentAddon = {}
 fire("CHAT_MSG_ADDON", "RTK1", "E;0", "GUILD", "Nuevo-Nightslayer")
 assert(sentWith("^D;%x+;%d+;%d+;sk1;Player%-6065%-0411;1792530100;Alquimia"), "reenvía lo recibido")
 assert(sentWith("^D;%x+;1;1;p1;" .. ME:gsub("%-", "%%-")), "manda lo propio")
-assert(not sentWith(";inv1;"), "lo privado no")
+assert(not sentWith(";rep1;"), "lo privado no")
 print("canal de datos OK")
 
 -- Profesiones (Classic): recetas, cooldowns y las que se ven después se suman.
@@ -161,24 +160,18 @@ fire("CRAFT_SHOW")
 assert(D[ME]["r1:Encantamiento"]:match(";Encantamiento;120;150;s13501$"), D[ME]["r1:Encantamiento"])
 print("profesiones OK")
 
--- Bolsas y banco (el banco solo con su ventana abierta).
-local bags = { [0] = { { 6948, 1 }, { 13443, 5 } }, [1] = { { 13443, 3 } }, [-1] = { { 12360, 2 } }, [5] = { { 2589, 20 } } }
+-- El balance, las bolsas y el banco de cada persona no se anotan (solo los de la guild), y al entrar
+-- se borra lo que haya dejado una versión anterior.
+local bags = { [0] = { { 6948, 1 } } }
 function GetContainerNumSlots(b) return bags[b] and #bags[b] or 0 end
 function GetContainerItemInfo(b, s) local x = bags[b][s]; return "tex", x[2], false, 1, false, false, "|Hitem:" .. x[1] .. "|h", false, false, x[1] end
 function GetMoney() return 5000000 end
-fire("BAG_UPDATE")
-assert(D[ME]["inv1:bags"]:match(";bags;6948:1,13443:8$"), D[ME]["inv1:bags"])
-assert(not D[ME]["inv1:bank"], "sin abrir el banco no se lee")
-fire("BANKFRAME_OPENED")
-assert(D[ME]["inv1:bank"]:match(";bank;2589:20,12360:2$"), D[ME]["inv1:bank"])
-assert(not D[ME].mo1, "sin la app no se anota el balance")
-RebirthTrackApp = { balance = true } -- la app con «Enviar mi balance» activada
-fire("PLAYER_MONEY")
-assert(D[ME].mo1:match(";5000000$"), "con la app y la casilla activada, sí")
-RebirthTrackApp = { balance = false } -- la desactivó: al entrar se borra
+fire("BAG_UPDATE"); fire("BANKFRAME_OPENED"); fire("PLAYER_MONEY")
+assert(not D[ME].mo1 and not D[ME]["inv1:bags"] and not D[ME]["inv1:bank"], "ni balance ni bolsas ni banco personal")
+D[ME].mo1, D[ME]["inv1:bags"] = "mo1;" .. ME .. ";1792530000;123", "inv1;" .. ME .. ";1792530000;bags;6948:1" -- de la 0.3.1
 fire("PLAYER_LOGIN")
-assert(not D[ME].mo1, "desactivada, se borra lo anotado")
-print("bolsas y banco OK")
+assert(not D[ME].mo1 and not D[ME]["inv1:bags"], "al entrar se borra lo que había")
+print("sin balance ni bolsas personales OK")
 
 -- Subasta: lo publicado, la compra al precio de compra y las facturas del correo (una vez cada una).
 local owned = { { "Barra de arcanita", "", 2, 1, true, 55, "", 900000, 1000, 1200000, 0, false, nil, "Roguebash", "Roguebash-Nightslayer", 0, 12360 } }
@@ -230,7 +223,7 @@ function GetGuildBankMoney() return 777 end
 function QueryGuildBankTab() end
 fire("GUILDBANKFRAME_OPENED")
 local GK = "guild:Rebirth Knights"
-assert(D[GK]["gb1:1"]:match("^gb1;guild:Rebirth Knights;%d+;1;Mats;12360:4,13443:10$"), D[GK]["gb1:1"])
+assert(D[GK]["gb1:1"]:match("^gb1;guild:Rebirth Knights;%d+;1;Mats;12360:4,13443:10;1=12360:4,2=13443:10$"), D[GK]["gb1:1"])
 assert(not D[GK]["gb1:2"], "la pestaña que no se puede ver, no")
 assert(D[GK].gbm1:match(";777$"))
 function GetGuildRosterMOTD() return "Raid jueves 21 h; traer pociones" end
