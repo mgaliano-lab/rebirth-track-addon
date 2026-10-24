@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.3.2] - 2026-10-24
+
+### Para todos
+
+- **Banco de la guild como en el juego**: el addon anota en qué casillero está cada ítem, así el sitio muestra cada pestaña igual que en el juego.
+- **Tu balance, tus bolsas y tu banco ya no se anotan**: de oro e inventario, el addon solo anota los de la guild. Al entrar al juego borra lo que había anotado la versión anterior.
+
+### Técnico
+
+- `gb1` suma un cuarto campo con `casillero=ítem:cantidad,…` (1 a 98). El sitio (v0.6.0) entiende los dos formatos; sin ese campo acomoda los ítems en orden.
+- Fuera `mo1` (balance) e `inv1` (bolsas, banco y banco de componentes) con sus eventos, y `AppSettings.lua` (ya no hace falta la casilla de la app). En `PLAYER_LOGIN` se borran de `RebirthTrackDB.data`.
+
 ## [0.3.1] - 2026-10-23
 
 ### Para todos

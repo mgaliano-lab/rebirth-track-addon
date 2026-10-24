@@ -1,10 +1,11 @@
 -- Rebirth Track · Lo que el juego le muestra al jugador, anotado para el sitio
--- Personaje, balance, profesiones (niveles, recetas y cooldowns), equipo, talentos, bolsas y banco,
--- reputaciones, misiones completadas, subasta (solo lo que publicás y lo que comprás o vendés), banco
--- de la guild, historial de la guild, y en bandas y mazmorras el botín, los buffs al empezar cada jefe
--- y el equipo del resto (inspeccionando, fuera de combate). WoW no deja a los addons salir a internet:
+-- Personaje, profesiones (niveles, recetas y cooldowns), equipo, talentos, reputaciones, misiones
+-- completadas, subasta (solo lo que publicás y lo que comprás o vendés), banco y balance de la guild,
+-- historial de la guild, y en bandas y mazmorras el botín, los buffs al empezar cada jefe y el equipo
+-- del resto (inspeccionando, fuera de combate). El balance, las bolsas y el banco de cada persona no
+-- se anotan. WoW no deja a los addons salir a internet:
 -- todo queda en RebirthTrackDB y Rebirth Track Uploader lo sube cuando el juego guarda (/reload,
--- salir o desconectarse). Banco, correo, subasta, recetas y banco de la guild solo se ven con su
+-- salir o desconectarse). Correo, subasta, recetas y banco de la guild solo se ven con su
 -- ventana abierta: se anotan cuando el jugador las abre.
 --
 -- Cada dato es una línea «tipo;dueño;hora;…» (sin «|», que WoW escapa, ni «;» dentro de los textos).
@@ -17,12 +18,10 @@
 --     cd1  profesión;receta=hora en que vuelve a estar lista,…                  (se comparte)
 --     eq1  ranura=ítem[:encantamiento],…  (propio o de alguien inspeccionado)   (se comparte el propio)
 --     t1   grupo;rama~puntos~fila.columna.rango,…/…  (talentos, salvo Retail)  (se comparte)
---     mo1  balance en cobre (solo con la app y «Enviar mi balance» activada: AppSettings.lua)
 --     pt1  tiempo jugado;en el nivel (al usar /played)
---     inv1 lugar;ítem:cantidad,…  (bags, bank, reagents)
 --     rep1 facción=nivel:valor,… · q1 misión,… (completadas)
 --     aho1 ítem:cantidad:oferta mínima:compra:oferta actual:tiempo:vendida,…  (lo que tenés publicado)
---     gb1  pestaña;nombre;ítem:cantidad,… · gbm1 balance · gx1 mensaje del día;información  (de la guild)
+--     gb1  pestaña;nombre;ítem:cantidad,…;casillero=ítem:cantidad,… · gbm1 balance · gx1 mensaje del día;información  (de la guild)
 --   RebirthTrackDB.events = lo que pasa una vez (la hora es la del hecho):
 --     lt1  botín en instancias (raro o mejor): quién;instancia;dificultad;ítem;cantidad;nombre de la instancia
 --     bf1  buffs al empezar un jefe: encuentro;jefe;hechizo,…  (uno por jugador)
@@ -32,7 +31,7 @@
 --
 -- Lo que no es privado y le sirve a la guild (personaje, profesiones, cooldowns, equipo y talentos)
 -- se comparte por el canal de addons (RTK1), así lo sube cualquiera que tenga la app aunque vos no
--- la tengas. Lo recibido se guarda con «@remitente;» adelante. Balance, bolsas, banco, reputaciones,
+-- la tengas. Lo recibido se guarda con «@remitente;» adelante. Reputaciones,
 -- misiones y subasta no se comparten: solo los sube tu app, a tu cuenta.
 --
 -- Por el canal (mensajes de hasta 255 caracteres):
@@ -42,7 +41,7 @@ local ADDON, ns = ...
 ns = ns or {}
 
 local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true }
-local KEYED = { r1 = true, cd1 = true, inv1 = true, gb1 = true } -- una por profesión, lugar o pestaña
+local KEYED = { r1 = true, cd1 = true, gb1 = true } -- una por profesión o pestaña
 local MAX_EVENTS, MAX_PEERS, MAX_REPLY, CHUNK = 1500, 400, 40, 200
 local INSPECT_EVERY = 6 * 3600
 
@@ -56,9 +55,6 @@ local function J(...)
   return table.concat(out, ";", 1, n)
 end
 local function me() return UnitGUID("player") end
--- El balance de cada personaje se anota solo si la app está y su casilla «Enviar mi balance» está
--- activada: la app lo deja en AppSettings.lua (RebirthTrackApp.balance).
-local function balanceOn() return type(RebirthTrackApp) == "table" and RebirthTrackApp.balance == true end
 
 local function store()
   local d = ns.db()
@@ -87,11 +83,6 @@ local function put(owner, t, payload, doShare)
   c[key] = line
   if doShare and SHARED[t] then share(line) end
   return true
-end
-
-local function saveBalance()
-  local g = me()
-  if g and GetMoney and balanceOn() then put(g, "mo1", tostring(GetMoney() or 0)) end
 end
 
 local function event(t, owner, payload, at)
@@ -195,7 +186,6 @@ local function collectPlayer()
   local guild = IsInGuild and IsInGuild() and GetGuildInfo("player") or ""
   put(g, "p1", J(tok(UnitName("player")), tok(GetRealmName()), ns.regionCode(), WOW_PROJECT_ID or 0, class or "",
     race or "", UnitLevel("player") or 0, UnitFactionGroup and UnitFactionGroup("player") or "", tok(guild)), true)
-  saveBalance()
 end
 
 local function collectSkills()
@@ -343,68 +333,13 @@ local function collectTalents()
   if #tabs > 0 then put(g, "t1", J(GetActiveTalentGroup and GetActiveTalentGroup() or 1, table.concat(tabs, "/")), true) end
 end
 
--- ── Bolsas y banco ─────────────────────────────────────────────────────────────────────
-local CB = C_Container
-local function numSlots(bag)
-  if CB and CB.GetContainerNumSlots then return CB.GetContainerNumSlots(bag) or 0 end
-  return GetContainerNumSlots and GetContainerNumSlots(bag) or 0
-end
-local function slotItem(bag, slot)
-  if CB and CB.GetContainerItemInfo then
-    local i = CB.GetContainerItemInfo(bag, slot)
-    if i then return i.itemID, i.stackCount end
-    return nil
-  end
-  if not GetContainerItemInfo then return nil end
-  local _, count, _, _, _, _, link, _, _, id = GetContainerItemInfo(bag, slot)
-  return id or (link and tonumber(link:match("item:(%d+)"))), count
-end
-local function counts(bags)
-  local n = {}
-  for _, b in ipairs(bags) do
-    for s = 1, numSlots(b) do
-      local id, c = slotItem(b, s)
-      if id then n[id] = (n[id] or 0) + (c or 1) end
-    end
-  end
-  return n
-end
+-- «ítem:cantidad,…» ordenado por ítem (banco de la guild).
 local function fmtCounts(n)
   local ids = {}
   for id in pairs(n) do ids[#ids + 1] = id end
   table.sort(ids)
   for i, id in ipairs(ids) do ids[i] = id .. ":" .. n[id] end
   return table.concat(ids, ",")
-end
-local function bagList()
-  local out = {}
-  for b = 0, (NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) do out[#out + 1] = b end
-  return out
-end
-local function bankList()
-  local B = Enum and Enum.BagIndex
-  if B and B.CharacterBankTab_1 then -- Retail (pestañas del banco)
-    local out = {}
-    for i = 1, 6 do if B["CharacterBankTab_" .. i] then out[#out + 1] = B["CharacterBankTab_" .. i] end end
-    return out
-  end
-  local out, first = { BANK_CONTAINER or -1 }, (NUM_BAG_SLOTS or 4) + 1
-  for b = first, first + (NUM_BANKBAGSLOTS or 6) - 1 do out[#out + 1] = b end
-  return out
-end
-
-local bankOpen = false
-local function collectBags()
-  local g = me()
-  if not g then return end
-  put(g, "inv1", J("bags", fmtCounts(counts(bagList()))))
-  if bankOpen then
-    put(g, "inv1", J("bank", fmtCounts(counts(bankList()))))
-    if REAGENTBANK_CONTAINER and IsReagentBankUnlocked and IsReagentBankUnlocked() then
-      put(g, "inv1", J("reagents", fmtCounts(counts({ REAGENTBANK_CONTAINER }))))
-    end
-  end
-  saveBalance()
 end
 
 -- ── Reputaciones y misiones ────────────────────────────────────────────────────────────
@@ -627,17 +562,18 @@ local function collectGuildBank()
   for tab = 1, GetNumGuildBankTabs() or 0 do
     local name, _, viewable = GetGuildBankTabInfo(tab)
     if viewable then
-      local n, any = {}, false
+      local n, slots, any = {}, {}, false
       for slot = 1, 98 do
         local link = GetGuildBankItemLink(tab, slot)
         local id = link and tonumber(link:match("item:(%d+)"))
         if id then
           local _, count = GetGuildBankItemInfo(tab, slot)
           n[id], any = (n[id] or 0) + (count or 1), true
+          slots[#slots + 1] = slot .. "=" .. id .. ":" .. (count or 1) -- dónde está, para mostrarlo como en el juego
         end
       end
       -- Una pestaña que todavía no cargó viene vacía: solo se anota vacía si es la que estás mirando.
-      if any or tab == current then put(gk, "gb1", J(tab, tok(name), fmtCounts(n))) end
+      if any or tab == current then put(gk, "gb1", J(tab, tok(name), fmtCounts(n), table.concat(slots, ","))) end
     end
   end
   if GetGuildBankMoney then put(gk, "gbm1", tostring(GetGuildBankMoney() or 0)) end
@@ -695,10 +631,13 @@ end
 
 local ON = {
   PLAYER_LOGIN = function()
-    -- Sin la app o con «Enviar mi balance» desactivada, se borra el que haya quedado anotado.
-    if not balanceOn() then for _, c in pairs(store().data) do c.mo1 = nil end end
+    -- Hasta la 0.3.1 se anotaban el balance y las bolsas y el banco de cada personaje: ya no (solo
+    -- los de la guild). Se borra lo que haya quedado.
+    for _, c in pairs(store().data) do
+      for key in pairs(c) do if key == "mo1" or key:match("^inv1") then c[key] = nil end end
+    end
     C_Timer.After(15, function()
-      for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectBags, collectReputation, collectQuests }) do pcall(fn) end
+      for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectReputation, collectQuests }) do pcall(fn) end
       if ns.send then ns.send("E;" .. math.max(0, (store().syncAt or 0) - 86400)) end
       pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end)
     end)
@@ -708,12 +647,11 @@ local ON = {
     end
   end,
   PLAYER_LOGOUT = function()
-    for _, fn in ipairs({ collectPlayer, collectBags }) do pcall(fn) end
+    pcall(collectPlayer)
     store().syncAt = time()
   end,
   PLAYER_LEVEL_UP = function() soon("player", collectPlayer) end,
   PLAYER_GUILD_UPDATE = function() soon("player", collectPlayer) end,
-  PLAYER_MONEY = function() soon("money", saveBalance, 5) end,
   SKILL_LINES_CHANGED = function() soon("skills", collectSkills) end,
   TRADE_SKILL_SHOW = function()
     pcall(function() if ExpandTradeSkillSubClass then ExpandTradeSkillSubClass(0) end end)
@@ -726,12 +664,6 @@ local ON = {
   PLAYER_EQUIPMENT_CHANGED = function() soon("gear", collectGear) end,
   CHARACTER_POINTS_CHANGED = function() soon("talents", collectTalents) end,
   PLAYER_TALENT_UPDATE = function() soon("talents", collectTalents) end,
-  BAG_UPDATE_DELAYED = function() soon("bags", collectBags, 3) end,
-  BAG_UPDATE = function() soon("bags", collectBags, 3) end,
-  BANKFRAME_OPENED = function() bankOpen = true; soon("bags", collectBags, 1) end,
-  BANKFRAME_CLOSED = function() pcall(collectBags); bankOpen = false end,
-  PLAYERBANKSLOTS_CHANGED = function() soon("bags", collectBags) end,
-  PLAYERREAGENTBANKSLOTS_CHANGED = function() soon("bags", collectBags) end,
   UPDATE_FACTION = function() soon("rep", collectReputation, 5) end,
   QUEST_TURNED_IN = function() soon("quests", collectQuests, 5) end,
   TIME_PLAYED_MSG = function(total, level) local g = me(); if g and total then put(g, "pt1", J(total, level or 0)) end end,
@@ -772,7 +704,7 @@ function ns.dataSummary()
 end
 
 -- Para las pruebas.
-ns._collect = { put = put, putPeer = putPeer, share = share, pattern = pattern, collectBags = collectBags,
+ns._collect = { put = put, putPeer = putPeer, share = share, pattern = pattern,
   collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, onLoot = onLoot,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }
