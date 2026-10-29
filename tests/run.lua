@@ -3,6 +3,7 @@ local chunk = assert(loadfile(arg[2] or "RebirthTrack/RebirthTrack.lua"))
 local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -242,3 +243,39 @@ for _, c in pairs(D) do for _, l in pairs(c) do assert(not l:find("|", 1, true),
 for _, l in ipairs(RebirthTrackDB.events) do assert(not l:find("|", 1, true), l) end
 rt("datos")
 print("datos OK")
+
+-- Plan del personaje (RTP1): el texto que arma el sitio (shared/planText.ts) se lee con la misma
+-- suma de control; lo copiado a medias no. Avance con lo que ve el juego.
+local PLAN = table.concat({
+  "RTP1;ab12;Roguebash;nightslayer;Orco;Rogue;pve;1", "P;mining;Minería",
+  "S;mining;1;65;70;2657;Fundir cobre", "S;mining;65;125;60;2659;Fundir bronce", "M;mining;2770;70;Mena de cobre",
+  "B;0;Asesinato", "B;1;Combate", "B;2;Sutileza", "T;0;1;1;3;3;Remate mejorado", "T;1;1;2;5;5;Precisión",
+  "L;Aventura;2;3;Descanso profundo", "N;main de banda", "Z;f4d8b72e" }, "\n")
+assert(ns.planCrc32("123456789") == "cbf43926", "crc32 como el de zip")
+local blocks = ns.planParse("basura\n" .. PLAN .. "\n")
+assert(#blocks == 1, "lee el plan del sitio")
+local p = blocks[1].plan
+assert(p.name == "Roguebash" and p.main and #p.profs == 1 and #p.profs[1].steps == 2 and #p.talents == 2 and #p.legacy == 1 and p.notes == "main de banda")
+assert(#ns.planParse(PLAN:gsub("Fundir cobre", "Fundir plata")) == 0, "suma mal: no se lee")
+function GetNumSkillLines() return 2 end
+function GetSkillLineInfo(i) if i == 1 then return "Profesiones", true end return "Minería", false, nil, 80, 0, 0, 150 end
+function GetNumTalentTabs() return 3 end
+function GetNumTalents() return 1 end
+function GetTalentInfo(tab) if tab == 1 then return "Remate mejorado", "", 1, 1, 3, 3 end if tab == 3 then return "Otro", "", 1, 1, 1, 5 end return "Precisión", "", 1, 2, 2, 5 end
+function GetItemCount() return 12 end
+local pr = ns.planProgress(p)
+assert(pr.profs[1].rank == 80 and pr.profs[1].step == 2, "paso 2 con 80 de minería")
+assert(pr.tal.planned == 8 and pr.tal.matched == 5 and pr.tal.spent == 6 and pr.tal.off == 1, "talentos contra el plan")
+assert(pr.tal.next.t.name == "Precisión", "el próximo a tocar")
+rt("plan " .. PLAN:gsub("\n", " ")) -- en una línea no es válido: abre la ventana igual y avisa
+SlashCmdList.REBIRTHTRACK("plan")
+assert(not RebirthTrackDB.plans or not next(RebirthTrackDB.plans), "nada pegado todavía")
+click("Pegar plan")
+for _, fr in ipairs(__frames or {}) do end
+ns.openPlan(PLAN)
+assert(RebirthTrackDB.plans.ab12, "queda guardado el pegado")
+RebirthTrackPlans = { at = 1, plans = { (PLAN:gsub("ab12", "zz99"):gsub("Z;f4d8b72e", "Z;00000000")) } }
+ns.planRefresh() -- uno de la app con la suma mal no rompe nada
+for _, k in ipairs({ "Profesiones", "Talentos", "Legado", "Resumen" }) do click(k) end
+click("Borrar pegados"); assert(not next(RebirthTrackDB.plans))
+print("plan OK")
