@@ -44,6 +44,7 @@ local TEXTS = {
     tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
     bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).",
+    bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
     back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
     mmOpen = "Clic: abrir o cerrar la ventana", mmLink = "Clic derecho: vincular este personaje",
@@ -78,6 +79,7 @@ local TEXTS = {
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
+      "/rt plan · plan del personaje",
       "/rt datos · data",
       "/rt ayuda · help",
     },
@@ -108,6 +110,7 @@ local TEXTS = {
     tRec = "Turn logging on or off manually (/rt start · /rt stop).",
     bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
     bHelp = "Help", tHelp = "How to use it (/rt help).",
+    bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
     back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
     mmOpen = "Click: open or close the window", mmLink = "Right-click: link this character",
@@ -142,6 +145,7 @@ local TEXTS = {
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
+      "/rt plan · character plan",
       "/rt data · datos",
       "/rt help · ayuda",
     },
@@ -163,6 +167,8 @@ local function db()
   return RebirthTrackDB
 end
 ns.db = db
+ns.lang = lang
+ns.say = say
 
 local function advancedOn() return GetCVar("advancedCombatLogging") == "1" end
 
@@ -731,6 +737,7 @@ local function createUI()
     db().settings.dungeons = not db().settings.dungeons
     checkZone()
   end)
+  button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
   button("bHelp", "tHelp", function() showHelp(true) end)
 
@@ -1015,6 +1022,7 @@ local COMMANDS = {
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
   rangos = "ranks", ranks = "ranks",
+  plan = "plan", planes = "plan", plans = "plan",
   datos = "data", data = "data",
 }
 
@@ -1046,6 +1054,7 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().sessions = {}
     say(L("resetSay"))
   elseif cmd == "ranks" then openRanks(raw)
+  elseif cmd == "plan" then if ns.openPlan then ns.openPlan((msg or ""):match("^%s*%S+%s+(.+)$")) end
   elseif cmd == "data" then
     if ns.dataSummary then say(L("dataSay"):format(ns.dataSummary())) end
   elseif cmd == "lang" then

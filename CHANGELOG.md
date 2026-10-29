@@ -13,6 +13,19 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.4.0] - 2026-10-29
+
+### Para todos
+
+- **Tu plan en el juego (/rt plan)**: la ventana «Plan del personaje» muestra el plan que armaste en rebirthknights.fun contra tu avance real. Tiene pestañas de **Resumen**, **Profesiones** (el paso de la ruta que te toca según tu habilidad y los materiales que ya tenés en bolsas y banco), **Talentos** (cuáles tenés, cuáles faltan y el próximo a tocar) y **Legado**.
+- Llega solo si tenés la app (los personajes que vinculaste en la web, al entrar o con /reload). Sin la app: en la web tocá «⚔ Para el addon» y en el juego **/rt plan → Pegar plan → Leer**.
+
+### Técnico
+
+- `Plan.lua`: lee bloques RTP1 (`shared/planText.ts` del sitio) con CRC-32 propio (librería `bit` de WoW o aritmética), de `RebirthTrackDB.plans` (pegados) y de `RebirthTrackPlans` (`Plans.lua`, que escribe la app; va en el `.toc` y no viene en el zip). Elige el del personaje por nombre y reino.
+- Avance con la API del juego: `GetSkillLineInfo`, `GetTalentInfo` (rama, fila y columna como en el sitio), `GetItemCount(item, true)` y `UnitLevel`. Se refresca con `SKILL_LINES_CHANGED`, `CHARACTER_POINTS_CHANGED`, `BAG_UPDATE_DELAYED` y `PLAYER_LEVEL_UP`.
+- Comando `/rt plan` (`planes`, `plans`) y botón «Plan del personaje» en la ventana principal; pruebas en `tests/run.lua` con un texto generado por el sitio.
+
 ## [0.3.2] - 2026-10-24
 
 ### Para todos

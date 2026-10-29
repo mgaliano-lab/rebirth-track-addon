@@ -20,7 +20,7 @@ OUT=dist
 ADDON_ZIP="RebirthTrack-$VERSION.zip"          # listo para instalar: RebirthTrack/ en la raíz
 TOOLS_ZIP="RebirthTrack-tools-$VERSION.zip"     # guía + herramientas de medición (F0)
 rm -rf "$OUT" && mkdir -p "$OUT"
-(zip -qrX "$OUT/$ADDON_ZIP" RebirthTrack -x '*.DS_Store')
+(zip -qrX "$OUT/$ADDON_ZIP" RebirthTrack -x '*.DS_Store' 'RebirthTrack/Plans.lua') # Plans.lua lo escribe la app
 (zip -qrX "$OUT/$TOOLS_ZIP" README.md tools -x '*.DS_Store')
 
 SIZE=$(stat -f%z "$OUT/$ADDON_ZIP" 2>/dev/null || stat -c%s "$OUT/$ADDON_ZIP")
