@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\RebirthTrack\icon
 ## Notes: Prende el registro de combate avanzado al entrar a una banda o mazmorra y anota la sesión.
 ## Author: Rebirth Knights
-## Version: 0.3.2
+## Version: 0.4.0
 ## X-Curse-Project-ID: 1757092
 ## SavedVariables: RebirthTrackDB
 
