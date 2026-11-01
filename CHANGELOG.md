@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.4.3] - 2026-11-01
+
+### Para todos
+
+- **Sin avisos al entrar al juego en Retail y WoW Forever**: ya no aparece el cartel «RebirthTrack se ha bloqueado de una acción disponible solo para la interfaz de usuario de Blizzard». Tampoco aparece el aviso «Error loading RebirthTrack/Plans.lua» cuando la app todavía no bajó tus planes. El registro de combate de las bandas se sigue grabando igual.
+
+### Técnico
+
+- Junta en una sola publicación los arreglos de la 0.4.1 y la 0.4.2: no se pide `COMBAT_LOG_EVENT_UNFILTERED` donde está restringido, y `Plans.lua` viene vacío con el addon. No hay cambios de código respecto de la 0.4.2.
+
 ## [0.4.2] - 2026-11-01
 
 ### Para todos
