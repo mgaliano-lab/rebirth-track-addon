@@ -174,18 +174,25 @@ local function equippedFor(equipLoc, ilvl)
 end
 
 -- ── Lo que manda la web (Plans.lua → RebirthTrackCouncil) ────────────────────────────────
---   RebirthTrackCouncil = { at = hora, ranks = { 0, 1 }, players = { "Nombre-Reino;rango;asistidas;recibidos", … } }
--- rango = knight | recruit | renegade, como en la prioridad del sitio.
+--   RebirthTrackCouncil = { at = hora, ranks = { 0, 1 }, players = { forever = { "Nombre-Reino;rango;asistidas;recibidos", … }, … } }
+-- Por versión de WoW (la propia sale de WOW_PROJECT_ID); rango = knight | recruit | renegade, como en
+-- la prioridad del sitio. El reino se compara sin espacios, guiones ni apóstrofos.
+local GAMES = { [1] = "retail", [2] = "era", [5] = "anniversary", [11] = "classic", [14] = "classic", [19] = "classic", [18] = "forever" }
+local function playerKey(name)
+  local n, r = tostring(name or ""):match("^([^%-]+)%-?(.*)$")
+  return ((n or "") .. "-" .. (r or ""):gsub("[%s%-'%.]", "")):lower()
+end
 local webPlayers, webAt
 local function web()
   local src = RebirthTrackCouncil
-  if type(src) ~= "table" then return {} end
+  if type(src) ~= "table" or type(src.players) ~= "table" then return {} end
   if webPlayers and webAt == src.at then return webPlayers end
   webPlayers, webAt = {}, src.at
-  for _, line in ipairs(src.players or {}) do
+  local list = src.players[GAMES[WOW_PROJECT_ID or 0] or ""] or (src.players[1] and src.players) or {}
+  for _, line in ipairs(list) do
     local f = split(tostring(line))
     if f[1] and f[1] ~= "" then
-      webPlayers[f[1]:lower()] = { rank = f[2] ~= "" and f[2] or nil, attended = tonumber(f[3]) or 0, received = tonumber(f[4]) or 0 }
+      webPlayers[playerKey(f[1])] = { rank = f[2] ~= "" and f[2] or nil, attended = tonumber(f[3]) or 0, received = tonumber(f[4]) or 0 }
     end
   end
   return webPlayers
@@ -646,7 +653,7 @@ local function candidates(s, it)
     if other.award and other.award.to ~= "" then today[other.award.to:lower()] = (today[other.award.to:lower()] or 0) + 1 end
   end
   for name, r in pairs(it.responses) do
-    local info = w[name:lower()] or {}
+    local info = w[playerKey(name)] or {}
     local votes = 0
     for _, v in pairs(it.votes) do if v[name] then votes = votes + 1 end end
     out[#out + 1] = { name = name, kind = r.kind, delta = r.delta, eq = r.eq, note = r.note, votes = votes,

@@ -352,10 +352,11 @@ LC.vote(s, 1, "Tanque-Nightslayer", true)
 assert(s.items[1].votes["Roguebash-Nightslayer"]["Tanque-Nightslayer"], "el ML vota")
 
 -- Lo que sabe la web (Plans.lua) y el orden: BiS primero, después la prioridad del sitio.
-RebirthTrackCouncil = { at = 1, ranks = { 0, 1 }, players = { "Tanque-Nightslayer;knight;4;0", "Healz-Nightslayer;recruit;4;3" } }
+RebirthTrackCouncil = { at = 1, ranks = { 0, 1 }, players = { anniversary = { "Tanque-Nightslayer;knight;4;0", "Healz-Night slayer;recruit;4;3" }, era = { "Healz-Nightslayer;renegade;0;9" } } }
 local c = LC.candidates(s, s.items[1])
 assert(c[1].name == "Roguebash-Nightslayer" and c[2].name == "Tanque-Nightslayer" and c[3].name == "Healz-Nightslayer", c[1].name .. c[2].name)
 assert(c[2].rank == "knight" and c[2].attended == 4 and c[2].votes == 1)
+assert(c[3].rank == "recruit" and c[3].received == 3, "los datos de su versión (Anniversary), con el reino normalizado")
 -- La prioridad es la del sitio (shared/lootPriority.ts).
 local P = ns.councilPriorityLess
 assert(P({ rank = "knight", delta = 5, today = 0, received = 0, attended = 1 }, { rank = "renegade", delta = 50, today = 0, received = 0, attended = 1 }), "el Renegado último")
