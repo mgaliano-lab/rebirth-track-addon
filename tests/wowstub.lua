@@ -73,7 +73,7 @@ function GuildControlGetRankName(i) return ({ "Guild Master", "Oficial", "Caball
 C_GuildInfo = { GuildRoster = function() end }
 sentAddon = {}
 C_ChatInfo = {
-  RegisterAddonMessagePrefix = function(p) registeredPrefix = p end,
+  RegisterAddonMessagePrefix = function(p) registeredPrefix = registeredPrefix or p; prefixes = prefixes or {}; prefixes[p] = true end,
   SendAddonMessage = function(p, msg, chan) table.insert(sentAddon, { p, msg, chan }) end,
 }
 function InCombatLockdown() return false end

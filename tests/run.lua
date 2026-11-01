@@ -4,6 +4,7 @@ local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -279,3 +280,119 @@ ns.planRefresh() -- uno de la app con la suma mal no rompe nada
 for _, k in ipairs({ "Profesiones", "Talentos", "Legado", "Resumen" }) do click(k) end
 click("Borrar pegados"); assert(not next(RebirthTrackDB.plans))
 print("plan OK")
+
+-- Reparto por consejo: el master looter abre el reparto al lootear, cada uno responde con lo que
+-- tiene puesto, el consejo vota, el ML adjudica y lo entrega con botín maestro; todo queda anotado.
+local LC = ns._council; ns.debug = true
+local ITEMS = {
+  [19019] = { "Furia de los vientos", "|cffff8000|Hitem:19019::::::::60:::::|h[Furia de los vientos]|h|r", 5, 80, "", "", "", 1, "INVTYPE_WEAPON", 1, 0, 2, 7 },
+  [16866] = { "Yelmo de ira", "|cffa335ee|Hitem:16866::::::::60:::::|h[Yelmo de ira]|h|r", 4, 76, "", "", "", 1, "INVTYPE_HEAD", 1, 0, 4, 4 },
+  [16800] = { "Botas arcanas", "|cffa335ee|Hitem:16800::::::::60:::::|h[Botas arcanas]|h|r", 4, 66, "", "", "", 1, "INVTYPE_FEET", 1, 0, 4, 1 },
+  [12345] = { "Espada vieja", "|cff0070dd|Hitem:12345|h[Espada vieja]|h|r", 3, 60, "", "", "", 1, "INVTYPE_WEAPON", 1, 0, 2, 7 },
+}
+function GetItemInfo(s) local d = ITEMS[tonumber(tostring(s):match("item:(%d+)"))]; if d then return table.unpack(d) end end
+function GetInventoryItemLink(_, slot) if slot == 16 or slot == 17 then return ITEMS[12345][2] end end
+function IsInRaid() return true end
+function IsInGroup() return true end
+function UnitIsGroupLeader() return true end
+function GetLootMethod() return "master" end
+function IsInInstance() return true, "raid" end
+function GetInstanceInfo() return "Núcleo de Magma", "raid", 9, "40 jugadores", 40, 0, false, 409 end
+local loot = { 19019, 16866, 16800 }
+function GetNumLootItems() return #loot end
+function GetLootSlotLink(i) return ITEMS[loot[i]][2] end
+function GetLootSlotInfo(i) return "", ITEMS[loot[i]][1], 1, nil, ITEMS[loot[i]][3] end
+function GetLootThreshold() return 4 end
+function GetLootSourceInfo() return "Creature-0-1-409-1-12056-1" end
+given = {}
+function GiveMasterLoot(slot, i) table.insert(given, { slot, i }) end
+function GetMasterLootCandidate(slot, i) return ({ "Roguebash", "Healz", "Tanque" })[i] end
+said = {}
+function SendChatMessage(msg, chan) table.insert(said, { msg, chan }) end
+local classes = { Roguebash = "ROGUE", Healz = "PRIEST", Tanque = "WARRIOR" }
+function UnitClass(u) local n = (u == "player" or not u) and "Roguebash" or tostring(u):gsub("%-.*", ""); return "x", classes[n] end
+local function lc(prefix) local out = {}; for _, l in ipairs(RebirthTrackDB.council) do if l:match(prefix) then out[#out + 1] = l end end; return out end
+local function sentLC(kind) local out = {}; for _, m in ipairs(sentAddon) do if m[1] == "RTLC" and m[2]:sub(1, 2) == kind .. ";" then out[#out + 1] = m end end; return out end
+
+fire("ENCOUNTER_END", 663, "Lucifron", 9, 40, 1)
+fire("LOOT_OPENED")
+assert(#LC.pending() == 3, "los 3 épicos quedan para repartir")
+fire("LOOT_OPENED"); assert(#LC.pending() == 3, "el mismo cadáver no se suma dos veces")
+click("Repartir (3)")
+local s = LC.current()
+assert(s and s.mlName == "Roguebash-Nightslayer" and s.boss == "Lucifron" and s.encounterId == 663, "abre el reparto con el jefe")
+assert(#lc("^lc1;Player%-6065%-044C2423;%d+;") == 1 and #lc("^ld1;") == 3, "anota el reparto y los ítems")
+assert(lc("^ld1;")[1]:match(";1;item:19019::::::::60;80;INVTYPE_WEAPON;Roguebash%-Nightslayer$"), lc("^ld1;")[1])
+assert(#sentLC("S") == 1 and sentLC("S")[1][3] == "RAID" and #sentLC("I") == 3, "lo manda a la banda")
+
+-- Lo propio: lo que tengo puesto y cuánto gano.
+local eq, delta = LC.equippedFor("INVTYPE_WEAPON", 80)
+assert(eq == "12345@60,12345@60" and delta == 20, eq .. " " .. tostring(delta))
+LC.respond(s, 1, "bis", "para; mi | main")
+local mine = lc("^lr1;")[1]
+assert(mine:match(";1;Roguebash%-Nightslayer;bis;20;12345@60,12345@60;para  mi   main$"), mine)
+
+-- Lo de otros por el canal: respuestas, votos (solo del consejo) y la placa que no es para un sacerdote.
+local sid = s.sid
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";1;Healz-Nightslayer;upgrade;5;;", "RAID", "Healz-Nightslayer")
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";1;Tanque-Nightslayer;upgrade;30;;", "RAID", "Tanque-Nightslayer")
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";1;Otro-Nightslayer;bis;;;", "RAID", "Healz-Nightslayer") -- se hace pasar por otro: no
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";2;Healz-Nightslayer;bis;10;;", "RAID", "Healz-Nightslayer") -- placa: no
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";3;Healz-Nightslayer;bis;10;;", "RAID", "Healz-Nightslayer") -- tela: sí
+fire("CHAT_MSG_ADDON", "RTLC", "R;" .. sid .. ";2;Tanque-Nightslayer;bis;8;;", "RAID", "Tanque-Nightslayer")
+assert(not s.items[2].responses["Healz-Nightslayer"] and s.items[2].responses["Tanque-Nightslayer"], "la placa solo la pide quien usa placa")
+assert(s.items[3].responses["Healz-Nightslayer"] and not s.items[1].responses["Otro-Nightslayer"])
+LC.respond(s, 2, "bis", ""); assert(not s.items[2].responses["Roguebash-Nightslayer"], "un pícaro no pide placa")
+LC.respond(s, 2, "pass", ""); assert(s.items[2].responses["Roguebash-Nightslayer"].kind == "pass", "pasar se puede siempre")
+LC.openToAll(s, 3) -- el ML decide abrirlo
+assert(s.items[3].open and #lc("^lo1;") == 1)
+fire("CHAT_MSG_ADDON", "RTLC", "V;" .. sid .. ";1;Healz-Nightslayer;Tanque-Nightslayer;1", "RAID", "Healz-Nightslayer") -- Healz no es del consejo
+assert(not s.items[1].votes["Healz-Nightslayer"], "solo vota el consejo")
+LC.vote(s, 1, "Tanque-Nightslayer", true)
+assert(s.items[1].votes["Roguebash-Nightslayer"]["Tanque-Nightslayer"], "el ML vota")
+
+-- Lo que sabe la web (Plans.lua) y el orden: BiS primero, después la prioridad del sitio.
+RebirthTrackCouncil = { at = 1, ranks = { 0, 1 }, players = { anniversary = { "Tanque-Nightslayer;knight;4;0", "Healz-Night slayer;recruit;4;3" }, era = { "Healz-Nightslayer;renegade;0;9" } } }
+local c = LC.candidates(s, s.items[1])
+assert(c[1].name == "Roguebash-Nightslayer" and c[2].name == "Tanque-Nightslayer" and c[3].name == "Healz-Nightslayer", c[1].name .. c[2].name)
+assert(c[2].rank == "knight" and c[2].attended == 4 and c[2].votes == 1)
+assert(c[3].rank == "recruit" and c[3].received == 3, "los datos de su versión (Anniversary), con el reino normalizado")
+-- La prioridad es la del sitio (shared/lootPriority.ts).
+local P = ns.councilPriorityLess
+assert(P({ rank = "knight", delta = 5, today = 0, received = 0, attended = 1 }, { rank = "renegade", delta = 50, today = 0, received = 0, attended = 1 }), "el Renegado último")
+assert(P({ rank = "recruit", delta = nil, today = 0, received = 9, attended = 1 }, { rank = "knight", delta = 0, today = 0, received = 0, attended = 1 }), "a quien le sirve antes")
+assert(P({ rank = "knight", delta = 1, today = 0, received = 9, attended = 1 }, { rank = "recruit", delta = 9, today = 0, received = 0, attended = 1 }), "Caballero antes que Recluta")
+assert(P({ rank = "knight", delta = 1, today = 0, received = 2, attended = 4 }, { rank = "knight", delta = 9, today = 0, received = 2, attended = 2 }), "menos botín por raid asistida")
+LC.refresh(true)
+
+-- Adjudicar: con el cadáver abierto lo entrega con botín maestro y lo anuncia.
+click("Dar")
+assert(s.items[1].award and s.items[1].award.to == "Roguebash-Nightslayer" and s.items[1].award.how == "ml", "adjudica al primero")
+assert(given[1] and given[1][1] == 1 and given[1][2] == 1, "lo entrega con GiveMasterLoot")
+assert(said[#said][2] == "RAID" and said[#said][1]:find("Roguebash"), said[#said][1])
+LC.award(s, 2, "", "", "de")
+assert(lc("^la1;")[2]:match(";2;;;de;Roguebash%-Nightslayer$"), lc("^la1;")[2])
+loot = {}
+LC.award(s, 3, "Healz-Nightslayer", "bis")
+fire("LOOT_OPENED") -- sin el ítem en el cadáver no se puede entregar todavía
+assert(#given == 1)
+
+-- Si el juego rechaza los mensajes de addon: anuncia en el chat y se responde por susurro.
+C_ChatInfo.SendAddonMessage = function() return 3 end -- Enum.SendAddonMessageResult distinto de 0
+fire("CHAT_MSG_ADDON", "RTLC", "Q;" .. sid, "RAID", "Healz-Nightslayer")
+assert(said[#said][1]:find("Reparto", 1, true), "anuncia los ítems en la banda: " .. said[#said][1])
+LC.state.sessions[sid].items[4] = { n = 4, item = "item:12345", ilvl = 60, equipLoc = "INVTYPE_WEAPON", responses = {}, votes = {} }
+fire("CHAT_MSG_WHISPER", "4 mejora la quiero", "Tanque-Nightslayer")
+assert(s.items[4].responses["Tanque-Nightslayer"].kind == "upgrade" and s.items[4].responses["Tanque-Nightslayer"].note == "la quiero")
+C_ChatInfo.SendAddonMessage = function(p, msg, chan) table.insert(sentAddon, { p, msg, chan }) end
+
+-- Cerrar, y tras un /reload el estado se arma de nuevo con lo anotado.
+click("Cerrar reparto")
+assert(not LC.current(), "cerrado")
+LC.rebuild()
+local again = LC.state.sessions[sid]
+assert(again and again.closed and again.items[1].award.to == "Roguebash-Nightslayer" and again.items[3].open, "se rearma igual")
+for _, l in ipairs(RebirthTrackDB.council) do assert(not l:find("|", 1, true), l) end
+rt("reparto agregar |cffa335ee|Hitem:16866::::::::60:::::|h[Yelmo de ira]|h|r")
+assert(#LC.pending() == 1, "/rt reparto agregar suma el ítem (Retail: desde las bolsas)")
+print("reparto OK")

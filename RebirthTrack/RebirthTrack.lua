@@ -48,6 +48,7 @@ local TEXTS = {
     tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
     bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).",
+    bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
     back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
@@ -84,6 +85,7 @@ local TEXTS = {
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
       "/rt plan · plan del personaje",
+      "/rt reparto · reparto de botín (agregar [ítem] · cerrar)",
       "/rt datos · data",
       "/rt ayuda · help",
     },
@@ -114,6 +116,7 @@ local TEXTS = {
     tRec = "Turn logging on or off manually (/rt start · /rt stop).",
     bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
     bHelp = "Help", tHelp = "How to use it (/rt help).",
+    bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
     back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
@@ -150,6 +153,7 @@ local TEXTS = {
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
       "/rt plan · character plan",
+      "/rt loot · loot council (add [item] · close)",
       "/rt data · datos",
       "/rt help · ayuda",
     },
@@ -741,6 +745,7 @@ local function createUI()
     checkZone()
   end)
   button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
+  button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
   button("bHelp", "tHelp", function() showHelp(true) end)
 
@@ -1026,6 +1031,7 @@ local COMMANDS = {
   idioma = "lang", language = "lang", lang = "lang",
   rangos = "ranks", ranks = "ranks",
   plan = "plan", planes = "plan", plans = "plan",
+  reparto = "loot", botin = "loot", ["botín"] = "loot", loot = "loot", council = "loot", consejo = "loot",
   datos = "data", data = "data",
 }
 
@@ -1058,6 +1064,7 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     say(L("resetSay"))
   elseif cmd == "ranks" then openRanks(raw)
   elseif cmd == "plan" then if ns.openPlan then ns.openPlan((msg or ""):match("^%s*%S+%s+(.+)$")) end
+  elseif cmd == "loot" then if ns.openCouncil then ns.openCouncil((msg or ""):match("^%s*%S+%s+(.+)$")) end
   elseif cmd == "data" then
     if ns.dataSummary then say(L("dataSay"):format(ns.dataSummary())) end
   elseif cmd == "lang" then
