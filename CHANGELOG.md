@@ -13,6 +13,17 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.4.2] - 2026-11-01
+
+### Para todos
+
+- **Sin el aviso «Error loading RebirthTrack/Plans.lua»**: el addon ya trae ese archivo, así que el aviso no aparece aunque la app todavía no haya bajado tus planes (por ejemplo, justo después de actualizar el addon o con la app cerrada).
+
+### Técnico
+
+- `RebirthTrack/Plans.lua` se incluye vacío, solo con comentarios. Los `.toc` lo cargan, pero lo escribía solo Rebirth Track Uploader, y si faltaba el juego tiraba `LUA_WARNING … Error loading RebirthTrack/Plans.lua`. Pasaba por ejemplo después de que una actualización por CurseForge reemplazara la carpeta. La app lo sigue pisando con los planes, porque `WritePlans` compara contra lo que hay en disco.
+- Se sacó `RebirthTrack/Plans.lua` de `.gitignore` y de la exclusión del zip en `scripts/release.sh`.
+
 ## [0.4.1] - 2026-11-01
 
 ### Para todos

@@ -1,0 +1,3 @@
+-- Rebirth Track · planes de tus personajes. Viene vacío con el addon: lo reemplaza Rebirth Track
+-- Uploader con tus planes de rebirthknights.fun (se ven en el juego con /rt plan). Está para que el
+-- juego siempre lo encuentre al cargar el addon, aunque la app todavía no lo haya escrito.
