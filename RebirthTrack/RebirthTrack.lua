@@ -13,6 +13,10 @@ local f = CreateFrame("Frame")
 local session -- sesión en curso (tabla dentro de RebirthTrackDB.sessions)
 local startedLogging = false -- si el /combatlog lo prendimos nosotros
 
+-- Retail (12.0) y WoW Forever (WOW_PROJECT_CAMELOT) restringen a los addons: no pueden pedir el
+-- registro de combate (COMBAT_LOG_EVENT_UNFILTERED) y no mandan mensajes de addon en instancias.
+local RESTRICTED = WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1) or WOW_PROJECT_ID == (WOW_PROJECT_CAMELOT or 18)
+
 local function say(msg) print(PREFIX .. msg) end
 
 -- ── Textos en español (por defecto) e inglés ───────────────────────────────────────────
@@ -250,7 +254,7 @@ local function startSession(reason)
     startedAt = time(), endedAt = nil,
     advanced = advancedOn(), startedLogging = startedLogging,
     roster = {}, encounters = {},
-    events = { total = 0, byType = {}, perMinute = {} },
+    events = { total = 0, byType = {}, perMinute = {}, counted = not RESTRICTED },
   }
   local s = db().sessions
   table.insert(s, session)
@@ -286,7 +290,7 @@ local function summary(sess, title)
     if e.kill then kills = kills + 1 elseif e.finish then wipes = wipes + 1 end
   end
   say(L("sumLine"):format(
-    title, sess.instance.name or "?", fmtDuration(finished - sess.startedAt), players, fmtNumber(sess.events.total)))
+    title, sess.instance.name or "?", fmtDuration(finished - sess.startedAt), players, sess.events.counted == false and "—" or fmtNumber(sess.events.total)))
   if #sess.encounters == 0 then
     say(L("noBosses"))
   else
@@ -353,10 +357,11 @@ f:SetScript("OnEvent", function(_, event, ...)
   end
 end)
 
--- WoW Forever (y Retail 12.0) no dejan a los addons leer el registro de combate: el evento se
--- registra con pcall para que el resto del addon ande igual (el archivo lo sigue escribiendo el juego).
+-- Donde está restringido no se pide el registro de combate: pedirlo ya dispara el cartel «se ha
+-- bloqueado de una acción disponible solo para la interfaz de Blizzard» (ADDON_ACTION_FORBIDDEN), y
+-- pcall no lo evita. Ahí no se cuentan los eventos; el archivo del registro lo sigue escribiendo el juego.
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_ENTERING_WORLD", "ZONE_CHANGED_NEW_AREA", "GROUP_ROSTER_UPDATE",
-  "ENCOUNTER_START", "ENCOUNTER_END", "COMBAT_LOG_EVENT_UNFILTERED" }) do
+  "ENCOUNTER_START", "ENCOUNTER_END", not RESTRICTED and "COMBAT_LOG_EVENT_UNFILTERED" or nil }) do
   pcall(f.RegisterEvent, f, e)
 end
 
@@ -438,9 +443,7 @@ end
 local queue, pumping = {}, false
 local function paused()
   if InCombatLockdown and InCombatLockdown() then return true end
-  -- Retail y WoW Forever (WOW_PROJECT_CAMELOT) restringen los mensajes de addons en instancias.
-  local restricted = WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1) or WOW_PROJECT_ID == (WOW_PROJECT_CAMELOT or 18)
-  return restricted and IsInInstance and IsInInstance() and true or false
+  return RESTRICTED and IsInInstance and IsInInstance() and true or false
 end
 local function rawSend(msg)
   if C_ChatInfo and C_ChatInfo.SendAddonMessage then C_ChatInfo.SendAddonMessage(COMM, msg, "GUILD")

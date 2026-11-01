@@ -13,6 +13,17 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.4.1] - 2026-11-01
+
+### Para todos
+
+- **Sin el cartel de «acción bloqueada»**: en Retail y en WoW Forever ya no aparece al entrar al juego el aviso «RebirthTrack se ha bloqueado de una acción disponible solo para la interfaz de usuario de Blizzard». El registro de combate de las bandas se sigue grabando igual.
+
+### Técnico
+
+- `RebirthTrack.lua`: en Retail (12.0) y WoW Forever (`WOW_PROJECT_CAMELOT`) ya no se registra `COMBAT_LOG_EVENT_UNFILTERED`. Registrarlo dispara `ADDON_ACTION_FORBIDDEN`, y el `pcall` alrededor de `RegisterEvent` no lo evita (BugGrabber: `RebirthTrack.lua:360`, «UNKNOWN()»). Ahí no se cuentan los eventos y el resumen muestra «—» (`events.counted = false`).
+- Una sola constante `RESTRICTED` para esto y para la pausa de mensajes de addon en instancias, que antes calculaba lo mismo por su cuenta.
+
 ## [0.4.0] - 2026-10-29
 
 ### Para todos
