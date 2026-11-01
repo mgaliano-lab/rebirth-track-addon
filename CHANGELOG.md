@@ -13,6 +13,24 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.5.0] - 2026-11-01
+
+### Para todos
+
+- **Reparto de botín por consejo (/rt reparto)**: al lootear un jefe, el master looter toca «Repartir» y a toda la banda le aparece cada ítem con lo que tiene puesto en esa ranura. Cada uno responde **BiS**, **Mejora**, **Off-spec**, **Transmog** o **Pasar**, con una nota si quiere.
+- **El consejo vota**: oficiales y Guild Master (los rangos que diga la web) ven las respuestas ordenadas con la misma prioridad que rebirthknights.fun. Para cada uno se ve el rango, el botín recibido contra las raids asistidas y lo que ya sacó hoy. El master looter adjudica: en WoW Forever y Classic el addon entrega el ítem solo; en Retail avisa a quién comerciárselo. Lo que nadie pide va a desencantar o al banco.
+- **Cada clase pide su armadura**: si el ítem es de placa y tu clase no usa placa (o tela, cuero o malla según el caso), solo podés pasar, salvo que el master looter lo abra a todos.
+- **Todo queda en la web**: lo que cayó, las respuestas, los votos y a quién fue cada ítem se suben con la app (de cualquiera que la tenga) al historial de botín del sitio.
+- Si el juego no deja mandar mensajes de addon en la banda, el master looter anuncia los ítems en el chat y se responde por susurro: «1 bis», «2 mejora una nota».
+
+### Técnico
+
+- `Council.lua` (nuevo, en todos los `.toc`): prefijo `RTLC` por el canal `RAID`/`PARTY`, con cola de envío propia en pausa en combate (y durante encuentros en Retail y Forever). Si `SendAddonMessage` devuelve un código distinto de 0 (o `false`) dos veces seguidas, pasa al modo de chat y susurros.
+- Líneas nuevas en `RebirthTrackDB.council` (tope 4000), con el GUID del master looter como dueño: `lc1` reparto, `ld1` ítem, `lr1` respuesta con lo equipado (`id@ilvl`) y el ilvl que gana, `lv1` voto, `la1` adjudicación (`ml`, `trade`, `de` o `bank`), `lo1` abierto a todos y `lx1` cerrado. El estado se arma con esas líneas, así que sobrevive a un `/reload`. Quien llega tarde lo pide con `Q`.
+- Validaciones de cada addon: las respuestas solo las da el propio jugador, los votos solo el consejo (rangos de `RebirthTrackCouncil.ranks`, por defecto 0 y 1, más el ML) y las adjudicaciones solo el ML. Una pieza de armadura de otro tipo solo admite «Pasar» (tipo principal por clase, `classID` 4 de `GetItemInfo`), salvo `lo1`.
+- La prioridad (`ns.councilPriorityLess`) es la de `shared/lootPriority.ts` del sitio. Usa `RebirthTrackCouncil.players`, que llega en `Plans.lua`.
+- Entrega con `GiveMasterLoot`/`GetMasterLootCandidate`; si el cadáver no está abierto, queda pendiente para el próximo `LOOT_OPENED`. `/rt reparto agregar [ítem]` suma ítems desde las bolsas (Retail) y `/rt reparto cerrar` cierra el reparto. Pruebas del flujo completo en `tests/run.lua`.
+
 ## [0.4.3] - 2026-11-01
 
 ### Para todos
