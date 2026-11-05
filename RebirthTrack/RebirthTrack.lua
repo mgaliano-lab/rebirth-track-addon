@@ -392,6 +392,20 @@ local MAX_KNOWN, MAX_REPLY = 1000, 60
 local function clean(s) return (tostring(s or ""):gsub("[|;\n\"]", " ")) end
 local function regionCode() return REGIONS[GetCurrentRegion and GetCurrentRegion() or 1] or "us" end
 ns.regionCode = regionCode
+
+-- WoW Forever: los personajes son «Nombre Apellido», únicos en la región y sin reino a la vista.
+-- GetUnitName(unidad, true) y la lista de la guild lo dan junto ("Baldor Dwimorberg"). El sitio
+-- guarda el apellido en el lugar del reino, así que en Forever se manda el apellido como «reino».
+local function splitSurname(full)
+  if type(full) ~= "string" then return nil, nil end
+  return full:match("^(%S+) (.+)$")
+end
+ns.splitSurname = splitSurname
+local function selfRealm()
+  local _, surname = splitSurname(GetUnitName and GetUnitName("player", true))
+  return surname or GetRealmName()
+end
+ns.selfRealm = selfRealm
 local function split(s)
   local out = {}
   for part in (s .. ";"):gmatch("([^;]*);") do out[#out + 1] = part end
@@ -438,7 +452,7 @@ end
 
 local function selfRecord(kind)
   local _, class = UnitClass("player")
-  return { "k1", time(), kind, regionCode(), clean(GetRealmName()), clean(UnitName("player")), class or "",
+  return { "k1", time(), kind, regionCode(), clean(selfRealm()), clean(UnitName("player")), class or "",
     UnitLevel("player") or 0, UnitGUID("player") or "", WOW_PROJECT_ID or 0 }
 end
 
@@ -535,8 +549,11 @@ local function snapshotGuild()
   for i = 1, n do
     local full, rankName, rankIndex, level, _, _, note, officerNote, online, _, class, _, _, _, _, _, guid = GetGuildRosterInfo(i)
     if full then
-      local name, realm = full:match("^([^%-]+)%-(.+)$")
-      if not realm or realm == homeKey then realm = home end
+      local name, realm = splitSurname(full) -- Forever: «Nombre Apellido»
+      if not realm then
+        name, realm = full:match("^([^%-]+)%-(.+)$")
+        if not realm or realm == homeKey then realm = home end
+      end
       members[#members + 1] = table.concat({ "m1", clean(name or full), clean(realm), class or "", level or 0, rankIndex or 0,
         clean(rankName), guid or "", online and 0 or lastOnline(i), clean(note),
         (CanViewOfficerNote and CanViewOfficerNote()) and clean(officerNote) or "" }, ";")

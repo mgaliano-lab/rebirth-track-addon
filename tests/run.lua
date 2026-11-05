@@ -46,6 +46,15 @@ assert(g.members[1] == "m1;Roguebash;Nightslayer;ROGUE;60;1;Oficial;Player-6065-
 assert(g.members[2]:match("^m1;Healz;Nightslayer;PRIEST;58;3;Miembro;Player%-6065%-0411;%d+;Alt de Roguebash;$"), g.members[2])
 assert(g.members[3]:find("^m1;Otro;Dreamscythe;MAGE"), g.members[3])
 for _, m in ipairs(g.members) do assert(not m:find("|", 1, true)) end
+-- WoW Forever: «Nombre Apellido» → el apellido va en el lugar del reino.
+local n, s = ns.splitSurname("Baldor Dwimorberg")
+assert(n == "Baldor" and s == "Dwimorberg", "separa nombre y apellido")
+assert(ns.splitSurname("Healz-Nightslayer") == nil, "con guion no es apellido")
+assert(ns.selfRealm() == "Nightslayer", "sin apellido, el reino")
+local realGUN = GetUnitName
+GetUnitName = function() return "Roguebash Piedrafría" end
+assert(ns.selfRealm() == "Piedrafría", "con apellido, el apellido")
+GetUnitName = realGUN
 print("lista de la guild OK")
 
 -- Canal de addons: el prefijo se registra, al entrar avisa hasta dónde tiene datos y se anuncia.

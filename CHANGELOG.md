@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.5.1] - 2026-11-05
+
+### Para todos
+
+- **WoW Forever**: el addon ahora manda tu nombre y apellido («Baldor Dwimorberg»), igual que los de la lista de la guild. Así la web te reconoce como un solo personaje aunque lo hayas vinculado con Battle.net o lo haya subido el addon.
+
+### Técnico
+
+- En Forever los personajes son «Nombre Apellido», únicos en la región: `GetUnitName("player", true)` y `GetGuildRosterInfo` lo dan junto. Nuevo `ns.splitSurname` / `ns.selfRealm`: el apellido viaja en el campo del reino de `p1`, `k1` y `m1` (el sitio lo guarda en ese lugar). Fuera de Forever no cambia nada (`GetRealmName()` y «Nombre-Reino» como antes).
+
 ## [0.5.0] - 2026-11-01
 
 ### Para todos
