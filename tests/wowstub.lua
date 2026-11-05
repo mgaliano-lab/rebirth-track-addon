@@ -82,3 +82,4 @@ local clock = 100; function GetTime() clock = clock + 1; return clock end
 -- Subasta (Classic): hooksecurefunc llama a la función original y después al gancho.
 function PlaceAuctionBid() end
 function hooksecurefunc(name, fn) local orig = _G[name]; _G[name] = function(...) orig(...); fn(...) end end
+function GetUnitName(unit, full) return "Roguebash" end

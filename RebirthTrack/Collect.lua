@@ -184,7 +184,7 @@ local function collectPlayer()
   local _, class = UnitClass("player")
   local race = UnitRace and select(2, UnitRace("player")) or ""
   local guild = IsInGuild and IsInGuild() and GetGuildInfo("player") or ""
-  put(g, "p1", J(tok(UnitName("player")), tok(GetRealmName()), ns.regionCode(), WOW_PROJECT_ID or 0, class or "",
+  put(g, "p1", J(tok(UnitName("player")), tok(ns.selfRealm()), ns.regionCode(), WOW_PROJECT_ID or 0, class or "",
     race or "", UnitLevel("player") or 0, UnitFactionGroup and UnitFactionGroup("player") or "", tok(guild)), true)
 end
 
