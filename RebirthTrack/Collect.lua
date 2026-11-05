@@ -586,10 +586,36 @@ local function queryGuildBank()
   end
 end
 
+-- Mensaje del día e información de la guild. En algunos clientes una de las dos es protegida: el
+-- juego bloquea la llamada (ADDON_ACTION_BLOCKED, que no es un error de Lua y pcall no lo ataja) y
+-- devuelve nada. `calling` marca cuál se está leyendo; si el juego la bloquea, se deja de llamar
+-- en esta sesión y se conserva lo último que se anotó. En combate no se lee ninguna.
+local blockedApi, calling = {}, nil
+local function readGuildText(name)
+  local fn = _G[name]
+  if not fn or blockedApi[name] then return nil end
+  calling = name
+  local ok, v = pcall(fn)
+  calling = nil
+  if blockedApi[name] or not ok or type(v) ~= "string" then return nil end
+  return v
+end
+local function onActionBlocked(addon)
+  if addon == ADDON and calling then blockedApi[calling] = true end
+end
+
 local function collectGuildInfo()
   local gk = guildKey()
-  if not gk then return end
-  put(gk, "gx1", J(tok(GetGuildRosterMOTD and GetGuildRosterMOTD() or ""), tok(GetGuildInfoText and GetGuildInfoText() or "")))
+  if not gk or (InCombatLockdown and InCombatLockdown()) then return end
+  local motd, info = readGuildText("GetGuildRosterMOTD"), readGuildText("GetGuildInfoText")
+  if not motd and not info then return end
+  if not motd or not info then
+    -- Si una no se pudo leer, se mantiene la anterior en vez de mandarla vacía.
+    local c = store().data[gk]
+    local pm, pi = ((c and c.gx1 and select(4, split4(c.gx1))) or ""):match("^([^;]*);(.*)$")
+    motd, info = motd or pm or "", info or pi or ""
+  end
+  put(gk, "gx1", J(tok(motd), tok(info)))
 end
 
 -- Historial (ingresos, ascensos, descensos, expulsiones, salidas). El juego da «hace cuánto»: el
@@ -679,6 +705,8 @@ local ON = {
   GUILD_ROSTER_UPDATE = function() soon("ginfo", collectGuildInfo, 3) end,
   GUILD_MOTD = function() soon("ginfo", collectGuildInfo, 3) end,
   GUILD_EVENT_LOG_UPDATE = function() soon("glog", collectGuildEvents, 1) end,
+  ADDON_ACTION_BLOCKED = onActionBlocked,
+  ADDON_ACTION_FORBIDDEN = onActionBlocked,
 }
 
 local cf = CreateFrame("Frame")
