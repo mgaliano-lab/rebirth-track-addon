@@ -46,6 +46,29 @@ assert(g.members[1] == "m1;Roguebash;Nightslayer;ROGUE;60;1;Oficial;Player-6065-
 assert(g.members[2]:match("^m1;Healz;Nightslayer;PRIEST;58;3;Miembro;Player%-6065%-0411;%d+;Alt de Roguebash;$"), g.members[2])
 assert(g.members[3]:find("^m1;Otro;Dreamscythe;MAGE"), g.members[3])
 for _, m in ipairs(g.members) do assert(not m:find("|", 1, true)) end
+-- Mensaje del día e info de la guild. Si el juego bloquea una (ADDON_ACTION_BLOCKED, ej. GetGuildInfoText
+-- protegida), se deja de llamar y se conserva lo último anotado.
+local function gx1()
+  for _, c in pairs(RebirthTrackDB.data) do if c.gx1 then return c.gx1 end end
+end
+local infoCalls, infoBlocked = 0, false
+GetGuildRosterMOTD = function() return "Raid jueves 21 h" end
+GetGuildInfoText = function()
+  infoCalls = infoCalls + 1
+  if infoBlocked then fire("ADDON_ACTION_BLOCKED", "RebirthTrack", "UNKNOWN()"); return nil end
+  return "Reglas en el Discord"
+end
+fire("GUILD_MOTD")
+assert(gx1() and gx1():match(";Raid jueves 21 h;Reglas en el Discord$"), tostring(gx1()))
+infoBlocked = true
+GetGuildRosterMOTD = function() return "Raid viernes" end
+fire("GUILD_MOTD")
+assert(gx1():match(";Raid viernes;Reglas en el Discord$"), "conserva la info anterior: " .. gx1())
+local calls = infoCalls
+fire("GUILD_MOTD")
+assert(infoCalls == calls, "no vuelve a llamar a la bloqueada")
+fire("ADDON_ACTION_BLOCKED", "Otro", "UNKNOWN()") -- de otro addon: no importa
+print("info de la guild OK")
 -- WoW Forever: «Nombre Apellido» → el apellido va en el lugar del reino.
 local n, s = ns.splitSurname("Baldor Dwimorberg")
 assert(n == "Baldor" and s == "Dwimorberg", "separa nombre y apellido")

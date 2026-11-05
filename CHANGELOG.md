@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.5.2] - 2026-11-05
+
+### Para todos
+
+- Arreglado el aviso de error «RebirthTrack ha intentado llamar a una función protegida» que podía aparecer al actualizarse la lista de la guild. Ahora, si el juego no deja leer la información de la guild, el addon simplemente la saltea y conserva la última que tenía.
+
+### Técnico
+
+- `collectGuildInfo` llamaba a `GetGuildRosterMOTD` y `GetGuildInfoText` desde un `C_Timer` (código del addon). En algunos clientes una es protegida: el juego dispara `ADDON_ACTION_BLOCKED` (no es un error de Lua, `pcall` no lo ataja). Ahora cada lectura marca cuál está llamando; si llega `ADDON_ACTION_BLOCKED`/`FORBIDDEN` de RebirthTrack durante la llamada, esa función se deja de llamar en la sesión y `gx1` conserva el valor anterior. Tampoco se lee en combate. Prueba nueva en `tests/run.lua`.
+
 ## [0.5.1] - 2026-11-05
 
 ### Para todos
