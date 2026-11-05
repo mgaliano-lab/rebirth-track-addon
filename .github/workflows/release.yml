@@ -1,8 +1,8 @@
 # Al pushear un tag vX.Y.Z: corre las pruebas, valida CHANGELOG.md, arma el zip y lo publica en
 # CurseForge (notas: «Para todos») y en un GitHub Release (notas: la versión entera), y lo anuncia
-# en el canal de novedades de Discord.
+# en el canal de novedades de Discord. También lo sube al CDN de rebirthknights.fun
+# (scripts/release.sh → addon/latest.json), que es de donde la app uploader saca la versión nueva.
 # La versión del tag tiene que coincidir con "## Version:" del .toc.
-# El CDN de rebirthknights.fun se sigue publicando a mano con scripts/release.sh.
 name: release
 
 on:
@@ -52,6 +52,14 @@ jobs:
         run: |
           gh release create "v${{ steps.v.outputs.version }}" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" \
             --title "Rebirth Track ${{ steps.v.outputs.version }}" --notes-file notes.md
+
+      - name: CDN (app uploader)
+        if: github.ref_type == 'tag'
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.CDN_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.CDN_AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: us-east-1
+        run: scripts/release.sh
 
       - name: Anunciar en Discord
         if: github.ref_type == 'tag'
