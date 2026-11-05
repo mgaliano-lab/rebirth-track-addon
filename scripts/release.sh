@@ -9,7 +9,8 @@ cd "$(dirname "$0")/.."
 BUCKET=rebirthknights-assets
 DIST_ID=E360BSSXQTTMVZ
 CDN=https://ast.rebirthknights.fun
-export AWS_PROFILE=mgaliano
+# Local: perfil mgaliano. En CI vienen las claves del usuario rebirthknights-addon-ci por env.
+[[ -n "${AWS_ACCESS_KEY_ID:-}" ]] || export AWS_PROFILE=mgaliano
 
 TOC=RebirthTrack/RebirthTrack.toc
 VERSION=$(sed -n 's/^## Version: *//p' "$TOC" | tr -d '\r')

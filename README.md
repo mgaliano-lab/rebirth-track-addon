@@ -109,7 +109,9 @@ instala y actualiza este addon sola.
    GitHub Release con las notas del changelog, y lo anuncia en el canal de novedades de Discord
    (`scripts/announce-release.sh`, con el token OIDC de GitHub). Necesita el secret `CF_API_TOKEN`
    (token de https://legacy.curseforge.com/account/api-tokens).
-3. CDN del sitio: corré `scripts/release.sh` (con `AWS_PROFILE=mgaliano`). Arma dos zip:
+3. CDN del sitio: lo hace el mismo workflow con `scripts/release.sh` (secrets `CDN_AWS_ACCESS_KEY_ID` /
+   `CDN_AWS_SECRET_ACCESS_KEY`, usuario IAM `rebirthknights-addon-ci` de `aws/rebirthknights/ci.tf`).
+   A mano también se puede correr (con `AWS_PROFILE=mgaliano`). Arma dos zip:
    - el de instalar, con `RebirthTrack/` en la raíz;
    - el de herramientas.
 
