@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.5.3] - 2026-11-07
+
+### Para todos
+
+- **Registro de oro del banco de la guild**: al abrir el banco, el addon anota los depósitos, retiros, reparaciones y compras de pestañas (quién, cuánto y cuándo). En la web aparecen en la pestaña Balance, con lo que aportó cada uno.
+
+### Técnico
+
+- Nuevo hecho `gm1` (`tipo;jugador;cobre`, dueño `guild:<nombre>`) desde `GetGuildBankMoneyTransaction`. Al abrir el banco se pide el registro de oro (`QueryGuildBankLog(MAX_GUILDBANK_TABS + 1)`) y se lee en `GUILDBANKLOG_UPDATE`. El juego da «hace cuánto»: cada lectura se empareja con lo ya anotado (mismo tipo, jugador y monto, a menos de 6 h, en `RebirthTrackDB.guildMoney`) y solo lo que sobra es nuevo, así dos depósitos iguales cuentan dos veces. Prueba nueva en `tests/run.lua`.
+
 ## [0.5.2] - 2026-11-05
 
 ### Para todos
