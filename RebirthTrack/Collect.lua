@@ -1,6 +1,7 @@
 -- Rebirth Track · Lo que el juego le muestra al jugador, anotado para el sitio
 -- Personaje, profesiones (niveles, recetas y cooldowns), equipo, talentos, reputaciones, misiones
--- completadas, subasta (solo lo que publicás y lo que comprás o vendés), banco y balance de la guild,
+-- completadas, subasta (solo lo que publicás y lo que comprás o vendés), banco, balance y registro de
+-- oro de la guild,
 -- historial de la guild, y en bandas y mazmorras el botín, los buffs al empezar cada jefe y el equipo
 -- del resto (inspeccionando, fuera de combate). El balance, las bolsas y el banco de cada persona no
 -- se anotan. WoW no deja a los addons salir a internet:
@@ -28,6 +29,7 @@
 --     ahb1 compraste en la subasta: ítem;cantidad;precio;vendedor;nombre
 --     ahi1 factura de la subasta (correo): buyer|seller;ítem;otro jugador;precio;compra;depósito;comisión;cantidad
 --     ge1  historial de la guild: tipo;jugador;otro jugador;rango
+--     gm1  oro del banco de la guild: tipo;jugador;cobre  (deposit, withdraw, repair, buyTab, …)
 --
 -- Lo que no es privado y le sirve a la guild (personaje, profesiones, cooldowns, equipo y talentos)
 -- se comparte por el canal de addons (RTK1), así lo sube cualquiera que tenga la app aunque vos no
@@ -243,6 +245,24 @@ local function saveProfession(prof, rank, max, ids, cds)
   end
 end
 
+local function snapTradeSkill()
+  if IsTradeSkillLinked and IsTradeSkillLinked() then return nil end -- la de otro (link en el chat)
+  local prof, rank, max = GetTradeSkillLine()
+  local ids, cds = {}, {}
+  for i = 1, GetNumTradeSkills() or 0 do
+    local name, kind = GetTradeSkillInfo(i)
+    if name and kind ~= "header" and kind ~= "subheader" then
+      local id = recipeId(GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)) or recipeId(GetTradeSkillItemLink(i)) or ("n" .. tok(name))
+      ids[#ids + 1] = id
+      local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i)
+      if cd and cd > 0 then cds[#cds + 1] = id .. "=" .. readyAt(cd) end
+    end
+  end
+  local again = GetTradeSkillLine() -- cambió mientras se leía la lista: no sirve
+  if again ~= prof then return nil end
+  return { prof = prof, rank = rank, max = max, ids = ids, cds = cds, sig = table.concat(ids, ",") }
+end
+
 local function readTradeSkill()
   local T = C_TradeSkillUI
   if T and T.GetAllRecipeIDs then -- Retail
@@ -265,19 +285,17 @@ local function readTradeSkill()
     return
   end
   if not GetTradeSkillLine or not GetNumTradeSkills then return end
-  if IsTradeSkillLinked and IsTradeSkillLinked() then return end -- la de otro (link en el chat)
-  local prof, rank, max = GetTradeSkillLine()
-  local ids, cds = {}, {}
-  for i = 1, GetNumTradeSkills() or 0 do
-    local name, kind = GetTradeSkillInfo(i)
-    if name and kind ~= "header" and kind ~= "subheader" then
-      local id = recipeId(GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)) or recipeId(GetTradeSkillItemLink(i)) or ("n" .. tok(name))
-      ids[#ids + 1] = id
-      local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i)
-      if cd and cd > 0 then cds[#cds + 1] = id .. "=" .. readyAt(cd) end
+  -- Al pasar de una profesión a otra, el juego avisa la nueva un instante antes de cambiar la lista
+  -- (hasta la 0.5.3 eso anotaba, por ejemplo, las recetas de Peletería como de Primeros auxilios). Se
+  -- lee dos veces, con medio segundo de diferencia, y solo se anota si las dos lecturas coinciden.
+  local first = snapTradeSkill()
+  if not first then return end
+  C_Timer.After(0.5, function()
+    local again = snapTradeSkill()
+    if again and again.prof == first.prof and again.sig == first.sig then
+      saveProfession(again.prof, again.rank, again.max, again.ids, again.cds)
     end
-  end
-  saveProfession(prof, rank, max, ids, cds)
+  end)
 end
 
 -- Encantamiento (y antes de WotLK) usa la ventana de «craft», con su propia API.
@@ -586,6 +604,48 @@ local function queryGuildBank()
   end
 end
 
+-- Registro de oro del banco (depósitos, retiros, reparaciones, compra de pestañas). Como el
+-- historial, el juego da «hace cuánto» y el mismo movimiento leído otro día cae unas horas corrido:
+-- cada lectura se empareja con lo ya anotado (mismo tipo, jugador y monto, a menos de 6 h) y solo
+-- lo que sobra es nuevo. Así dos depósitos iguales del mismo día cuentan dos veces.
+local function collectGuildMoneyLog()
+  local gk = guildKey()
+  if not gk or not GetNumGuildBankMoneyTransactions or not GetGuildBankMoneyTransaction then return end
+  local d = store()
+  d.guildMoney = d.guildMoney or {}
+  local seen, used = d.guildMoney, {}
+  for i = 1, GetNumGuildBankMoneyTransactions() or 0 do
+    local kind, who, amount, y, m, dd, h = GetGuildBankMoneyTransaction(i)
+    if kind and amount then
+      local at = time() - ((((y or 0) * 365 + (m or 0) * 30 + (dd or 0)) * 24) + (h or 0)) * 3600
+      at = math.floor(at / 3600) * 3600
+      local key = table.concat({ gk, kind, tok(who), amount }, "/")
+      seen[key] = seen[key] or {}
+      used[key] = used[key] or {}
+      local match
+      for j, prev in ipairs(seen[key]) do
+        if not used[key][j] and math.abs(prev - at) <= 6 * 3600 then match = j; break end
+      end
+      if match then
+        used[key][match] = true
+      else
+        local list = seen[key]
+        list[#list + 1] = at
+        used[key][#list] = true
+        event("gm1", gk, J(tok(kind), tok(who), amount), at)
+      end
+    end
+  end
+  for k, list in pairs(seen) do
+    local keep = {}
+    for _, at in ipairs(list) do if time() - at <= 120 * 86400 then keep[#keep + 1] = at end end
+    seen[k] = #keep > 0 and keep or nil
+  end
+end
+local function queryMoneyLog()
+  if QueryGuildBankLog then QueryGuildBankLog((MAX_GUILDBANK_TABS or 6) + 1) end
+end
+
 -- Mensaje del día e información de la guild. En algunos clientes una de las dos es protegida: el
 -- juego bloquea la llamada (ADDON_ACTION_BLOCKED, que no es un error de Lua y pcall no lo ataja) y
 -- devuelve nada. `calling` marca cuál se está leyendo; si el juego la bloquea, se deja de llamar
@@ -699,7 +759,11 @@ local ON = {
   CHAT_MSG_LOOT = function(msg) pcall(onLoot, msg) end,
   ENCOUNTER_START = function(id, name) onEncounterStart(id, name) end,
   INSPECT_READY = function(guid) pcall(onInspectReady, guid) end,
-  GUILDBANKFRAME_OPENED = function() pcall(queryGuildBank); soon("gbank", collectGuildBank, 2) end,
+  GUILDBANKFRAME_OPENED = function()
+    pcall(queryGuildBank); pcall(queryMoneyLog)
+    soon("gbank", collectGuildBank, 2); soon("gmlog", collectGuildMoneyLog, 3)
+  end,
+  GUILDBANKLOG_UPDATE = function() soon("gmlog", collectGuildMoneyLog, 1) end,
   GUILDBANKBAGSLOTS_CHANGED = function() soon("gbank", collectGuildBank) end,
   GUILDBANK_UPDATE_MONEY = function() soon("gbank", collectGuildBank) end,
   GUILD_ROSTER_UPDATE = function() soon("ginfo", collectGuildInfo, 3) end,
@@ -734,5 +798,5 @@ end
 -- Para las pruebas.
 ns._collect = { put = put, putPeer = putPeer, share = share, pattern = pattern,
   collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
-  readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, onLoot = onLoot,
+  readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }

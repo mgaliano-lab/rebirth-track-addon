@@ -185,6 +185,18 @@ assert(D[ME]["cd1:Alquimia"]:match("^cd1;Player%-6065%-044C2423;%d+;Alquimia;i12
 table.remove(recipes, 2) -- con un filtro puesto se ve una sola
 fire("TRADE_SKILL_UPDATE")
 assert(D[ME]["r1:Alquimia"]:find("i12360,i13443", 1, true), "no se pierden las que no se ven")
+-- Al pasar a otra profesión el juego avisa la nueva antes de cambiar la lista: no se anota mezclado.
+local line, calls = { "Primeros auxilios", 40, 75 }, 0
+function GetTradeSkillLine() calls = calls + 1; return table.unpack(calls <= 2 and line or { "Alquimia", 290, 300 }) end
+fire("TRADE_SKILL_UPDATE")
+assert(not D[ME]["r1:Primeros auxilios"], "la lista de Alquimia no se anota como de Primeros auxilios")
+-- Ya con la lista nueva, sí.
+recipes[#recipes + 1] = { "Venda de lino", "optimal", "|cffffffff|Hitem:1251:0:0:0|h[Venda de lino]|h|r", 0 }
+function GetTradeSkillLine() return table.unpack(line) end
+fire("TRADE_SKILL_UPDATE")
+assert(D[ME]["r1:Primeros auxilios"]:match(";Primeros auxilios;40;75;i12360,i1251$"), D[ME]["r1:Primeros auxilios"])
+recipes[#recipes] = nil
+function GetTradeSkillLine() return "Alquimia", 290, 300 end
 -- Encantamiento usa la ventana de «craft».
 function GetCraftDisplaySkillLine() return "Encantamiento", 120, 150 end
 function GetNumCrafts() return 1 end
@@ -260,6 +272,27 @@ local GK = "guild:Rebirth Knights"
 assert(D[GK]["gb1:1"]:match("^gb1;guild:Rebirth Knights;%d+;1;Mats;12360:4,13443:10;1=12360:4,2=13443:10$"), D[GK]["gb1:1"])
 assert(not D[GK]["gb1:2"], "la pestaña que no se puede ver, no")
 assert(D[GK].gbm1:match(";777$"))
+
+-- Registro de oro: cada movimiento una vez, aunque se lea de nuevo horas después; dos iguales cuentan dos.
+local moneyLog = {
+  { "deposit", "Akuma", 10000, 0, 0, 0, 2 },
+  { "deposit", "Akuma", 10000, 0, 0, 0, 2 },
+  { "withdraw", "Healz", 5000, 0, 0, 1, 0 },
+  { "repair", "Roguebash", 1234, 0, 0, 0, 0 },
+}
+function GetNumGuildBankMoneyTransactions() return #moneyLog end
+function GetGuildBankMoneyTransaction(i) return table.unpack(moneyLog[i]) end
+function QueryGuildBankLog() end
+fire("GUILDBANKLOG_UPDATE")
+local gm = events("^gm1;")
+assert(#gm == 4, #gm)
+assert(has(RebirthTrackDB.events, "^gm1;guild:Rebirth Knights;%d+;deposit;Akuma;10000$"))
+assert(has(RebirthTrackDB.events, "^gm1;guild:Rebirth Knights;%d+;repair;Roguebash;1234$"))
+moneyLog[1][7], moneyLog[2][7] = 5, 5 -- leído 3 h más tarde
+table.insert(moneyLog, 1, { "deposit", "Akuma", 10000, 0, 0, 0, 0 }) -- uno nuevo, igual a los otros
+fire("GUILDBANKLOG_UPDATE")
+assert(#events("^gm1;") == 5, #events("^gm1;"))
+print("registro de oro del banco OK")
 function GetGuildRosterMOTD() return "Raid jueves 21 h; traer pociones" end
 function GetGuildInfoText() return "Reglas en\nel Discord" end
 fire("GUILD_ROSTER_UPDATE")
