@@ -245,6 +245,24 @@ local function saveProfession(prof, rank, max, ids, cds)
   end
 end
 
+local function snapTradeSkill()
+  if IsTradeSkillLinked and IsTradeSkillLinked() then return nil end -- la de otro (link en el chat)
+  local prof, rank, max = GetTradeSkillLine()
+  local ids, cds = {}, {}
+  for i = 1, GetNumTradeSkills() or 0 do
+    local name, kind = GetTradeSkillInfo(i)
+    if name and kind ~= "header" and kind ~= "subheader" then
+      local id = recipeId(GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)) or recipeId(GetTradeSkillItemLink(i)) or ("n" .. tok(name))
+      ids[#ids + 1] = id
+      local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i)
+      if cd and cd > 0 then cds[#cds + 1] = id .. "=" .. readyAt(cd) end
+    end
+  end
+  local again = GetTradeSkillLine() -- cambió mientras se leía la lista: no sirve
+  if again ~= prof then return nil end
+  return { prof = prof, rank = rank, max = max, ids = ids, cds = cds, sig = table.concat(ids, ",") }
+end
+
 local function readTradeSkill()
   local T = C_TradeSkillUI
   if T and T.GetAllRecipeIDs then -- Retail
@@ -267,19 +285,17 @@ local function readTradeSkill()
     return
   end
   if not GetTradeSkillLine or not GetNumTradeSkills then return end
-  if IsTradeSkillLinked and IsTradeSkillLinked() then return end -- la de otro (link en el chat)
-  local prof, rank, max = GetTradeSkillLine()
-  local ids, cds = {}, {}
-  for i = 1, GetNumTradeSkills() or 0 do
-    local name, kind = GetTradeSkillInfo(i)
-    if name and kind ~= "header" and kind ~= "subheader" then
-      local id = recipeId(GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)) or recipeId(GetTradeSkillItemLink(i)) or ("n" .. tok(name))
-      ids[#ids + 1] = id
-      local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i)
-      if cd and cd > 0 then cds[#cds + 1] = id .. "=" .. readyAt(cd) end
+  -- Al pasar de una profesión a otra, el juego avisa la nueva un instante antes de cambiar la lista
+  -- (hasta la 0.5.3 eso anotaba, por ejemplo, las recetas de Peletería como de Primeros auxilios). Se
+  -- lee dos veces, con medio segundo de diferencia, y solo se anota si las dos lecturas coinciden.
+  local first = snapTradeSkill()
+  if not first then return end
+  C_Timer.After(0.5, function()
+    local again = snapTradeSkill()
+    if again and again.prof == first.prof and again.sig == first.sig then
+      saveProfession(again.prof, again.rank, again.max, again.ids, again.cds)
     end
-  end
-  saveProfession(prof, rank, max, ids, cds)
+  end)
 end
 
 -- Encantamiento (y antes de WotLK) usa la ventana de «craft», con su propia API.
