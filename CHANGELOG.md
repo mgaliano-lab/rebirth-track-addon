@@ -17,10 +17,12 @@ anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
 ### Para todos
 
+- **Recetas de profesiones**: arreglado que al pasar de una profesión a otra (por ejemplo de Peletería a Primeros auxilios) se anotaran las recetas de una como de la otra.
 - **Registro de oro del banco de la guild**: al abrir el banco, el addon anota los depósitos, retiros, reparaciones y compras de pestañas (quién, cuánto y cuándo). En la web aparecen en la pestaña Balance, con lo que aportó cada uno.
 
 ### Técnico
 
+- `readTradeSkill` (Classic): al cambiar de ventana el juego da la profesión nueva antes de cambiar la lista y, como `saveProfession` suma, la mezcla quedaba para siempre. Ahora lee dos veces (`snapTradeSkill`, con 0,5 s de diferencia, y descarta si `GetTradeSkillLine` cambia mientras lee) y solo anota si coinciden. Lo ya mezclado lo limpia la web al leer. Prueba nueva en `tests/run.lua`.
 - Nuevo hecho `gm1` (`tipo;jugador;cobre`, dueño `guild:<nombre>`) desde `GetGuildBankMoneyTransaction`. Al abrir el banco se pide el registro de oro (`QueryGuildBankLog(MAX_GUILDBANK_TABS + 1)`) y se lee en `GUILDBANKLOG_UPDATE`. El juego da «hace cuánto»: cada lectura se empareja con lo ya anotado (mismo tipo, jugador y monto, a menos de 6 h, en `RebirthTrackDB.guildMoney`) y solo lo que sobra es nuevo, así dos depósitos iguales cuentan dos veces. Prueba nueva en `tests/run.lua`.
 
 ## [0.5.2] - 2026-11-05
