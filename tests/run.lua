@@ -536,8 +536,28 @@ fire("BANKFRAME_CLOSED")
 bank[-1].items = {}
 fire("BAG_UPDATE", 5)
 assert(RebirthTrackBank.containers[1].items[1], "con el banco cerrado no se pisa lo anotado")
+-- WoW Forever: el cliente conoce las pestañas del banco de Retail, pero el banco es el clásico.
+Enum.BagIndex = { Bank = -1, CharacterBankTab_1 = 6, BankBag_1 = 5 }
+bank[-1].items = { [3] = { 13444, 2, "item:13444" } }
+fire("BANKFRAME_OPENED")
+local F = RebirthTrackBank
+assert(not F.tabbed, "con casilleros clásicos no usa pestañas")
+assert(F.containers[1].id == -1 and F.containers[2].id == 5 and F.containers[2].name == "Bolsa de tela de luna", "banco + bolsa 5")
+for _, c in ipairs(F.containers) do assert(not c.tab, "sin «Pestaña N»") end
+assert(#F.containers == 1 + 7, "banco + 7 huecos de bolsa: " .. #F.containers)
+-- Retail 11.2+: sin casilleros clásicos, las pestañas.
+local saved = bank[-1]; bank[-1] = nil
+bank[6] = { n = 98, items = { [1] = { 12360, 1, "item:12360" } } }
+fire("BANKFRAME_OPENED")
+assert(RebirthTrackBank.tabbed and RebirthTrackBank.containers[1].tab == 1 and RebirthTrackBank.containers[1].items[1].id == 12360, "pestañas de Retail")
+bank[-1], bank[6] = saved, nil
+Enum.BagIndex = nil
+fire("BANKFRAME_OPENED")
 rt("banco")
-click("Banco personal") -- el botón de la ventana del addon abre lo mismo
+local pg0 = ns._bank.page()
+assert(pg0 and pg0.shown, "/rt banco abre la ventana")
+click("Banco personal") -- el botón de la ventana del addon la cierra (y vuelve a abrir)
+assert(not pg0.shown, "el botón alterna la ventana")
 -- La vista: 24 casilleros + la fila de 7 huecos de bolsa + 16 de la bolsa = 47 botones.
 local pg = ns._bank.page()
 assert(pg, "la página del banco existe")

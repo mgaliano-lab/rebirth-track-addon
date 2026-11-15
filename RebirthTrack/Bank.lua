@@ -1,7 +1,7 @@
 -- Rebirth Track · Banco personal (solo local)
--- Al abrir el banco se anota qué hay en cada casillero del banco y de sus bolsas, y en
--- Esc › Opciones › AddOns › Rebirth Track › Banco personal (o /rt banco) se ve como en el banco:
--- los casilleros del banco, la fila de bolsas y cada bolsa abierta, con el tooltip del ítem.
+-- Al abrir el banco se anota qué hay en cada casillero del banco y de sus bolsas, y en su ventana
+-- (botón «Banco personal» de la ventana del addon o /rt banco) se ve como en el banco: los
+-- casilleros del banco, la fila de bolsas y cada bolsa abierta, con el tooltip del ítem.
 --
 -- NO se manda a nadie: va en RebirthTrackBank, que es por personaje (## SavedVariablesPerCharacter),
 -- y el juego lo guarda en WTF/Account/<cuenta>/<reino>/<personaje>/SavedVariables/, que la app no
@@ -67,17 +67,22 @@ local function bagItem(bag)
   return link, icon, link and link:match("%[(.-)%]")
 end
 
--- Contenedores del banco según la versión: Classic (casilleros + bolsas), Retail viejo (+ componentes)
--- y Retail 11.2+ (pestañas del banco del personaje).
-local function bankBags()
-  local out = {}
-  local tabs = Enum and Enum.BagIndex and Enum.BagIndex.CharacterBankTab_1
-  if tabs then
-    for i = 0, 5 do out[#out + 1] = { id = tabs + i, tab = i + 1 } end
+-- Contenedores del banco según la versión: Classic y WoW Forever (casilleros + huecos de bolsa),
+-- Retail viejo (+ componentes) y Retail 11.2+ (pestañas del banco del personaje). Forever corre en un
+-- cliente moderno que ya conoce las pestañas (Enum.BagIndex.CharacterBankTab_1) pero su banco es el
+-- clásico: se usan pestañas solo si el banco no tiene los casilleros clásicos.
+local function bankBags(mainSlots)
+  local out, E = {}, Enum and Enum.BagIndex
+  if mainSlots == 0 and E and E.CharacterBankTab_1 then
+    for i = 0, 5 do out[#out + 1] = { id = E.CharacterBankTab_1 + i, tab = i + 1 } end
     return out, true
   end
-  local first = (NUM_BAG_SLOTS or 4) + 1
-  for i = 0, (NUM_BANKBAGSLOTS or 7) - 1 do out[#out + 1] = { id = first + i } end
+  -- Las bolsas del banco van después de las propias (4 en Classic; 5 con la de componentes en Retail).
+  local first = (E and E.BankBag_1) or ((NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) + 1)
+  for i = 0, (NUM_BANKBAGSLOTS or 7) - 1 do
+    local id = first + i
+    if id ~= BANK and id ~= REAGENTS then out[#out + 1] = { id = id } end
+  end
   return out, false
 end
 
@@ -85,7 +90,7 @@ local bankOpen = false
 local function scan()
   if not bankOpen then return end
   local main = numSlots(BANK)
-  local bags, tabbed = bankBags()
+  local bags, tabbed = bankBags(main)
   if main == 0 and not tabbed then return end -- el banco no está cargado
   local containers = {}
   if main > 0 then
@@ -266,7 +271,7 @@ function ns.refreshBank()
   header:SetText(T("when"):format(ago(data.at), full, total, distinct))
   local term = (search:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
 
-  local width = math.max(300, (page:GetWidth() or 620) - 40)
+  local width = math.max(300, (page:GetWidth() or 660) - 60)
   local x, y, rowH, n = 0, 0, 0, 0
   local function place(f)
     if x > 0 and x + f.w > width then x, y, rowH = 0, y + rowH + 10, 0 end
@@ -319,23 +324,43 @@ function ns.refreshBank()
   content:SetSize(width, y + rowH + 10)
 end
 
+-- Ventana propia del addon (como Plan del personaje y Reparto de botín): se mueve arrastrando, Esc
+-- la cierra y recuerda dónde quedó.
 local function createPage()
-  if page or not ns.addOptionsPage then return end
-  page = CreateFrame("Frame", "RebirthTrackBankPage", UIParent)
+  if page then return end
+  page = CreateFrame("Frame", "RebirthTrackBankFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  page:SetSize(660, 560); page:SetFrameStrata("DIALOG"); page:SetClampedToScreen(true)
+  page:SetMovable(true); page:EnableMouse(true); page:RegisterForDrag("LeftButton")
+  page:SetScript("OnDragStart", page.StartMoving)
+  page:SetScript("OnDragStop", function(self)
+    self:StopMovingOrSizing()
+    local point, _, rel, x, y = self:GetPoint()
+    local u = ns.db().ui or {}
+    u.bank = { point = point, rel = rel, x = x, y = y }
+    ns.db().ui = u
+  end)
+  local pos = (ns.db().ui or {}).bank
+  page:SetPoint(pos and pos.point or "CENTER", UIParent, pos and pos.rel or "CENTER", pos and pos.x or 0, pos and pos.y or 0)
+  if page.SetBackdrop then
+    page:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
+  end
   page:Hide()
-  local title = page:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", 16, -16)
+  local title = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+  title:SetPoint("TOP", 0, -14)
   page.title = title
+  local close = CreateFrame("Button", nil, page, "UIPanelCloseButton")
+  close:SetPoint("TOPRIGHT", -4, -4)
   page.intro = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  page.intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-  page.intro:SetPoint("RIGHT", -24, 0)
+  page.intro:SetPoint("TOPLEFT", 18, -38)
+  page.intro:SetPoint("RIGHT", -210, 0)
   page.intro:SetJustifyH("LEFT")
   header = page:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
   header:SetPoint("TOPLEFT", page.intro, "BOTTOMLEFT", 0, -8)
   search = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
-  search:SetSize(180, 20)
+  search:SetSize(170, 20)
   search:SetAutoFocus(false)
-  search:SetPoint("TOPRIGHT", -24, -16)
+  search:SetPoint("TOPRIGHT", -26, -38)
   search.hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
   search.hint:SetPoint("LEFT", 4, 0)
   search:SetScript("OnTextChanged", function(self)
@@ -345,18 +370,22 @@ local function createPage()
   search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   scroll = CreateFrame("ScrollFrame", "RebirthTrackBankScroll", page, "UIPanelScrollFrameTemplate")
   scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
-  scroll:SetPoint("BOTTOMRIGHT", -30, 10)
+  scroll:SetPoint("BOTTOMRIGHT", -34, 16)
   content = CreateFrame("Frame", nil, scroll)
-  content:SetSize(560, 10)
+  content:SetSize(600, 10)
   scroll:SetScrollChild(content)
   page:SetScript("OnShow", function() title:SetText(T("page")); ns.refreshBank() end)
-  page:SetScript("OnSizeChanged", function() ns.refreshBank() end)
-  ns.openBank = ns.addOptionsPage(page, T("page"))
+  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackBankFrame") end
+end
+
+-- /rt banco y el botón de la ventana del addon: abre o cierra la ventana.
+function ns.openBank()
+  createPage()
+  if page:IsShown() then page:Hide() else page:Show(); ns.refreshBank() end
 end
 
 -- ── Eventos ──────────────────────────────────────────────────────────────────────────────
 local ON = {
-  PLAYER_LOGIN = function() pcall(createPage) end,
   BANKFRAME_OPENED = function() bankOpen = true; scanSoon() end,
   BANKFRAME_CLOSED = function() bankOpen = false end, -- cerrado ya no se puede leer: queda lo último
   PLAYERBANKSLOTS_CHANGED = scanSoon,

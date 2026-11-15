@@ -93,7 +93,7 @@ local TEXTS = {
       "/rt mazmorras · dungeons",
       "/rt posicion · position",
       "/rt opciones · options (Esc › Opciones › AddOns)",
-      "/rt banco · bank (lo que tenés en el banco, sin ir al banco)",
+      "/rt banco · bank (ventana con lo que tenés en el banco)",
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
@@ -174,7 +174,7 @@ local TEXTS = {
       "/rt dungeons · mazmorras",
       "/rt position · posicion",
       "/rt options · opciones (Esc › Options › AddOns)",
-      "/rt bank · banco (what's in your bank, without going there)",
+      "/rt bank · banco (window with what's in your bank)",
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
@@ -929,6 +929,7 @@ local function refreshOptions()
   for _, c in ipairs(options.checks) do c:SetChecked(c.get() and true or false); c.label:SetText(L(c.key)) end
   options.open:SetText(L("optOpen"))
   options.link:SetText(L("bLink"))
+  options.bank:SetText(L("bBank"))
   options.lang:SetText(lang() == "es" and "English" or "Español")
 end
 ns.refreshOptions = refreshOptions
@@ -981,6 +982,8 @@ local function createOptions()
   options.link:SetPoint("LEFT", options.open, "RIGHT", 8, 0)
   options.lang = button(100, function() db().settings.lang = lang() == "es" and "en" or "es"; say(L("langSay")) end)
   options.lang:SetPoint("LEFT", options.link, "RIGHT", 8, 0)
+  options.bank = button(160, function() if ns.openBank then ns.openBank() end end)
+  options.bank:SetPoint("TOPLEFT", options.open, "BOTTOMLEFT", 0, -8)
 
   options:SetScript("OnShow", refreshOptions)
   if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
@@ -990,27 +993,6 @@ local function createOptions()
     InterfaceOptions_AddCategory(options)
   end
   refreshOptions()
-end
-
--- Páginas que cuelgan de Rebirth Track en Esc › Opciones › AddOns (Bank.lua: banco personal).
--- Devuelve la función que abre esa página.
-function ns.addOptionsPage(frame, name)
-  createOptions()
-  frame.name, frame.parent = name, options.name
-  local sub
-  if optionsCategory and Settings and Settings.RegisterCanvasLayoutSubcategory then
-    sub = Settings.RegisterCanvasLayoutSubcategory(optionsCategory, frame, name)
-  elseif InterfaceOptions_AddCategory then
-    InterfaceOptions_AddCategory(frame)
-  end
-  return function()
-    if sub and Settings.OpenToCategory then
-      Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
-      if SettingsPanel and SettingsPanel.SelectCategory then pcall(SettingsPanel.SelectCategory, SettingsPanel, sub) end
-    elseif InterfaceOptionsFrame_OpenToCategory then
-      InterfaceOptionsFrame_OpenToCategory(frame); InterfaceOptionsFrame_OpenToCategory(frame)
-    end
-  end
 end
 
 function ns.openOptions()

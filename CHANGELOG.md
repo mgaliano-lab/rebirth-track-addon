@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.7.2] - 2026-11-15
+
+### Para todos
+
+- **Banco personal arreglado en WoW Forever**: ahora se ve como es, con los casilleros del banco y los huecos de bolsa (los que compraste, con su bolsa, y los que no). Antes mostraba «pestañas» que Forever no tiene.
+- **El banco es una ventana propia del addon**, como el Plan del personaje y el Reparto de botín: se abre con el botón «Banco personal» de la ventana del addon (o `/rt banco`), se mueve arrastrando y se cierra con Esc.
+
+### Técnico
+
+- `bankBags(main)`: Forever corre en un cliente que define `Enum.BagIndex.CharacterBankTab_1` pero su banco es el clásico; las pestañas de Retail 11.2+ se usan solo si el banco (-1) no tiene casilleros. Las bolsas del banco arrancan en `Enum.BagIndex.BankBag_1` (o `NUM_TOTAL_EQUIPPED_BAG_SLOTS`/`NUM_BAG_SLOTS` + 1) y no se cuentan el banco ni los componentes. Pruebas para Forever y para Retail.
+- La vista pasa de subpágina de las opciones a ventana `RebirthTrackBankFrame` (en `UISpecialFrames`, posición en `RebirthTrackDB.ui.bank`); el panel de opciones suma un botón «Banco personal». Se quita `ns.addOptionsPage`.
+
 ## [0.7.1] - 2026-11-15
 
 ### Para todos
