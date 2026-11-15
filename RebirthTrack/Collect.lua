@@ -19,6 +19,7 @@
 --     cd1  profesión;receta=hora en que vuelve a estar lista,…                  (se comparte)
 --     eq1  ranura=ítem[:encantamiento],…  (propio o de alguien inspeccionado)   (se comparte el propio)
 --     t1   grupo;rama~puntos~fila.columna.rango,…/…  (talentos, salvo Retail)  (se comparte)
+--     pos1 mapa;x;y;continente;x;y;zona;instancia;nombre del continente  («off» si no la comparte) (se comparte)
 --     pt1  tiempo jugado;en el nivel (al usar /played)
 --     rep1 facción=nivel:valor,… · q1 misión,… (completadas)
 --     aho1 ítem:cantidad:oferta mínima:compra:oferta actual:tiempo:vendida,…  (lo que tenés publicado)
@@ -42,7 +43,7 @@
 local ADDON, ns = ...
 ns = ns or {}
 
-local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true }
+local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true, pos1 = true }
 local KEYED = { r1 = true, cd1 = true, gb1 = true } -- una por profesión o pestaña
 local MAX_EVENTS, MAX_PEERS, MAX_REPLY, CHUNK = 1500, 400, 40, 200
 local INSPECT_EVERY = 6 * 3600
@@ -702,6 +703,50 @@ local function collectGuildEvents()
   for k, at in pairs(seen) do if time() - at > 120 * 86400 then seen[k] = nil end end
 end
 
+-- ── Posición ──────────────────────────────────────────────────────────────────────────
+-- Cada minuto (y al cambiar de zona) se anota dónde está el personaje y se comparte con la guild:
+-- el mapa de la zona y el del continente (uiMapID) con la posición en cada uno (0 a 1), para el mapa
+-- del sitio. Dentro de instancias el juego no da coordenadas: va solo la instancia. Si el jugador lo
+-- apaga (opciones del addon o /rt posicion) se manda «off» una vez, así el sitio deja de mostrarlo.
+local CONTINENT = Enum and Enum.UIMapType and Enum.UIMapType.Continent or 2
+local function r3(v) return (string.format("%.3f", v or 0):gsub("%.?0+$", "")) end
+local function continentOf(mapId)
+  local id, guard = mapId, 0
+  while id and id > 0 and guard < 10 do
+    local info = C_Map.GetMapInfo(id)
+    if not info then return nil end
+    if info.mapType == CONTINENT then return id end
+    id, guard = info.parentMapID, guard + 1
+  end
+end
+local function collectPosition()
+  local g = me()
+  if not g then return end
+  if ns.sharePos and not ns.sharePos() then put(g, "pos1", "off", true); return end
+  if not (C_Map and C_Map.GetBestMapForUnit) then return end
+  local inInst = IsInInstance and IsInInstance()
+  if inInst then
+    local name, _, _, _, _, _, _, instanceId = GetInstanceInfo()
+    put(g, "pos1", J(0, 0, 0, 0, 0, 0, tok(name), instanceId or 0, ""), true)
+    return
+  end
+  local mapId = C_Map.GetBestMapForUnit("player")
+  if not mapId then return end
+  local pos = C_Map.GetPlayerMapPosition(mapId, "player")
+  if not pos then return end
+  local x, y = pos:GetXY()
+  local cont = continentOf(mapId)
+  local cx, cy = 0, 0
+  if cont then
+    local cp = C_Map.GetPlayerMapPosition(cont, "player")
+    if cp then cx, cy = cp:GetXY() end
+  end
+  local info, contInfo = C_Map.GetMapInfo(mapId), cont and C_Map.GetMapInfo(cont)
+  put(g, "pos1", J(mapId, r3(x), r3(y), cont or 0, r3(cx), r3(cy), tok(info and info.name or (GetZoneText and GetZoneText()) or ""), 0,
+    tok(contInfo and contInfo.name or "")), true)
+end
+ns.collectPosition = function() pcall(collectPosition) end
+
 -- ── Eventos del juego ──────────────────────────────────────────────────────────────────
 -- Cada lectura espera un instante (el juego manda varios avisos seguidos) y va con pcall: si una
 -- versión de WoW no tiene alguna función, lo demás se sigue anotando.
@@ -728,6 +773,7 @@ local ON = {
       pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end)
     end)
     if C_Timer.NewTicker then
+      C_Timer.NewTicker(60, function() pcall(collectPosition) end)
       C_Timer.NewTicker(5, function() pcall(inspectNext) end)
       C_Timer.NewTicker(1800, function() pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end) end)
     end
@@ -737,6 +783,8 @@ local ON = {
     store().syncAt = time()
   end,
   PLAYER_LEVEL_UP = function() soon("player", collectPlayer) end,
+  ZONE_CHANGED_NEW_AREA = function() soon("pos", collectPosition, 3) end,
+  PLAYER_ENTERING_WORLD = function() soon("pos", collectPosition, 20) end,
   PLAYER_GUILD_UPDATE = function() soon("player", collectPlayer) end,
   SKILL_LINES_CHANGED = function() soon("skills", collectSkills) end,
   TRADE_SKILL_SHOW = function()
@@ -796,7 +844,7 @@ function ns.dataSummary()
 end
 
 -- Para las pruebas.
-ns._collect = { put = put, putPeer = putPeer, share = share, pattern = pattern,
+ns._collect = { put = put, collectPosition = collectPosition, putPeer = putPeer, share = share, pattern = pattern,
   collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }
