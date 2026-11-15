@@ -91,6 +91,7 @@ local TEXTS = {
       "/rt mazmorras · dungeons",
       "/rt posicion · position",
       "/rt opciones · options (Esc › Opciones › AddOns)",
+      "/rt banco · bank (lo que tenés en el banco, sin ir al banco)",
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
@@ -169,6 +170,7 @@ local TEXTS = {
       "/rt dungeons · mazmorras",
       "/rt position · posicion",
       "/rt options · opciones (Esc › Options › AddOns)",
+      "/rt bank · banco (what's in your bank, without going there)",
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
@@ -972,6 +974,27 @@ local function createOptions()
   refreshOptions()
 end
 
+-- Páginas que cuelgan de Rebirth Track en Esc › Opciones › AddOns (Bank.lua: banco personal).
+-- Devuelve la función que abre esa página.
+function ns.addOptionsPage(frame, name)
+  createOptions()
+  frame.name, frame.parent = name, options.name
+  local sub
+  if optionsCategory and Settings and Settings.RegisterCanvasLayoutSubcategory then
+    sub = Settings.RegisterCanvasLayoutSubcategory(optionsCategory, frame, name)
+  elseif InterfaceOptions_AddCategory then
+    InterfaceOptions_AddCategory(frame)
+  end
+  return function()
+    if sub and Settings.OpenToCategory then
+      Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
+      if SettingsPanel and SettingsPanel.SelectCategory then pcall(SettingsPanel.SelectCategory, SettingsPanel, sub) end
+    elseif InterfaceOptionsFrame_OpenToCategory then
+      InterfaceOptionsFrame_OpenToCategory(frame); InterfaceOptionsFrame_OpenToCategory(frame)
+    end
+  end
+end
+
 function ns.openOptions()
   createOptions()
   if optionsCategory and Settings and Settings.OpenToCategory then
@@ -1159,6 +1182,7 @@ local COMMANDS = {
   mazmorras = "dungeons", dungeons = "dungeons",
   posicion = "position", ["posición"] = "position", position = "position", ubicacion = "position", mapa = "position",
   opciones = "options", options = "options", config = "options",
+  banco = "bank", bank = "bank",
   borrar = "reset", reset = "reset",
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
@@ -1192,6 +1216,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     local on = (arg == "on" or arg == "si" or arg == "sí") or (arg ~= "off" and arg ~= "no" and not sharePos())
     setSharePos(on)
     say(L("posSay"):format(on and L("shared") or L("notShared")))
+  elseif cmd == "bank" then
+    if ns.openBank then ns.openBank() end
   elseif cmd == "options" then
     if ns.openOptions then ns.openOptions() end
   elseif cmd == "minimap" then
