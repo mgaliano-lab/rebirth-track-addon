@@ -13,6 +13,24 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.8.0] - 2026-11-15
+
+### Para todos
+
+- **La guild en el mapa del juego**: cada miembro que comparte su posición aparece como un punto del color de su clase en el mapa del mundo, con su nombre, nivel y zona al pasar el mouse. No reemplaza tu mapa: se ve en el de Blizzard y en los addons de mapa que muestran puntos de otros addons (OpenMap, Mapster…). Se apaga desde las opciones o el botón «Puntos en el mapa».
+- **La posición se manda como OpenMap**: cada 10 segundos mientras te movés y cada minuto si estás quieto (antes, una vez por minuto). Nada desde mazmorras ni bandas.
+- **Botón «Posiciones de la guild»** en la ventana del addon (o `/rt posiciones`): la lista de todo lo que llegó, con zona, coordenadas, hace cuánto y un botón para verlo en el mapa, para comprobar que se esté sincronizando.
+- **Banco personal arreglado en WoW Forever**: ahora se ve como es, con los casilleros del banco y los huecos de bolsa (los que compraste, con su bolsa, y los que no). Antes mostraba «pestañas» que Forever no tiene.
+- **El banco es una ventana propia del addon**, como el Plan del personaje y el Reparto de botín: se abre con el botón «Banco personal» de la ventana del addon (o `/rt banco`), se mueve arrastrando y se cierra con Esc.
+
+### Técnico
+
+- `Positions.lua` nuevo: puntos con HereBeDragons-Pins 2.0 (`AddWorldMapIconMap`, `HBD_PINS_WORLDMAP_SHOW_WORLD`), un punto se va a los 150 s sin noticias (hora de llegada en la sesión, o la anotada si es más de 5 min más vieja). Librerías en `Libs/` (LibStub y CallbackHandler-1.0 de dominio público/BSD, HereBeDragons 2.18 BSD) cargadas antes que el addon.
+- `collectPosition` con la cadencia de OpenMap (`Friends.lua`): mira cada 2 s, manda si se movió más de 0,002 cada 10 s y quieto cada 60 s (`put(..., force)` para refrescar la hora). No manda con 0,0 (el juego no sabe).
+- `ns.onPeerPosition` (desde `putPeer`) marca cuándo se oyó a cada uno. Ventana `RebirthTrackPositionsFrame`, opción `settings.mapPins`, `/rt posiciones`.
+- `bankBags(main)`: Forever corre en un cliente que define `Enum.BagIndex.CharacterBankTab_1` pero su banco es el clásico; las pestañas de Retail 11.2+ se usan solo si el banco (-1) no tiene casilleros. Las bolsas del banco arrancan en `Enum.BagIndex.BankBag_1` (o `NUM_TOTAL_EQUIPPED_BAG_SLOTS`/`NUM_BAG_SLOTS` + 1) y no se cuentan el banco ni los componentes. Pruebas para Forever y para Retail.
+- La vista pasa de subpágina de las opciones a ventana `RebirthTrackBankFrame` (en `UISpecialFrames`, posición en `RebirthTrackDB.ui.bank`); el panel de opciones suma un botón «Banco personal». Se quita `ns.addOptionsPage`.
+
 ## [0.7.1] - 2026-11-15
 
 ### Para todos

@@ -47,7 +47,7 @@ local TEXTS = {
     bStatus = "Estado", tStatus = "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).",
     tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
-    position = "Posición: ", tPos = "Compartir o no dónde está tu personaje con la guild, para el mapa del sitio (/rt posicion).",
+    position = "Posición: ", tPos = "Compartir o no dónde está tu personaje con la guild, para el mapa del juego y el del sitio (/rt posicion).",
     posSay = "posición %s.", shared = "|cff3fbf3fCOMPARTIDA|r con la guild", notShared = "sin compartir",
     optIntro = "Registra tus bandas y mazmorras y comparte con la guild lo que sirve para el sitio (rebirthknights.fun). La app de tu PC lo sube cuando el juego guarda: al hacer /reload o al salir.",
     optPos = "Compartir mi posición con la guild", optPosTip = "Cada minuto avisa por el canal de addons de la guild en qué zona y en qué punto del mapa está tu personaje, para el mapa de miembros del sitio. Dentro de instancias va solo la instancia. Apagado, el sitio deja de mostrarte.",
@@ -58,6 +58,8 @@ local TEXTS = {
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
+    bPositions = "Posiciones de la guild", tPositions = "Lista de las posiciones que llegaron por el canal (zona, coordenadas y hace cuánto) para ver que se esté sincronizando (/rt posiciones).",
+    optPins = "Mostrar a la guild en el mapa del juego", optPinsTip = "Un punto del color de su clase por cada miembro que comparte su posición, en el mapa del mundo (el de Blizzard o el addon de mapa que uses). No reemplaza tu mapa.",
     bBank = "Banco personal", tBank = "Lo que tenés en el banco, sin ir al banco (/rt banco). Se anota cada vez que lo abrís y queda solo en tu PC.",
     back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
     mmOpen = "Clic: abrir o cerrar la ventana", mmLink = "Clic derecho: vincular este personaje",
@@ -91,9 +93,10 @@ local TEXTS = {
       "/rt registrar · start",
       "/rt detener · stop",
       "/rt mazmorras · dungeons",
-      "/rt posicion · position",
+      "/rt posicion · position (compartir o no)",
+      "/rt posiciones · positions (lista de la guild)",
       "/rt opciones · options (Esc › Opciones › AddOns)",
-      "/rt banco · bank (lo que tenés en el banco, sin ir al banco)",
+      "/rt banco · bank (ventana con lo que tenés en el banco)",
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
@@ -139,6 +142,8 @@ local TEXTS = {
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
+    bPositions = "Guild positions", tPositions = "List of the positions that arrived over the channel (zone, coordinates and how long ago) to check it's syncing (/rt positions).",
+    optPins = "Show the guild on the game's map", optPinsTip = "A class-coloured dot for each member sharing their position, on the world map (Blizzard's or whatever map addon you use). It doesn't replace your map.",
     bBank = "Personal bank", tBank = "What's in your bank, without going there (/rt bank). Recorded every time you open it; stays on your PC only.",
     back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
     mmOpen = "Click: open or close the window", mmLink = "Right-click: link this character",
@@ -172,9 +177,10 @@ local TEXTS = {
       "/rt start · registrar",
       "/rt stop · detener",
       "/rt dungeons · mazmorras",
-      "/rt position · posicion",
+      "/rt position · posicion (share or not)",
+      "/rt positions · posiciones (guild list)",
       "/rt options · opciones (Esc › Options › AddOns)",
-      "/rt bank · banco (what's in your bank, without going there)",
+      "/rt bank · banco (window with what's in your bank)",
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
@@ -813,6 +819,7 @@ local function createUI()
   button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
   button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
   button("bBank", "tBank", function() SlashCmdList.REBIRTHTRACK("banco") end)
+  button("bPositions", "tPositions", function() SlashCmdList.REBIRTHTRACK("posiciones") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
   button("bHelp", "tHelp", function() showHelp(true) end)
 
@@ -929,6 +936,7 @@ local function refreshOptions()
   for _, c in ipairs(options.checks) do c:SetChecked(c.get() and true or false); c.label:SetText(L(c.key)) end
   options.open:SetText(L("optOpen"))
   options.link:SetText(L("bLink"))
+  options.bank:SetText(L("bBank"))
   options.lang:SetText(lang() == "es" and "English" or "Español")
 end
 ns.refreshOptions = refreshOptions
@@ -964,6 +972,8 @@ local function createOptions()
     return c
   end
   check("optPos", "optPosTip", sharePos, setSharePos)
+  check("optPins", "optPinsTip", function() return db().settings.mapPins ~= false end,
+    function(on) db().settings.mapPins = on; if ns.refreshPositions then ns.refreshPositions() end end)
   check("optDungeons", "optDungeonsTip", function() return db().settings.dungeons end,
     function(on) db().settings.dungeons = on; checkZone() end)
   check("optMinimap", "optMinimapTip", function() return ui_db().minimap ~= false end,
@@ -981,6 +991,8 @@ local function createOptions()
   options.link:SetPoint("LEFT", options.open, "RIGHT", 8, 0)
   options.lang = button(100, function() db().settings.lang = lang() == "es" and "en" or "es"; say(L("langSay")) end)
   options.lang:SetPoint("LEFT", options.link, "RIGHT", 8, 0)
+  options.bank = button(160, function() if ns.openBank then ns.openBank() end end)
+  options.bank:SetPoint("TOPLEFT", options.open, "BOTTOMLEFT", 0, -8)
 
   options:SetScript("OnShow", refreshOptions)
   if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
@@ -990,27 +1002,6 @@ local function createOptions()
     InterfaceOptions_AddCategory(options)
   end
   refreshOptions()
-end
-
--- Páginas que cuelgan de Rebirth Track en Esc › Opciones › AddOns (Bank.lua: banco personal).
--- Devuelve la función que abre esa página.
-function ns.addOptionsPage(frame, name)
-  createOptions()
-  frame.name, frame.parent = name, options.name
-  local sub
-  if optionsCategory and Settings and Settings.RegisterCanvasLayoutSubcategory then
-    sub = Settings.RegisterCanvasLayoutSubcategory(optionsCategory, frame, name)
-  elseif InterfaceOptions_AddCategory then
-    InterfaceOptions_AddCategory(frame)
-  end
-  return function()
-    if sub and Settings.OpenToCategory then
-      Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
-      if SettingsPanel and SettingsPanel.SelectCategory then pcall(SettingsPanel.SelectCategory, SettingsPanel, sub) end
-    elseif InterfaceOptionsFrame_OpenToCategory then
-      InterfaceOptionsFrame_OpenToCategory(frame); InterfaceOptionsFrame_OpenToCategory(frame)
-    end
-  end
 end
 
 function ns.openOptions()
@@ -1201,6 +1192,7 @@ local COMMANDS = {
   posicion = "position", ["posición"] = "position", position = "position", ubicacion = "position", mapa = "position",
   opciones = "options", options = "options", config = "options",
   banco = "bank", bank = "bank",
+  posiciones = "positions", positions = "positions", ubicaciones = "positions",
   borrar = "reset", reset = "reset",
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
@@ -1234,6 +1226,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     local on = (arg == "on" or arg == "si" or arg == "sí") or (arg ~= "off" and arg ~= "no" and not sharePos())
     setSharePos(on)
     say(L("posSay"):format(on and L("shared") or L("notShared")))
+  elseif cmd == "positions" then
+    if ns.openPositions then ns.openPositions() end
   elseif cmd == "bank" then
     if ns.openBank then ns.openBank() end
   elseif cmd == "options" then
