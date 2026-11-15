@@ -20,6 +20,7 @@ local TEXTS = {
     never = "Todavía no se anotó nada: abrí el banco una vez con este personaje.",
     when = "Anotado %s · %d de %d casilleros ocupados · %d ítems distintos",
     search = "Buscar…", count = "En el banco: %d", where = "%s, casillero %d",
+    stale = "Anotado con una versión anterior del addon: abrí el banco una vez para verlo bien.",
     emptySlot = "Hueco de bolsa sin bolsa", locked = "Hueco de bolsa sin comprar", tab = "Pestaña %d", reagents = "Componentes",
     ago = { now = "recién", min = "hace %d min", h = "hace %d h", d = "hace %d días" },
   },
@@ -29,6 +30,7 @@ local TEXTS = {
     never = "Nothing recorded yet: open the bank once with this character.",
     when = "Recorded %s · %d of %d slots used · %d different items",
     search = "Search…", count = "In the bank: %d", where = "%s, slot %d",
+    stale = "Recorded with an older addon version: open the bank once to see it right.",
     emptySlot = "Bag slot without a bag", locked = "Bag slot not purchased", tab = "Tab %d", reagents = "Reagents",
     ago = { now = "just now", min = "%d min ago", h = "%d h ago", d = "%d days ago" },
   },
@@ -67,51 +69,69 @@ local function bagItem(bag)
   return link, icon, link and link:match("%[(.-)%]")
 end
 
--- Contenedores del banco según la versión: Classic y WoW Forever (casilleros + huecos de bolsa),
--- Retail viejo (+ componentes) y Retail 11.2+ (pestañas del banco del personaje). Forever corre en un
--- cliente moderno que ya conoce las pestañas (Enum.BagIndex.CharacterBankTab_1) pero su banco es el
--- clásico: se usan pestañas solo si el banco no tiene los casilleros clásicos.
-local function bankBags(mainSlots)
-  local out, E = {}, Enum and Enum.BagIndex
-  if mainSlots == 0 and E and E.CharacterBankTab_1 then
-    for i = 0, 5 do out[#out + 1] = { id = E.CharacterBankTab_1 + i, tab = i + 1 } end
-    return out, true
+-- Contenedores del banco según la versión:
+--  · Classic: el banco (-1) y los huecos de bolsa (las bolsas van después de las propias).
+--  · WoW Forever: el banco clásico (un banco y huecos de bolsa) pero con los números del banco nuevo:
+--    lo del banco está en CharacterBankTab_1 y cada bolsa del banco en las «pestañas» siguientes; el
+--    -1 existe pero viene vacío. (Visto en el juego: 32 casilleros vacíos en -1, los ítems en la 1.)
+--  · Retail 11.2+: pestañas de verdad.
+local FOREVER = WOW_PROJECT_ID == (WOW_PROJECT_CAMELOT or 18)
+local function bankLayout()
+  local E = Enum and Enum.BagIndex
+  local tab1 = E and E.CharacterBankTab_1
+  if tab1 and numSlots(tab1) > 0 then
+    if FOREVER or numSlots(BANK) > 0 then
+      local bags = {}
+      for i = 1, 5 do bags[#bags + 1] = tab1 + i end
+      return { main = tab1, bags = bags }
+    end
+    local tabs = {}
+    for i = 0, 5 do tabs[#tabs + 1] = tab1 + i end
+    return { tabs = tabs }
   end
-  -- Las bolsas del banco van después de las propias (4 en Classic; 5 con la de componentes en Retail).
+  if numSlots(BANK) == 0 then return nil end -- el banco no está cargado
   local first = (E and E.BankBag_1) or ((NUM_TOTAL_EQUIPPED_BAG_SLOTS or NUM_BAG_SLOTS or 4) + 1)
+  local bags = {}
   for i = 0, (NUM_BANKBAGSLOTS or 7) - 1 do
     local id = first + i
-    if id ~= BANK and id ~= REAGENTS then out[#out + 1] = { id = id } end
+    if id ~= BANK and id ~= REAGENTS then bags[#bags + 1] = id end
   end
-  return out, false
+  return { main = BANK, bags = bags }
 end
 
 local bankOpen = false
+local function read(id)
+  local n, items = numSlots(id), {}
+  for s = 1, n do items[s] = itemAt(id, s) end
+  return n, items
+end
 local function scan()
   if not bankOpen then return end
-  local main = numSlots(BANK)
-  local bags, tabbed = bankBags(main)
-  if main == 0 and not tabbed then return end -- el banco no está cargado
+  local lay = bankLayout()
+  if not lay then return end
   local containers = {}
-  if main > 0 then
-    local items = {}
-    for s = 1, main do items[s] = itemAt(BANK, s) end
-    containers[#containers + 1] = { id = BANK, slots = main, items = items }
-  end
-  for _, b in ipairs(bags) do
-    local n = numSlots(b.id)
-    local c = { id = b.id, slots = n, tab = b.tab, items = {} }
-    if not b.tab then c.link, c.icon, c.name = bagItem(b.id) end
-    for s = 1, n do c.items[s] = itemAt(b.id, s) end
-    containers[#containers + 1] = c
+  if lay.tabs then
+    for i, id in ipairs(lay.tabs) do
+      local n, items = read(id)
+      containers[#containers + 1] = { id = id, slots = n, tab = i, items = items }
+    end
+  else
+    local n, items = read(lay.main)
+    containers[#containers + 1] = { id = lay.main, slots = n, main = true, items = items }
+    for _, id in ipairs(lay.bags) do
+      local bn, bitems = read(id)
+      local c = { id = id, slots = bn, items = bitems }
+      local ok, link, icon, name = pcall(bagItem, id)
+      if ok then c.link, c.icon, c.name = link, icon, name end
+      containers[#containers + 1] = c
+    end
   end
   if REAGENTS and IsReagentBankUnlocked and IsReagentBankUnlocked() then
-    local n, items = numSlots(REAGENTS), {}
-    for s = 1, n do items[s] = itemAt(REAGENTS, s) end
+    local n, items = read(REAGENTS)
     if n > 0 then containers[#containers + 1] = { id = REAGENTS, slots = n, reagents = true, items = items } end
   end
   local bought = GetNumBankSlots and select(1, GetNumBankSlots()) or nil
-  RebirthTrackBank = { v = 1, at = time(), bagSlots = bought, tabbed = tabbed or nil, containers = containers }
+  RebirthTrackBank = { v = 2, at = time(), bagSlots = bought, tabbed = lay.tabs and true or nil, containers = containers }
   if ns.refreshBank then ns.refreshBank() end
 end
 ns.scanBank = scan
@@ -268,7 +288,8 @@ function ns.refreshBank()
       end
     end
   end
-  header:SetText(T("when"):format(ago(data.at), full, total, distinct))
+  header:SetText(T("when"):format(ago(data.at), full, total, distinct)
+    .. ((data.v or 1) < 2 and ("\n|cffff8040" .. T("stale") .. "|r") or ""))
   local term = (search:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
 
   local width = math.max(300, (page:GetWidth() or 660) - 60)
@@ -282,11 +303,11 @@ function ns.refreshBank()
   -- Casilleros del banco (Classic: 24 en 6 columnas o 28 en 7) y la fila de huecos de bolsa.
   local bags = {}
   for _, c in ipairs(data.containers) do
-    if c.id == BANK then
+    if c.main or (c.id == BANK and not data.tabbed) then
       n = n + 1
       local f = block(n)
       f.title:SetText(T("bank")); f.icon:SetTexture("Interface\\Icons\\INV_Misc_Bag_10_Blue")
-      grid(f, c, c.slots % 7 == 0 and 7 or 6, totals, term)
+      grid(f, c, c.slots > 28 and 8 or (c.slots % 7 == 0 and 7 or 6), totals, term)
       place(f)
     elseif not c.reagents then
       bags[#bags + 1] = c
@@ -312,7 +333,7 @@ function ns.refreshBank()
 
   -- Cada bolsa abierta (4 columnas, como en el juego), las pestañas y los componentes.
   for _, c in ipairs(data.containers) do
-    if c.id ~= BANK and c.slots > 0 then
+    if not (c.main or (c.id == BANK and not data.tabbed)) and c.slots > 0 then
       n = n + 1
       local f = block(n)
       f.title:SetText(c.reagents and T("reagents") or c.tab and T("tab"):format(c.tab) or c.name or "?")
