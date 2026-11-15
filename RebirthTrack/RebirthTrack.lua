@@ -47,6 +47,13 @@ local TEXTS = {
     bStatus = "Estado", tStatus = "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).",
     tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
+    position = "Posición: ", tPos = "Compartir o no dónde está tu personaje con la guild, para el mapa del sitio (/rt posicion).",
+    posSay = "posición %s.", shared = "|cff3fbf3fCOMPARTIDA|r con la guild", notShared = "sin compartir",
+    optIntro = "Registra tus bandas y mazmorras y comparte con la guild lo que sirve para el sitio (rebirthknights.fun). La app de tu PC lo sube cuando el juego guarda: al hacer /reload o al salir.",
+    optPos = "Compartir mi posición con la guild", optPosTip = "Cada minuto avisa por el canal de addons de la guild en qué zona y en qué punto del mapa está tu personaje, para el mapa de miembros del sitio. Dentro de instancias va solo la instancia. Apagado, el sitio deja de mostrarte.",
+    optDungeons = "Registrar también las mazmorras", optDungeonsTip = "Prende el registro de combate al entrar a mazmorras, no solo a bandas.",
+    optMinimap = "Mostrar el botón del minimapa", optMinimapTip = "El botón redondo del minimapa que abre la ventana.",
+    optOpen = "Abrir la ventana", optLangTip = "Idioma del addon",
     bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).",
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
@@ -68,6 +75,7 @@ local TEXTS = {
       "• |cffffffffEstado|r: si el registro está prendido y qué se anotó.",
       "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
       "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
+      "• |cffffffffPosición|r: compartir o no dónde está tu personaje con la guild, para el mapa del sitio (viene compartida).",
       "• |cffffffffES / EN|r: idioma del addon.",
       "",
       "|cffe3a42cGuild|r",
@@ -81,6 +89,8 @@ local TEXTS = {
       "/rt registrar · start",
       "/rt detener · stop",
       "/rt mazmorras · dungeons",
+      "/rt posicion · position",
+      "/rt opciones · options (Esc › Opciones › AddOns)",
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
@@ -115,6 +125,13 @@ local TEXTS = {
     bStatus = "Status", tStatus = "Shows in chat whether logging is on and what was recorded (/rt status).",
     tRec = "Turn logging on or off manually (/rt start · /rt stop).",
     bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
+    position = "Position: ", tPos = "Share where your character is with the guild, for the site's map (/rt position).",
+    posSay = "position %s.", shared = "|cff3fbf3fSHARED|r with the guild", notShared = "not shared",
+    optIntro = "Records your raids and dungeons and shares with the guild what the site (rebirthknights.fun) uses. The app on your PC uploads it when the game saves: on /reload or logout.",
+    optPos = "Share my position with the guild", optPosTip = "Every minute it tells the guild addon channel which zone and where on the map your character is, for the site's member map. Inside instances only the instance is sent. Off, the site stops showing you.",
+    optDungeons = "Also record dungeons", optDungeonsTip = "Turns combat logging on in dungeons too, not only raids.",
+    optMinimap = "Show the minimap button", optMinimapTip = "The round minimap button that opens the window.",
+    optOpen = "Open the window", optLangTip = "Addon language",
     bHelp = "Help", tHelp = "How to use it (/rt help).",
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
@@ -136,6 +153,7 @@ local TEXTS = {
       "• |cffffffffStatus|r: whether logging is on and what was recorded.",
       "• |cffffffffRecord / Stop|r: manually, if you want to record outside an instance.",
       "• |cffffffffDungeons|r: include dungeons or not (included by default).",
+      "• |cffffffffPosition|r: share where your character is with the guild, for the site's map (shared by default).",
       "• |cffffffffES / EN|r: addon language.",
       "",
       "|cffe3a42cGuild|r",
@@ -149,6 +167,8 @@ local TEXTS = {
       "/rt start · registrar",
       "/rt stop · detener",
       "/rt dungeons · mazmorras",
+      "/rt position · posicion",
+      "/rt options · opciones (Esc › Options › AddOns)",
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
@@ -175,6 +195,13 @@ local function db()
   return RebirthTrackDB
 end
 ns.db = db
+-- Posición compartida con la guild: prendida salvo que el jugador la apague.
+local function sharePos() return db().settings.sharePos ~= false end
+local function setSharePos(on)
+  db().settings.sharePos = on and true or false
+  if ns.collectPosition then ns.collectPosition() end
+end
+ns.sharePos = sharePos
 ns.lang = lang
 ns.say = say
 
@@ -643,6 +670,8 @@ local function refreshUI()
   if not ui then return end
   ui.rec:SetText(session and L("stop") or L("start"))
   ui.dun:SetText(L("dungeons") .. (db().settings.dungeons and L("yes") or L("no")))
+  ui.pos:SetText(L("position") .. (sharePos() and L("yes") or L("no")))
+  if ns.refreshOptions then ns.refreshOptions() end
   ui.state:SetText(LoggingCombat() and L("stateOn") .. (session and session.instance and (" · " .. session.instance.name) or "") or L("stateOff"))
   ui.lang:SetText(lang() == "es" and "EN" or "ES")
   for _, b in ipairs(ui.buttons) do b:SetText(b.label and L(b.label) or b:GetText()) end
@@ -761,6 +790,7 @@ local function createUI()
     db().settings.dungeons = not db().settings.dungeons
     checkZone()
   end)
+  ui.pos = button(nil, "tPos", function() setSharePos(not sharePos()) end)
   button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
   button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
@@ -868,6 +898,89 @@ local function createMinimapButton()
   mm:SetShown(ui_db().minimap ~= false)
 end
 
+-- ── Panel en Esc › Opciones › AddOns ──────────────────────────────────────────────────────
+-- Las mismas opciones que la ventana, en la pestaña de AddOns del juego como los demás addons.
+-- Retail y los clientes nuevos usan Settings.RegisterCanvasLayoutCategory; los viejos,
+-- InterfaceOptions_AddCategory. /rt opciones lo abre.
+local options, optionsCategory
+local function refreshOptions()
+  if not options then return end
+  options.intro:SetText(L("optIntro"))
+  for _, c in ipairs(options.checks) do c:SetChecked(c.get() and true or false); c.label:SetText(L(c.key)) end
+  options.open:SetText(L("optOpen"))
+  options.link:SetText(L("bLink"))
+  options.lang:SetText(lang() == "es" and "English" or "Español")
+end
+ns.refreshOptions = refreshOptions
+
+local function createOptions()
+  if options then return end
+  options = CreateFrame("Frame", "RebirthTrackOptions", UIParent)
+  options.name = "Rebirth Track"
+  options:Hide()
+  local title = options:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+  title:SetPoint("TOPLEFT", 16, -16)
+  title:SetText("Rebirth Track")
+  local logo = options:CreateTexture(nil, "ARTWORK")
+  logo:SetSize(24, 24)
+  logo:SetPoint("LEFT", title, "RIGHT", 6, 0)
+  logo:SetTexture(ICON)
+  options.intro = options:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+  options.intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
+  options.intro:SetPoint("RIGHT", -24, 0)
+  options.intro:SetJustifyH("LEFT")
+
+  options.checks = {}
+  local function check(key, tipKey, get, set)
+    local c = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
+    c:SetPoint("TOPLEFT", options.intro, "BOTTOMLEFT", -2, -14 - #options.checks * 30)
+    c.label = options:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    c.label:SetPoint("LEFT", c, "RIGHT", 4, 1)
+    c.key, c.get = key, get
+    c:SetScript("OnClick", function(self) set(self:GetChecked() and true or false); refreshUI(); refreshOptions() end)
+    c:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L(tipKey), 1, 1, 1, true); GameTooltip:Show() end)
+    c:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    table.insert(options.checks, c)
+    return c
+  end
+  check("optPos", "optPosTip", sharePos, setSharePos)
+  check("optDungeons", "optDungeonsTip", function() return db().settings.dungeons end,
+    function(on) db().settings.dungeons = on; checkZone() end)
+  check("optMinimap", "optMinimapTip", function() return ui_db().minimap ~= false end,
+    function(on) ui_db().minimap = on; if mm then mm:SetShown(on) end end)
+
+  local function button(w, onClick)
+    local b = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
+    b:SetSize(w, 24)
+    b:SetScript("OnClick", function() onClick(); refreshUI(); refreshOptions() end)
+    return b
+  end
+  options.open = button(160, function() openUI(false) end)
+  options.open:SetPoint("TOPLEFT", options.intro, "BOTTOMLEFT", 0, -24 - #options.checks * 30)
+  options.link = button(160, linkCharacter)
+  options.link:SetPoint("LEFT", options.open, "RIGHT", 8, 0)
+  options.lang = button(100, function() db().settings.lang = lang() == "es" and "en" or "es"; say(L("langSay")) end)
+  options.lang:SetPoint("LEFT", options.link, "RIGHT", 8, 0)
+
+  options:SetScript("OnShow", refreshOptions)
+  if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
+    optionsCategory = Settings.RegisterCanvasLayoutCategory(options, options.name)
+    Settings.RegisterAddOnCategory(optionsCategory)
+  elseif InterfaceOptions_AddCategory then
+    InterfaceOptions_AddCategory(options)
+  end
+  refreshOptions()
+end
+
+function ns.openOptions()
+  createOptions()
+  if optionsCategory and Settings and Settings.OpenToCategory then
+    Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
+  elseif InterfaceOptionsFrame_OpenToCategory then
+    InterfaceOptionsFrame_OpenToCategory(options); InterfaceOptionsFrame_OpenToCategory(options) -- la 1.ª vez no baja hasta el panel
+  end
+end
+
 local uf = CreateFrame("Frame")
 uf:RegisterEvent("PLAYER_LOGIN")
 uf:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -875,6 +988,7 @@ uf:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" then
     createUI()
     createMinimapButton()
+    createOptions()
     if ui_db().shown == false then ui:Hide() end
   end
   C_Timer.After(1.5, refreshUI)
@@ -1043,6 +1157,8 @@ local COMMANDS = {
   registrar = "start", empezar = "start", iniciar = "start", start = "start",
   detener = "stop", parar = "stop", stop = "stop",
   mazmorras = "dungeons", dungeons = "dungeons",
+  posicion = "position", ["posición"] = "position", position = "position", ubicacion = "position", mapa = "position",
+  opciones = "options", options = "options", config = "options",
   borrar = "reset", reset = "reset",
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
@@ -1072,6 +1188,12 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     db().settings.dungeons = not db().settings.dungeons
     say(L("dungeonsSay"):format(db().settings.dungeons and L("included") or L("excluded")))
     checkZone()
+  elseif cmd == "position" then
+    local on = (arg == "on" or arg == "si" or arg == "sí") or (arg ~= "off" and arg ~= "no" and not sharePos())
+    setSharePos(on)
+    say(L("posSay"):format(on and L("shared") or L("notShared")))
+  elseif cmd == "options" then
+    if ns.openOptions then ns.openOptions() end
   elseif cmd == "minimap" then
     ui_db().minimap = ui_db().minimap == false
     if mm then mm:SetShown(ui_db().minimap) end

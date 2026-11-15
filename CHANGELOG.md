@@ -13,6 +13,19 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.6.0] - 2026-11-15
+
+### Para todos
+
+- **Mapa de miembros**: el addon comparte con la guild dónde está tu personaje (zona y punto del mapa) para el mapa de miembros del sitio. Viene prendido; se apaga desde las opciones del addon, el botón «Posición» de la ventana o `/rt posicion`. Dentro de mazmorras y bandas solo se avisa en cuál estás.
+- **Opciones en el menú del juego**: Rebirth Track aparece en Esc › Opciones › AddOns como los demás addons, con la posición, las mazmorras, el botón del minimapa, el idioma y accesos a la ventana y a vincular el personaje. También se abre con `/rt opciones`.
+
+### Técnico
+
+- Nuevo estado compartido `pos1` (`mapa;x;y;continente;x;y;zona;instancia;nombre del continente`, uiMapID y posición 0–1 con 3 decimales) en `Collect.lua`: se lee cada 60 s, al cambiar de zona y al entrar al mundo con `C_Map.GetBestMapForUnit` / `GetPlayerMapPosition`, y el continente subiendo por `parentMapID` hasta `Enum.UIMapType.Continent`. Viaja por el canal `RTK1` como los demás estados (solo si cambió). En instancias va `0;…;nombre;instanceID`; apagado, `off` (una vez) para que el sitio lo oculte.
+- `settings.sharePos` (nil = prendido) con `ns.sharePos`; botón en la ventana, `/rt posicion [on|off]`.
+- Panel de opciones con `Settings.RegisterCanvasLayoutCategory` + `RegisterAddOnCategory` (o `InterfaceOptions_AddCategory` en clientes viejos); `/rt opciones` lo abre. Pruebas nuevas en `tests/run.lua`.
+
 ## [0.5.3] - 2026-11-07
 
 ### Para todos

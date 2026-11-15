@@ -461,3 +461,43 @@ for _, l in ipairs(RebirthTrackDB.council) do assert(not l:find("|", 1, true), l
 rt("reparto agregar |cffa335ee|Hitem:16866::::::::60:::::|h[Yelmo de ira]|h|r")
 assert(#LC.pending() == 1, "/rt reparto agregar suma el ítem (Retail: desde las bolsas)")
 print("reparto OK")
+
+-- Posición: el mapa de la zona y el del continente, compartida por el canal; dentro de una instancia
+-- va solo la instancia; apagada (opciones o /rt posicion) se manda «off» y deja de anotarse.
+local function vec(x, y) return { GetXY = function() return x, y end } end
+Enum = Enum or {}
+C_Map = {
+  GetBestMapForUnit = function() return 1429 end,
+  GetPlayerMapPosition = function(id) if id == 1429 then return vec(0.41234, 0.6) end; if id == 1415 then return vec(0.4, 0.795) end end,
+  GetMapInfo = function(id)
+    return ({ [1429] = { name = "Bosque de Elwynn", mapType = 3, parentMapID = 1415 }, [1415] = { name = "Reinos del Este", mapType = 2, parentMapID = 947 } })[id]
+  end,
+}
+function IsInInstance() return false end
+local CP = ns._collect
+local function pos1() return RebirthTrackDB.data["Player-6065-044C2423"].pos1 end
+sentAddon = {}
+assert(RebirthTrackDB.settings.sharePos == nil, "compartida por defecto (sin tocar la opción)")
+CP.collectPosition()
+assert(pos1():match("^pos1;Player%-6065%-044C2423;%d+;1429;0%.412;0%.6;1415;0%.4;0%.795;Bosque de Elwynn;0;Reinos del Este$"), pos1())
+local function sharedPos() for _, s in ipairs(sentAddon) do if s[1] == "RTK1" and s[2]:find(";pos1;", 1, true) then return s[2] end end end
+assert(sharedPos(), "se comparte con la guild")
+sentAddon = {}
+CP.collectPosition()
+assert(not sharedPos(), "si no se movió no se manda de nuevo")
+function IsInInstance() return true, "party" end
+CP.collectPosition()
+assert(pos1():match(";0;0;0;0;0;0;[^;]+;%d+;$"), "en instancias solo la instancia: " .. pos1())
+function IsInInstance() return false end
+rt("posicion")
+assert(RebirthTrackDB.settings.sharePos == false and pos1():match(";off$"), "apagada manda off: " .. pos1())
+sentAddon = {}
+CP.collectPosition()
+assert(not sharedPos(), "apagada no manda nada más")
+rt("posicion on")
+assert(RebirthTrackDB.settings.sharePos == true and pos1():match("Bosque de Elwynn;0;Reinos del Este$"))
+click("Posición: ")
+assert(RebirthTrackDB.settings.sharePos == false, "el botón de la ventana la apaga")
+rt("posicion on")
+rt("opciones") -- sin panel de opciones en este cliente: no falla
+print("posición OK")
