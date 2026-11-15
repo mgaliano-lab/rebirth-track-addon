@@ -74,14 +74,14 @@ local function keyOf(t, payload) return KEYED[t] and (t .. ":" .. (payload:match
 -- Guarda el estado propio (o de la guild, o de alguien inspeccionado). Si no cambió, queda la línea
 -- vieja con su hora: la hora dice desde cuándo es así.
 local share
-local function put(owner, t, payload, doShare)
+local function put(owner, t, payload, doShare, force)
   if not owner or owner == "" then return false end
   local d = store()
   local c = d.data[owner] or {}
   d.data[owner] = c
   local key = keyOf(t, payload)
   local old = c[key]
-  if old and old:sub(1, 1) ~= "@" and select(4, split4(old)) == payload then return false end
+  if not force and old and old:sub(1, 1) ~= "@" and select(4, split4(old)) == payload then return false end
   local line = t .. ";" .. owner .. ";" .. time() .. ";" .. payload
   c[key] = line
   if doShare and SHARED[t] then share(line) end
@@ -131,6 +131,7 @@ local function putPeer(line, sender)
   if old and (tonumber((select(3, split4(old)))) or 0) >= at then return nil end
   c[key] = "@" .. tok(sender) .. ";" .. line
   trimPeers()
+  if t == "pos1" and ns.onPeerPosition then ns.onPeerPosition(owner) end
   return owner .. "/" .. key
 end
 
@@ -704,11 +705,15 @@ local function collectGuildEvents()
 end
 
 -- ── Posición ──────────────────────────────────────────────────────────────────────────
--- Cada minuto (y al cambiar de zona) se anota dónde está el personaje y se comparte con la guild:
--- el mapa de la zona y el del continente (uiMapID) con la posición en cada uno (0 a 1), para el mapa
--- del sitio. Dentro de instancias el juego no da coordenadas: va solo la instancia. Si el jugador lo
--- apaga (opciones del addon o /rt posicion) se manda «off» una vez, así el sitio deja de mostrarlo.
+-- Como lo hace OpenMap: cada 2 s se mira dónde está el personaje y se comparte con la guild cada
+-- 10 s mientras se mueve y cada minuto si está quieto (así su punto no desaparece del mapa de los
+-- demás). Va el mapa de la zona y el del continente (uiMapID) con la posición en cada uno (0 a 1),
+-- para el mapa del juego (Positions.lua) y el del sitio. Dentro de instancias el juego no da
+-- coordenadas: va solo la instancia, una vez. Si el jugador la apaga (opciones del addon o
+-- /rt posicion) se manda «off» una vez, así deja de verse.
 local CONTINENT = Enum and Enum.UIMapType and Enum.UIMapType.Continent or 2
+local MOVED, SEND_EVERY, STILL_EVERY = 0.002, 10, 60
+local last = { at = -math.huge }
 local function r3(v) return (string.format("%.3f", v or 0):gsub("%.?0+$", "")) end
 local function continentOf(mapId)
   local id, guard = mapId, 0
@@ -722,12 +727,12 @@ end
 local function collectPosition()
   local g = me()
   if not g then return end
-  if ns.sharePos and not ns.sharePos() then put(g, "pos1", "off", true); return end
+  if ns.sharePos and not ns.sharePos() then put(g, "pos1", "off", true); last.at = -math.huge; return end
   if not (C_Map and C_Map.GetBestMapForUnit) then return end
-  local inInst = IsInInstance and IsInInstance()
-  if inInst then
+  if IsInInstance and IsInInstance() then
     local name, _, _, _, _, _, _, instanceId = GetInstanceInfo()
     put(g, "pos1", J(0, 0, 0, 0, 0, 0, tok(name), instanceId or 0, ""), true)
+    last.at = -math.huge
     return
   end
   local mapId = C_Map.GetBestMapForUnit("player")
@@ -735,6 +740,10 @@ local function collectPosition()
   local pos = C_Map.GetPlayerMapPosition(mapId, "player")
   if not pos then return end
   local x, y = pos:GetXY()
+  if type(x) ~= "number" or type(y) ~= "number" or (x <= 0 and y <= 0) then return end -- 0, 0: el juego no sabe
+  local moved = mapId ~= last.map or math.abs(x - last.x) > MOVED or math.abs(y - last.y) > MOVED
+  local now = GetTime()
+  if now - last.at < (moved and SEND_EVERY or STILL_EVERY) then return end
   local cont = continentOf(mapId)
   local cx, cy = 0, 0
   if cont then
@@ -742,8 +751,10 @@ local function collectPosition()
     if cp then cx, cy = cp:GetXY() end
   end
   local info, contInfo = C_Map.GetMapInfo(mapId), cont and C_Map.GetMapInfo(cont)
+  last.map, last.x, last.y, last.at = mapId, x, y, now
+  -- Quieto: la misma posición con la hora de ahora (force), para que los demás sepan que sigue ahí.
   put(g, "pos1", J(mapId, r3(x), r3(y), cont or 0, r3(cx), r3(cy), tok(info and info.name or (GetZoneText and GetZoneText()) or ""), 0,
-    tok(contInfo and contInfo.name or "")), true)
+    tok(contInfo and contInfo.name or "")), true, not moved)
 end
 ns.collectPosition = function() pcall(collectPosition) end
 
@@ -773,7 +784,7 @@ local ON = {
       pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end)
     end)
     if C_Timer.NewTicker then
-      C_Timer.NewTicker(60, function() pcall(collectPosition) end)
+      C_Timer.NewTicker(2, function() pcall(collectPosition) end)
       C_Timer.NewTicker(5, function() pcall(inspectNext) end)
       C_Timer.NewTicker(1800, function() pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end) end)
     end
@@ -844,7 +855,7 @@ function ns.dataSummary()
 end
 
 -- Para las pruebas.
-ns._collect = { put = put, collectPosition = collectPosition, putPeer = putPeer, share = share, pattern = pattern,
+ns._collect = { put = put, collectPosition = collectPosition, resetPosition = function() last.at = -math.huge end, putPeer = putPeer, share = share, pattern = pattern,
   collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }

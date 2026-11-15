@@ -4,6 +4,16 @@ local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Bank.lua"))("RebirthTrack", ns)
+-- HereBeDragons-Pins de mentira: anota qué puntos se ponen en el mapa.
+mapPins = {}
+LibStub = function(name)
+  if name ~= "HereBeDragons-Pins-2.0" then return nil end
+  return {
+    RemoveAllWorldMapIcons = function(_, ref) for k, v in pairs(mapPins) do if v.ref == ref then mapPins[k] = nil end end end,
+    AddWorldMapIconMap = function(_, ref, icon, map, x, y, flag) mapPins[icon] = { ref = ref, map = map, x = x, y = y, flag = flag, p = icon.p } end,
+  }
+end
+assert(loadfile("RebirthTrack/Positions.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
@@ -586,3 +596,48 @@ local mine
 for _, rec in ipairs(RebirthTrackDB.guild.known) do if rec:find("Player-6065-044C2423", 1, true) then mine = rec end end
 assert(mine:match(";0%.7%.0;0%.6%.3$"), mine)
 print("versiones OK")
+
+-- Posiciones de la guild: lo que llega por el canal va como punto al mapa (lo propio no) y a la lista.
+NUM_BAG_SLOTS = 4
+C_Map = {
+  GetBestMapForUnit = function() return 1429 end,
+  GetPlayerMapPosition = function(id) if id == 1429 then return { GetXY = function() return 0.4, 0.6 end } end; if id == 1415 then return { GetXY = function() return 0.42, 0.78 end } end end,
+  GetMapInfo = function(id) return ({ [1429] = { name = "Bosque de Elwynn", mapType = 3, parentMapID = 1415 }, [1415] = { name = "Reinos del Este", mapType = 2, parentMapID = 947 } })[id] end,
+}
+function IsInInstance() return false end
+ns._collect.resetPosition()
+ns._collect.collectPosition()
+local CPut = ns._collect.putPeer
+assert(CPut("pos1;Player-6065-0411;" .. time() .. ";1454;0.502;0.684;1414;0.583;0.455;Orgrimmar;0;Kalimdor", "Healz"), "llega la de Healz")
+assert(CPut("pos1;Player-6065-0099;" .. (time() - 3600) .. ";1453;0.5;0.5;1415;0.4;0.6;Ventormenta;0;Reinos del Este", "Otro"), "una vieja")
+ns.refreshPositions()
+local placed = {}
+for _, v in pairs(mapPins) do placed[#placed + 1] = v end
+assert(#placed == 1 and placed[1].map == 1454 and placed[1].x == 0.502 and placed[1].flag == 3, "solo Healz en el mapa (lo propio no, la vieja tampoco): " .. #placed)
+assert(placed[1].p.who.name == "Healz" and placed[1].p.who.class == "PRIEST", "con nombre y clase de la lista de la guild")
+local list = ns._positions.positions()
+assert(#list == 3, "la lista tiene las 3: " .. #list)
+-- Apagar los puntos los saca del mapa.
+RebirthTrackDB.settings.mapPins = false
+ns.refreshPositions()
+assert(next(mapPins) == nil, "sin puntos")
+RebirthTrackDB.settings.mapPins = nil
+-- La ventana: /rt posiciones y el botón de la ventana del addon.
+rt("posiciones")
+local w = ns._positions.window()
+assert(w and w.shown, "abre la lista")
+w.scripts.OnShow(w)
+local shownRows = 0
+for _, r in ipairs(ns._positions.rows()) do if r.shown then shownRows = shownRows + 1 end end
+assert(shownRows == 3, "una fila por posición: " .. shownRows)
+click("Posiciones de la guild")
+assert(not w.shown, "el botón la cierra")
+-- Quieto: se vuelve a avisar cada minuto (con la hora nueva), para no desaparecer del mapa de los demás.
+sentAddon = {}
+ns._collect.resetPosition()
+ns._collect.collectPosition()
+local function sentPos() local n = 0; for _, m in ipairs(sentAddon) do if m[2]:find(";pos1;", 1, true) then n = n + 1 end end; return n end
+local first = sentPos()
+ns._collect.collectPosition()
+assert(sentPos() == first, "quieto y antes del minuto, no manda")
+print("posiciones en el mapa OK")
