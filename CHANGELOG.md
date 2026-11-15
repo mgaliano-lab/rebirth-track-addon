@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.8.1] - 2026-11-15
+
+### Para todos
+
+- **Banco personal en WoW Forever, ahora sí**: se ve tu banco y tus bolsas del banco como son. Antes aparecía un «Banco» vacío y tus cosas en una «Pestaña 1». Abrí el banco una vez para que se vuelva a anotar.
+
+### Técnico
+
+- En Forever el -1 trae casilleros vacíos: lo del banco está en `Enum.BagIndex.CharacterBankTab_1` y cada bolsa del banco en las siguientes. `bankLayout()`: con la pestaña 1 con casilleros, en Forever (o si además el -1 tiene casilleros) es banco = pestaña 1 + bolsas = 2..6; en Retail 11.2+, pestañas; si no, el banco clásico (-1 + `BankBag_1`…). Datos `v = 2`; lo anotado con la versión anterior avisa que hay que abrir el banco. Prueba con el caso visto en el juego.
+
 ## [0.8.0] - 2026-11-15
 
 ### Para todos

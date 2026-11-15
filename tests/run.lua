@@ -535,7 +535,7 @@ sentAddon = {}
 local before = RebirthTrackDB.data and #(RebirthTrackDB.events or {})
 fire("BANKFRAME_OPENED")
 local B = RebirthTrackBank
-assert(B and B.v == 1 and B.bagSlots == 2, "anota el banco al abrirlo")
+assert(B and B.v == 2 and B.bagSlots == 2, "anota el banco al abrirlo")
 assert(B.containers[1].id == -1 and B.containers[1].slots == 24 and B.containers[1].items[1].n == 5 and B.containers[1].items[7].id == 12360)
 assert(B.containers[2].id == 5 and B.containers[2].name == "Bolsa de tela de luna" and B.containers[2].items[2].n == 3)
 assert(B.containers[3].id == 6 and B.containers[3].slots == 0, "hueco comprado sin bolsa")
@@ -555,6 +555,20 @@ assert(not F.tabbed, "con casilleros clásicos no usa pestañas")
 assert(F.containers[1].id == -1 and F.containers[2].id == 5 and F.containers[2].name == "Bolsa de tela de luna", "banco + bolsa 5")
 for _, c in ipairs(F.containers) do assert(not c.tab, "sin «Pestaña N»") end
 assert(#F.containers == 1 + 7, "banco + 7 huecos de bolsa: " .. #F.containers)
+-- WoW Forever de verdad (visto en el juego): el -1 trae 32 casilleros vacíos, lo del banco está en la
+-- «pestaña» 1 y la bolsa comprada (10) en la 2. Se ve como banco + bolsa, sin el -1.
+local saved1 = bank[-1]
+bank[-1] = { n = 32, items = {} }
+bank[6] = { n = 48, items = { [1] = { 13444, 4, "item:13444" }, [48] = { 12360, 1, "item:12360" } } }
+bank[7] = { n = 10, items = {} }
+function GetInventoryItemLink(_, inv) if inv == 77 then return "|cffffffff|Hitem:4245|h[Bolsa de seda]|h|r" end end
+fire("BANKFRAME_OPENED")
+local FV = RebirthTrackBank
+assert(FV.v == 2 and not FV.tabbed, "Forever: no son pestañas")
+assert(FV.containers[1].id == 6 and FV.containers[1].main and FV.containers[1].slots == 48 and FV.containers[1].items[48].id == 12360, "el banco es la 1")
+assert(FV.containers[2].id == 7 and FV.containers[2].slots == 10 and FV.containers[2].name == "Bolsa de seda", "la bolsa de 10 es la 2")
+for _, c in ipairs(FV.containers) do assert(c.id ~= -1, "el -1 vacío no se muestra") end
+bank[-1], bank[6], bank[7] = saved1, nil, nil
 -- Retail 11.2+: sin casilleros clásicos, las pestañas.
 local saved = bank[-1]; bank[-1] = nil
 bank[6] = { n = 98, items = { [1] = { 12360, 1, "item:12360" } } }
