@@ -644,6 +644,21 @@ w.scripts.OnShow(w)
 local shownRows = 0
 for _, r in ipairs(ns._positions.rows()) do if r.shown then shownRows = shownRows + 1 end end
 assert(shownRows == 3, "una fila por posición: " .. shownRows)
+-- «Mapa»: abre el mapa del mundo (arranca cerrado y al abrirse vuelve a la zona propia) en la zona
+-- de esa fila y cierra la lista.
+local mapSet = {}
+WorldMapFrame = { shown = false, IsShown = function(self) return self.shown end,
+  SetMapID = function(self, id) table.insert(mapSet, id) end }
+function ShowUIPanel(f) f.shown = true; f:SetMapID(1429) end -- el juego pone la zona propia al abrir
+local target
+for _, r in ipairs(ns._positions.rows()) do if r.shown and r.map.p and r.map.p.zone == "Orgrimmar" then target = r end end
+assert(target, "fila de Healz en Orgrimmar")
+target.map.scripts.OnClick(target.map)
+assert(WorldMapFrame.shown, "abre el mapa")
+assert(mapSet[#mapSet] == 1454, "termina en Orgrimmar (1454), no en la zona propia: " .. tostring(mapSet[#mapSet]))
+assert(not w.shown, "cierra la lista para no tapar el mapa")
+WorldMapFrame, ShowUIPanel = nil, nil
+rt("posiciones")
 click("Posiciones de la guild")
 assert(not w.shown, "el botón la cierra")
 -- Quieto: se vuelve a avisar cada minuto (con la hora nueva), para no desaparecer del mapa de los demás.

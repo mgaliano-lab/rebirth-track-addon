@@ -9,6 +9,8 @@
 local ADDON, ns = ...
 ns = ns or {}
 
+local DOT = 16 -- px del punto en el mapa
+local CIRCLE = "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask" -- círculo blanco: toma el color de la clase
 local GONE_AFTER = 150 -- s sin noticias: el punto se va del mapa (como OpenMap)
 local CLOCK_SLACK = 300 -- s de diferencia tolerada entre los relojes de dos PCs
 local REF = "RebirthTrack"
@@ -124,11 +126,29 @@ local dots = {}
 local function dot(owner)
   local d = dots[owner]
   if d then return d end
+  -- Un círculo lleno del color de la clase con borde oscuro (resalta sobre cualquier mapa) y un
+  -- destello para cuando se lo busca desde la lista.
   d = CreateFrame("Button", nil, UIParent)
-  d:SetSize(12, 12)
-  d.tex = d:CreateTexture(nil, "OVERLAY")
-  d.tex:SetAllPoints()
-  d.tex:SetTexture("Interface\\COMMON\\Indicator-Gray")
+  d:SetSize(DOT, DOT)
+  d.ring = d:CreateTexture(nil, "BACKGROUND")
+  d.ring:SetTexture(CIRCLE); d.ring:SetVertexColor(0, 0, 0, 0.95)
+  d.ring:SetPoint("CENTER"); d.ring:SetSize(DOT, DOT)
+  d.tex = d:CreateTexture(nil, "ARTWORK")
+  d.tex:SetTexture(CIRCLE)
+  d.tex:SetPoint("CENTER"); d.tex:SetSize(DOT - 5, DOT - 5)
+  d.shine = d:CreateTexture(nil, "OVERLAY")
+  d.shine:SetTexture(CIRCLE); d.shine:SetVertexColor(1, 1, 1, 0.55)
+  d.shine:SetPoint("CENTER", -1.5, 1.5); d.shine:SetSize(4, 4)
+  d:SetHighlightTexture(CIRCLE, "ADD")
+  d.ping = d:CreateTexture(nil, "BACKGROUND", nil, -1)
+  d.ping:SetTexture(CIRCLE); d.ping:SetPoint("CENTER"); d.ping:SetSize(DOT * 3, DOT * 3); d.ping:SetAlpha(0)
+  local ag = d.CreateAnimationGroup and d:CreateAnimationGroup()
+  if ag then
+    local a = ag:CreateAnimation("Alpha"); a:SetTarget(d.ping); a:SetFromAlpha(0.9); a:SetToAlpha(0); a:SetDuration(0.9)
+    local sc = ag:CreateAnimation("Scale"); sc:SetTarget(d.ping); sc:SetScale(0.2, 0.2); sc:SetDuration(0.9)
+    ag:SetLooping("RESTART")
+    d.pingAnim = ag
+  end
   d:SetScript("OnEnter", function(self)
     local p = self.p
     if not p then return end
@@ -142,6 +162,15 @@ local function dot(owner)
   d:SetScript("OnLeave", function() GameTooltip:Hide() end)
   dots[owner] = d
   return d
+end
+
+-- Destella el punto de alguien unos segundos (botón «Mapa» de la lista).
+local function ping(owner)
+  local d = dots[owner]
+  if not (d and d.pingAnim) then return end
+  d.ping:SetVertexColor(d.tex:GetVertexColor())
+  d.pingAnim:Play()
+  C_Timer.After(4, function() d.pingAnim:Stop(); d.ping:SetAlpha(0) end)
 end
 
 local function drawPins()
@@ -163,15 +192,26 @@ end
 local win, rows = nil, {}
 local ROW_H = 22
 
+-- Abre el mapa del mundo en la zona de alguien. Al abrirse, el mapa vuelve solo a la zona de uno
+-- (y algunos addons de mapa lo mueven después): se elige la zona una vez abierto y otra vez un
+-- instante después. La lista se cierra para que no tape el mapa y el punto destella.
 local function openMap(p)
-  if not p.map or p.map == 0 then return end
-  pcall(function()
-    if OpenWorldMap then OpenWorldMap(p.map)
-    elseif WorldMapFrame then
-      if not WorldMapFrame:IsShown() and ToggleWorldMap then ToggleWorldMap() end
-      if WorldMapFrame.SetMapID then WorldMapFrame:SetMapID(p.map) end
-    end
-  end)
+  if not p.map or p.map == 0 or not WorldMapFrame then return end
+  local function go()
+    pcall(function() if WorldMapFrame.SetMapID then WorldMapFrame:SetMapID(p.map) end end)
+    drawPins()
+    ping(p.owner)
+  end
+  if win then win:Hide() end
+  if not WorldMapFrame:IsShown() then
+    local ok = pcall(function()
+      if ShowUIPanel then ShowUIPanel(WorldMapFrame) elseif ToggleWorldMap then ToggleWorldMap() end
+    end)
+    if not ok and ToggleWorldMap then pcall(ToggleWorldMap) end
+  end
+  go()
+  C_Timer.After(0.1, go)
+  C_Timer.After(0.4, go)
 end
 
 local function row(i)
