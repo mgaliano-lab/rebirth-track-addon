@@ -3,6 +3,7 @@ local chunk = assert(loadfile(arg[2] or "RebirthTrack/RebirthTrack.lua"))
 local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Bank.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
@@ -84,7 +85,7 @@ print("lista de la guild OK")
 assert(registeredPrefix == "RTK1", "registra el prefijo RTK1")
 local function sentWith(pat) for _, s in ipairs(sentAddon) do if s[1] == "RTK1" and s[3] == "GUILD" and s[2]:match(pat) then return s[2] end end end
 assert(sentWith("^H;%d+$"), "manda el saludo H")
-assert(sentWith("^K;%d+;S;us;Nightslayer;Roguebash;ROGUE;60;Player%-6065%-044C2423;5$"), "se anuncia a sí mismo")
+assert(sentWith("^K;%d+;S;us;Nightslayer;Roguebash;ROGUE;60;Player%-6065%-044C2423;5;;$"), "se anuncia a sí mismo (versiones vacías sin metadatos)")
 -- Vincular anuncia el personaje como pedido de vinculación (L).
 sentAddon = {}
 click("Vincular personaje")
@@ -501,3 +502,66 @@ assert(RebirthTrackDB.settings.sharePos == false, "el botón de la ventana la ap
 rt("posicion on")
 rt("opciones") -- sin panel de opciones en este cliente: no falla
 print("posición OK")
+
+-- Banco personal: se anota al abrir el banco, por personaje (RebirthTrackBank) y NUNCA en
+-- RebirthTrackDB (lo que sube la app) ni por el canal de la guild.
+NUM_BAG_SLOTS, NUM_BANKBAGSLOTS = 4, 7
+local bank = {
+  [-1] = { n = 24, items = { [1] = { 13444, 5, "item:13444" }, [7] = { 12360, 1, "item:12360" } } },
+  [5] = { n = 16, items = { [2] = { 13444, 3, "item:13444" } } },
+}
+C_Container = {
+  GetContainerNumSlots = function(bag) return bank[bag] and bank[bag].n or 0 end,
+  GetContainerItemInfo = function(bag, slot)
+    local it = bank[bag] and bank[bag].items[slot]
+    if it then return { itemID = it[1], stackCount = it[2], hyperlink = "|cff1eff00|H" .. it[3] .. "|h[Item " .. it[1] .. "]|h|r", iconFileID = 134000, quality = 2 } end
+  end,
+  ContainerIDToInventoryID = function(bag) return 70 + bag end,
+}
+function GetInventoryItemLink(_, inv) if inv == 75 then return "|cffffffff|Hitem:14156|h[Bolsa de tela de luna]|h|r" end end
+function GetInventoryItemTexture(_, inv) if inv == 75 then return 133650 end end
+function GetNumBankSlots() return 2, false end
+sentAddon = {}
+local before = RebirthTrackDB.data and #(RebirthTrackDB.events or {})
+fire("BANKFRAME_OPENED")
+local B = RebirthTrackBank
+assert(B and B.v == 1 and B.bagSlots == 2, "anota el banco al abrirlo")
+assert(B.containers[1].id == -1 and B.containers[1].slots == 24 and B.containers[1].items[1].n == 5 and B.containers[1].items[7].id == 12360)
+assert(B.containers[2].id == 5 and B.containers[2].name == "Bolsa de tela de luna" and B.containers[2].items[2].n == 3)
+assert(B.containers[3].id == 6 and B.containers[3].slots == 0, "hueco comprado sin bolsa")
+for _, s in ipairs(sentAddon) do assert(not s[2]:find("13444", 1, true), "el banco no va por el canal") end
+for k in pairs(RebirthTrackDB) do assert(k ~= "bank" and k ~= "RebirthTrackBank", "el banco no va en RebirthTrackDB") end
+for _, c in pairs(RebirthTrackDB.data or {}) do for key in pairs(c) do assert(not key:match("^inv"), key) end end
+fire("BANKFRAME_CLOSED")
+bank[-1].items = {}
+fire("BAG_UPDATE", 5)
+assert(RebirthTrackBank.containers[1].items[1], "con el banco cerrado no se pisa lo anotado")
+rt("banco")
+-- La vista: 24 casilleros + la fila de 7 huecos de bolsa + 16 de la bolsa = 47 botones.
+local pg = ns._bank.page()
+assert(pg, "la página del banco existe")
+pg.shown = true
+pg.scripts.OnShow(pg)
+assert(ns._bank.used() == 24 + 7 + 16, "casilleros dibujados: " .. ns._bank.used())
+print("banco OK")
+
+-- Versión del addon y de la app en el anuncio (k1): la del .toc y la que deja la app en Plans.lua.
+C_AddOns = { GetAddOnMetadata = function(a, k) if a == "RebirthTrack" and k == "Version" then return "0.7.0" end end }
+assert(ns.addonVersion() == "0.7.0" and ns.appVersion() == "", "sin la app, vacía")
+RebirthTrackApp = { version = "0.6.3" }
+assert(ns.appVersion() == "0.6.3")
+RebirthTrackApp = { version = "0.6.3; malo" }
+assert(ns.appVersion() == "", "solo versiones con forma X.Y.Z")
+RebirthTrackApp = { version = "0.6.3" }
+sentAddon = {}
+local realTime = time
+time = function() return 1792540000 end -- un rato después (si no, el anuncio no es más nuevo)
+rt("vincular") -- vuelve a anunciar el personaje (L)
+time = realTime
+local k
+for _, s in ipairs(sentAddon) do if s[2]:match("^K;") then k = s[2] end end
+assert(k and k:match(";0%.7%.0;0%.6%.3$"), "el anuncio lleva las dos versiones: " .. tostring(k))
+local mine
+for _, rec in ipairs(RebirthTrackDB.guild.known) do if rec:find("Player-6065-044C2423", 1, true) then mine = rec end end
+assert(mine:match(";0%.7%.0;0%.6%.3$"), mine)
+print("versiones OK")

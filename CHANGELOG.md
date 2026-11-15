@@ -13,6 +13,20 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.7.0] - 2026-11-15
+
+### Para todos
+
+- **Banco personal**: cada vez que abrís el banco, el addon anota lo que hay y lo podés ver después sin ir al banco, en Esc › Opciones › AddOns › Rebirth Track › Banco personal o con `/rt banco`. Se ve como el banco del juego (casilleros, fila de bolsas y cada bolsa abierta), con el tooltip de cada ítem y un buscador. Queda solo en tu PC: no se manda al sitio ni a la guild.
+- **Quién tiene el addon y la app**: el addon avisa a la guild qué versión tiene y si usás la app, y en el sitio (Miembros › Guild del juego) se marca quién tiene cada cosa y si está al día.
+
+### Técnico
+
+- `Bank.lua` nuevo: al abrir el banco (`BANKFRAME_OPENED` y los cambios mientras está abierto) lee el banco y sus bolsas con `C_Container` (o la API vieja), y en Retail 11.2+ las pestañas del banco del personaje y los componentes. Con el banco cerrado no se pisa lo anotado.
+- Se guarda en `RebirthTrackBank` con `## SavedVariablesPerCharacter`: el juego lo escribe en `WTF/Account/<cuenta>/<reino>/<personaje>/SavedVariables/`, que la app no sube (solo `WTF/Account/*/SavedVariables/RebirthTrack.lua`). Ni `RebirthTrackDB` ni el canal `RTK1` lo llevan (lo cubre `tests/run.lua`).
+- El anuncio `k1` suma dos campos al final: versión del addon (`## Version` vía `C_AddOns.GetAddOnMetadata`) y de la app (`RebirthTrackApp.version`, que el sitio agrega a `Plans.lua` con el `X-App-Version` de la app; vacío si no está). Los addons viejos guardan y reenvían los campos de más sin tocarlos.
+- Vista como subpágina del panel de opciones (`ns.addOptionsPage`, `Settings.RegisterCanvasLayoutSubcategory` o `InterfaceOptions_AddCategory` con `parent`): grilla de 6 o 7 columnas, bolsas de 4, borde por calidad, cantidad, tooltip (`SetHyperlink`), mayús + clic al chat y búsqueda por nombre.
+
 ## [0.6.0] - 2026-11-15
 
 ### Para todos
