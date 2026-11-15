@@ -18,6 +18,10 @@ local function newObj()
       elseif k == "GetCenter" then return 1000, 700
       elseif k == "GetEffectiveScale" then return 1
       elseif k == "GetPoint" then return "CENTER", nil, "CENTER", 10, 20
+      elseif k == "CreateAnimationGroup" or k == "CreateAnimation" then return newObj()
+      elseif k == "SetLooping" then
+        local v = ...
+        if v ~= "NONE" and v ~= "REPEAT" and v ~= "BOUNCE" then error("bad argument #1 to 'SetLooping' (Usage: self:SetLooping(loopType))") end
       end
     end
   end })

@@ -142,13 +142,15 @@ local function dot(owner)
   d:SetHighlightTexture(CIRCLE, "ADD")
   d.ping = d:CreateTexture(nil, "BACKGROUND", nil, -1)
   d.ping:SetTexture(CIRCLE); d.ping:SetPoint("CENTER"); d.ping:SetSize(DOT * 3, DOT * 3); d.ping:SetAlpha(0)
-  local ag = d.CreateAnimationGroup and d:CreateAnimationGroup()
-  if ag then
+  -- El destello es solo adorno: si una versión del juego no tiene algo de esto, el punto igual se ve.
+  pcall(function()
+    local ag = d:CreateAnimationGroup()
     local a = ag:CreateAnimation("Alpha"); a:SetTarget(d.ping); a:SetFromAlpha(0.9); a:SetToAlpha(0); a:SetDuration(0.9)
-    local sc = ag:CreateAnimation("Scale"); sc:SetTarget(d.ping); sc:SetScale(0.2, 0.2); sc:SetDuration(0.9)
-    ag:SetLooping("RESTART")
+    local sc = ag:CreateAnimation("Scale"); sc:SetTarget(d.ping); sc:SetDuration(0.9)
+    if sc.SetScaleFrom then sc:SetScaleFrom(0.3, 0.3); sc:SetScaleTo(1, 1) else sc:SetScale(0.2, 0.2) end
+    ag:SetLooping("REPEAT") -- NONE, REPEAT o BOUNCE
     d.pingAnim = ag
-  end
+  end)
   d:SetScript("OnEnter", function(self)
     local p = self.p
     if not p then return end
@@ -169,8 +171,8 @@ local function ping(owner)
   local d = dots[owner]
   if not (d and d.pingAnim) then return end
   d.ping:SetVertexColor(d.tex:GetVertexColor())
-  d.pingAnim:Play()
-  C_Timer.After(4, function() d.pingAnim:Stop(); d.ping:SetAlpha(0) end)
+  pcall(d.pingAnim.Play, d.pingAnim)
+  C_Timer.After(4, function() pcall(d.pingAnim.Stop, d.pingAnim); d.ping:SetAlpha(0) end)
 end
 
 local function drawPins()
@@ -311,4 +313,4 @@ f:SetScript("OnEvent", function()
 end)
 
 -- Para las pruebas.
-ns._positions = { positions = positions, drawPins = drawPins, window = function() return win end, rows = function() return rows end }
+ns._positions = { positions = positions, drawPins = drawPins, dots = dots, window = function() return win end, rows = function() return rows end }

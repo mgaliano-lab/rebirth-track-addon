@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.8.3] - 2026-11-15
+
+### Para todos
+
+- **Arreglado el error al abrir «Posiciones de la guild»** (y al dibujar los puntos en el mapa) que trajo la 0.8.2.
+
+### Técnico
+
+- `SetLooping("RESTART")` no es un valor válido (solo `NONE`, `REPEAT`, `BOUNCE`) y cortaba `dot()` en Positions.lua:149. Ahora `REPEAT`, y todo el destello va en `pcall` (es adorno: si falla, el punto igual se ve); `SetScaleFrom/To` donde exista. El stub de pruebas valida `SetLooping` y se comprueba que el destello se arme.
+
 ## [0.8.2] - 2026-11-15
 
 ### Para todos
