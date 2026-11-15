@@ -537,6 +537,7 @@ bank[-1].items = {}
 fire("BAG_UPDATE", 5)
 assert(RebirthTrackBank.containers[1].items[1], "con el banco cerrado no se pisa lo anotado")
 rt("banco")
+click("Banco personal") -- el botón de la ventana del addon abre lo mismo
 -- La vista: 24 casilleros + la fila de 7 huecos de bolsa + 16 de la bolsa = 47 botones.
 local pg = ns._bank.page()
 assert(pg, "la página del banco existe")

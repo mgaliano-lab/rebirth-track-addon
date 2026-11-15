@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.7.1] - 2026-11-15
+
+### Para todos
+
+- **Botón «Banco personal»** en la ventana del addon (la que abre el botón del minimapa): abre la vista del banco sin escribir `/rt banco`.
+
+### Técnico
+
+- Botón `bBank` en `createUI` (entre Reparto de botín y Rangos) que llama a `/rt banco`; textos en español e inglés y línea en la ayuda. Prueba en `tests/run.lua`.
+
 ## [0.7.0] - 2026-11-15
 
 ### Para todos

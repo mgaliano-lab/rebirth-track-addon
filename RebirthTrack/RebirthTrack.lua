@@ -58,6 +58,7 @@ local TEXTS = {
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
+    bBank = "Banco personal", tBank = "Lo que tenés en el banco, sin ir al banco (/rt banco). Se anota cada vez que lo abrís y queda solo en tu PC.",
     back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
     mmOpen = "Clic: abrir o cerrar la ventana", mmLink = "Clic derecho: vincular este personaje",
     mmMove = "Arrastrar: moverlo · /rt minimapa: ocultarlo", tResize = "Arrastrar para cambiar el tamaño",
@@ -75,6 +76,7 @@ local TEXTS = {
       "• |cffffffffEstado|r: si el registro está prendido y qué se anotó.",
       "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
       "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
+      "• |cffffffffBanco personal|r: lo que tenés en el banco, sin ir al banco (queda solo en tu PC).",
       "• |cffffffffPosición|r: compartir o no dónde está tu personaje con la guild, para el mapa del sitio (viene compartida).",
       "• |cffffffffES / EN|r: idioma del addon.",
       "",
@@ -137,6 +139,7 @@ local TEXTS = {
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
+    bBank = "Personal bank", tBank = "What's in your bank, without going there (/rt bank). Recorded every time you open it; stays on your PC only.",
     back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
     mmOpen = "Click: open or close the window", mmLink = "Right-click: link this character",
     mmMove = "Drag: move it · /rt minimap: hide it", tResize = "Drag to resize",
@@ -154,6 +157,7 @@ local TEXTS = {
       "• |cffffffffStatus|r: whether logging is on and what was recorded.",
       "• |cffffffffRecord / Stop|r: manually, if you want to record outside an instance.",
       "• |cffffffffDungeons|r: include dungeons or not (included by default).",
+      "• |cffffffffPersonal bank|r: what's in your bank, without going there (stays on your PC).",
       "• |cffffffffPosition|r: share where your character is with the guild, for the site's map (shared by default).",
       "• |cffffffffES / EN|r: addon language.",
       "",
@@ -808,6 +812,7 @@ local function createUI()
   ui.pos = button(nil, "tPos", function() setSharePos(not sharePos()) end)
   button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
   button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
+  button("bBank", "tBank", function() SlashCmdList.REBIRTHTRACK("banco") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
   button("bHelp", "tHelp", function() showHelp(true) end)
 
