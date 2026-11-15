@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.8.2] - 2026-11-15
+
+### Para todos
+
+- **Puntos de la guild más visibles en el mapa**: más grandes, del color de la clase de cada uno y con borde oscuro, para que resalten sobre cualquier zona.
+- **El botón «Mapa» de la lista de posiciones abre el mapa donde está esa persona** (antes el mapa volvía a tu zona) y su punto destella unos segundos.
+
+### Técnico
+
+- Punto de 16 px: círculo blanco (`TempPortraitAlphaMask`) teñido con `RAID_CLASS_COLORS` sobre un círculo negro, brillo y resaltado; destello con `AnimationGroup` (Alpha + Scale) desde la lista.
+- `openMap`: abre con `ShowUIPanel(WorldMapFrame)` (o `ToggleWorldMap`) y recién después `SetMapID`, otra vez a los 0,1 s y 0,4 s porque al abrirse el mapa vuelve a la zona propia; cierra la lista. Prueba nueva.
+
 ## [0.8.1] - 2026-11-15
 
 ### Para todos
