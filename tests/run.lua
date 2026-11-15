@@ -85,7 +85,7 @@ print("lista de la guild OK")
 assert(registeredPrefix == "RTK1", "registra el prefijo RTK1")
 local function sentWith(pat) for _, s in ipairs(sentAddon) do if s[1] == "RTK1" and s[3] == "GUILD" and s[2]:match(pat) then return s[2] end end end
 assert(sentWith("^H;%d+$"), "manda el saludo H")
-assert(sentWith("^K;%d+;S;us;Nightslayer;Roguebash;ROGUE;60;Player%-6065%-044C2423;5$"), "se anuncia a sí mismo")
+assert(sentWith("^K;%d+;S;us;Nightslayer;Roguebash;ROGUE;60;Player%-6065%-044C2423;5;;$"), "se anuncia a sí mismo (versiones vacías sin metadatos)")
 -- Vincular anuncia el personaje como pedido de vinculación (L).
 sentAddon = {}
 click("Vincular personaje")
@@ -544,3 +544,24 @@ pg.shown = true
 pg.scripts.OnShow(pg)
 assert(ns._bank.used() == 24 + 7 + 16, "casilleros dibujados: " .. ns._bank.used())
 print("banco OK")
+
+-- Versión del addon y de la app en el anuncio (k1): la del .toc y la que deja la app en Plans.lua.
+C_AddOns = { GetAddOnMetadata = function(a, k) if a == "RebirthTrack" and k == "Version" then return "0.7.0" end end }
+assert(ns.addonVersion() == "0.7.0" and ns.appVersion() == "", "sin la app, vacía")
+RebirthTrackApp = { version = "0.6.3" }
+assert(ns.appVersion() == "0.6.3")
+RebirthTrackApp = { version = "0.6.3; malo" }
+assert(ns.appVersion() == "", "solo versiones con forma X.Y.Z")
+RebirthTrackApp = { version = "0.6.3" }
+sentAddon = {}
+local realTime = time
+time = function() return 1792540000 end -- un rato después (si no, el anuncio no es más nuevo)
+rt("vincular") -- vuelve a anunciar el personaje (L)
+time = realTime
+local k
+for _, s in ipairs(sentAddon) do if s[2]:match("^K;") then k = s[2] end end
+assert(k and k:match(";0%.7%.0;0%.6%.3$"), "el anuncio lleva las dos versiones: " .. tostring(k))
+local mine
+for _, rec in ipairs(RebirthTrackDB.guild.known) do if rec:find("Player-6065-044C2423", 1, true) then mine = rec end end
+assert(mine:match(";0%.7%.0;0%.6%.3$"), mine)
+print("versiones OK")

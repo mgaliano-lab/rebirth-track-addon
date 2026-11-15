@@ -414,7 +414,8 @@ local REGIONS = { [1] = "us", [2] = "kr", [3] = "eu", [4] = "tw", [5] = "cn" }
 -- Lo guardado va sin «|» (WoW lo escapa) y sin «;» en los textos (es el separador):
 --   info     "gi1;guild;reino;región;proyecto;hora"
 --   members  "m1;nombre;reino;clase;nivel;rango;nombre del rango;guid;segundos desde la última conexión"
---   known    "k1;hora;S|L;región;reino;nombre;clase;nivel;guid;proyecto"  (S = se anunció, L = pidió vincular)
+--   known    "k1;hora;S|L;región;reino;nombre;clase;nivel;guid;proyecto;versión del addon;versión de la app"
+--            (S = se anunció, L = pidió vincular; las versiones desde la 0.7.0, la de la app vacía si no la tiene)
 -- Por el canal: "H;hora más nueva que tengo" (al entrar) y "K;…" (un personaje, mismos campos que known).
 local COMM = "RTK1"
 local MAX_KNOWN, MAX_REPLY = 1000, 60
@@ -479,10 +480,22 @@ local function remember(f)
   return true
 end
 
+-- Versión de este addon (del .toc) y de la app: Rebirth Track Uploader la deja en Plans.lua
+-- (RebirthTrackApp) junto con los planes, así que si está, la app está instalada y en uso.
+local function addonVersion()
+  local get = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
+  return clean(get and get(ADDON, "Version") or "")
+end
+local function appVersion()
+  local v = type(RebirthTrackApp) == "table" and RebirthTrackApp.version
+  return type(v) == "string" and v:match("^%d+%.%d+%.%d+$") or ""
+end
+ns.addonVersion, ns.appVersion = addonVersion, appVersion
+
 local function selfRecord(kind)
   local _, class = UnitClass("player")
   return { "k1", time(), kind, regionCode(), clean(selfRealm()), clean(UnitName("player")), class or "",
-    UnitLevel("player") or 0, UnitGUID("player") or "", WOW_PROJECT_ID or 0 }
+    UnitLevel("player") or 0, UnitGUID("player") or "", WOW_PROJECT_ID or 0, addonVersion(), appVersion() }
 end
 
 -- Cola de envío: de a un mensaje cada medio segundo (el juego limita los mensajes de addons) y en
