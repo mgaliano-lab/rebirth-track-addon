@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.4] - 2026-11-17
+
+### Para todos
+
+- **Recetas con lo del banco en Forever**: en la 0.9.3 no aparecía nada en WoW Forever, porque su ventana de profesión es la nueva y no la clásica. Ahora «(+Banco n) (total)» y «(+Parcial Banco)» también salen ahí.
+- **Versión a la vista**: la ventana del addon muestra la versión al lado del nombre («Rebirth Track v0.9.4»), para saber cuál tenés cargada en el juego.
+
+### Técnico
+
+- `BankCraft.lua`: soporte de `ProfessionsFrame` (motor de Retail, el de Forever). Las filas del `CraftingPage.RecipeList.ScrollBox` se recorren con `ForEachFrame` cada 0,25 s mientras la ventana está abierta (las filas se reciclan al bajar o buscar); la receta sale de `GetElementData():GetData().recipeInfo` y los componentes básicos de `C_TradeSkillUI.GetRecipeSchematic` (todas las calidades de un hueco suman), con el bolso por `C_Item.GetItemCount`. En Retail sigue apagado.
+- `RebirthTrack.lua`: el título de la ventana suma `v<Version del .toc>`.
+
 ## [0.9.3] - 2026-11-17
 
 ### Para todos

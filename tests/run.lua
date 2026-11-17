@@ -805,3 +805,33 @@ do
   assert(not t:IsShown(), "sin banco anotado, no hay etiqueta")
   print("recetas con banco OK")
 end
+
+-- Ventana nueva (Forever): filas del ScrollBox con recipeInfo y componentes de GetRecipeSchematic.
+do
+  local C = ns._bankCraft
+  RebirthTrackBank = { v = 2, at = time(), containers = { { id = 6, slots = 1, items = { { id = 10938, n = 3 } } } } }
+  local row = CreateFrame("Button"); row.Label = row:CreateFontString(); row.Count = row:CreateFontString()
+  row.GetElementData = function() return { GetData = function() return { recipeInfo = { recipeID = 7428, learned = true } } end } end
+  local header = CreateFrame("Button"); header.Label = header:CreateFontString()
+  header.GetElementData = function() return { GetData = function() return { categoryInfo = { name = "Brazales" } } end } end
+  ProfessionsFrame = CreateFrame("Frame")
+  ProfessionsFrame.HookScript = function(self, ev, fn) self.scripts[ev] = fn end
+  ProfessionsFrame.CraftingPage = { RecipeList = { ScrollBox = { ForEachFrame = function(_, fn) fn(row); fn(header) end } } }
+  C_TradeSkillUI = C_TradeSkillUI or {}
+  C_TradeSkillUI.GetRecipeSchematic = function(id)
+    return { reagentSlotSchematics = { { reagentType = 1, quantityRequired = 1, reagents = { { itemID = 10938 } } } } }
+  end
+  C_Item = C_Item or {}
+  C_Item.GetItemCount = function(id) return id == 10938 and 1 or 0 end
+  C_Item.GetItemNameByID = function() return "Esencia mágica inferior" end
+  C.hookAll()
+  C.refreshModern()
+  local t = row.rtBank
+  assert(t and t:IsShown(), "etiqueta en la ventana nueva")
+  assert(t.text:GetText():find("+Banco 3", 1, true) and t.text:GetText():find("(4)", 1, true), t.text:GetText())
+  assert(t.res.lines[1]:find("Esencia mágica inferior: 3 del banco", 1, true), t.res.lines[1])
+  assert(not header.rtBank or not header.rtBank:IsShown(), "las categorías no llevan etiqueta")
+  ProfessionsFrame.scripts.OnShow(); assert(C.ticker:IsShown(), "repasa mientras está abierta")
+  ProfessionsFrame.scripts.OnHide(); assert(not C.ticker:IsShown())
+  print("recetas con banco (ventana nueva) OK")
+end
