@@ -157,16 +157,69 @@ local PROF_NAMES = {
   mining = { "Mining", "Minería" }, herbalism = { "Herbalism", "Herboristería", "Herbalismo" }, skinning = { "Skinning", "Desuello", "Desollar" },
   cooking = { "Cooking", "Cocina" }, firstaid = { "First Aid", "Primeros auxilios" }, fishing = { "Fishing", "Pesca" },
 }
+-- Línea de habilidad de cada profesión (GetProfessionInfo la devuelve: no depende del idioma).
+local SKILL_LINES = {
+  alchemy = 171, blacksmithing = 164, enchanting = 333, engineering = 202, leatherworking = 165, tailoring = 197,
+  mining = 186, herbalism = 182, skinning = 393, cooking = 185, firstaid = 129, fishing = 356,
+}
+local function sameName(key, name)
+  for _, n in ipairs(PROF_NAMES[key] or {}) do if n:lower() == tostring(name):lower() then return true end end
+  return false
+end
+-- Classic: la lista de habilidades (GetSkillLineInfo). WoW Forever y los clientes con el motor nuevo
+-- no la tienen: ahí las profesiones salen de GetProfessions (como en Collect.lua). Antes solo se miraba
+-- la primera y en Forever todo quedaba «sin aprender».
 local function skillOf(key)
-  if not (GetNumSkillLines and GetSkillLineInfo) then return nil end
-  local names = PROF_NAMES[key] or {}
-  for i = 1, GetNumSkillLines() do
-    local name, header, _, rank, _, _, max = GetSkillLineInfo(i)
-    if name and not header then
-      for _, n in ipairs(names) do if n:lower() == name:lower() then return rank, max end end
+  if GetNumSkillLines and GetSkillLineInfo then
+    for i = 1, GetNumSkillLines() or 0 do
+      local name, header, _, rank, _, _, max = GetSkillLineInfo(i)
+      if name and not header and sameName(key, name) then return rank, max end
+    end
+  end
+  if GetProfessions and GetProfessionInfo then
+    local list = { GetProfessions() }
+    for i = 1, 6 do
+      if list[i] then
+        local name, _, rank, max, _, _, line = GetProfessionInfo(list[i])
+        if (line and line == SKILL_LINES[key]) or (name and sameName(key, name)) then return rank, max end
+      end
     end
   end
   return nil
+end
+ns._skillOf = skillOf
+
+-- /rt diag: qué API de talentos, Legado y profesiones ofrece este cliente (para adaptar el addon a WoW
+-- Forever): las funciones conocidas y todo lo global con «Talent», «Legacy» o «Trait» en el nombre.
+function ns.planDiag()
+  local function has(name)
+    local v = _G[name]
+    return v == nil and "no" or type(v)
+  end
+  local function try(fn, ...)
+    local r = { pcall(fn, ...) }
+    if not r[1] then return "error: " .. tostring(r[2]) end
+    local out = {}
+    for i = 2, math.min(#r, 9) do out[#out + 1] = tostring(r[i]) end
+    return table.concat(out, ", ")
+  end
+  say("diag · proyecto " .. tostring(WOW_PROJECT_ID) .. " · build " .. try(GetBuildInfo))
+  for _, n in ipairs({ "GetNumTalentTabs", "GetTalentTabInfo", "GetNumTalents", "GetTalentInfo", "GetTalentInfoByID",
+    "GetNumSpecializations", "GetSpecialization", "GetActiveTalentGroup", "GetNumSkillLines", "GetProfessions",
+    "C_ClassTalents", "C_Traits", "C_SpecializationInfo", "C_Talent", "C_TalentTree" }) do
+    say("diag · " .. n .. ": " .. has(n))
+  end
+  if GetNumTalentTabs then say("diag · GetNumTalentTabs() = " .. try(GetNumTalentTabs)) end
+  if GetTalentInfo then say("diag · GetTalentInfo(1, 1) = " .. try(GetTalentInfo, 1, 1)) end
+  if GetTalentTabInfo then say("diag · GetTalentTabInfo(1) = " .. try(GetTalentTabInfo, 1)) end
+  if C_ClassTalents and C_ClassTalents.GetActiveConfigID then say("diag · C_ClassTalents.GetActiveConfigID() = " .. try(C_ClassTalents.GetActiveConfigID)) end
+  if GetProfessions then say("diag · GetProfessions() = " .. try(GetProfessions)) end
+  local names = {}
+  for k, v in pairs(_G) do
+    if type(k) == "string" and (k:find("Talent") or k:find("Legacy") or k:find("Trait")) and (type(v) == "function" or (type(v) == "table" and k:match("^C_"))) then names[#names + 1] = k end
+  end
+  table.sort(names)
+  for i = 1, #names, 6 do say("diag · " .. table.concat(names, " ", i, math.min(#names, i + 5))) end
 end
 local function talentRanks()
   local have = {}

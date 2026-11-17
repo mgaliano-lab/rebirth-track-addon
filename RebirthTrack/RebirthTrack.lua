@@ -1209,6 +1209,7 @@ local COMMANDS = {
   plan = "plan", planes = "plan", plans = "plan",
   reparto = "loot", botin = "loot", ["botín"] = "loot", loot = "loot", council = "loot", consejo = "loot",
   datos = "data", data = "data",
+  diag = "diag", diagnostico = "diag", ["diagnóstico"] = "diag",
 }
 
 SLASH_REBIRTHTRACK1 = "/rt"
@@ -1237,6 +1238,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     say(L("posSay"):format(on and L("shared") or L("notShared")))
   elseif cmd == "positions" then
     if ns.openPositions then ns.openPositions() end
+  elseif cmd == "diag" then
+    if ns.planDiag then ns.planDiag() end
   elseif cmd == "recruit" then
     if ns.openRecruit then ns.openRecruit() end
   elseif cmd == "bank" then
