@@ -4,6 +4,7 @@ local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Bank.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/BankCraft.lua"))("RebirthTrack", ns)
 -- HereBeDragons-Pins de mentira: anota qué puntos se ponen en el mapa.
 mapPins = {}
 LibStub = function(name)
@@ -768,3 +769,39 @@ assert(not rw.shown, "/rt invitar la cierra")
 click("Invitador")
 assert(rw.shown, "el botón de la ventana la abre")
 print("invitador OK")
+
+-- Recetas con lo del banco: (+Banco n) (total), parcial y nada si el banco no suma.
+do
+  local C = ns._bankCraft
+  local r = C.calc({ { id = 1, name = "Paño de lana", need = 2, have = 2, bank = 6 } })
+  assert(r and r.bags == 1 and r.total == 4 and r.extra == 3 and not r.partial, "1 del bolso + 3 del banco")
+  assert(C.label(r):find("+Banco 3", 1, true) and C.label(r):find("(4)", 1, true), C.label(r))
+  assert(r.lines[1]:find("Paño de lana: 6 del banco", 1, true), r.lines[1])
+  local p = C.calc({ { id = 1, name = "Paño de lana", need = 2, have = 0, bank = 1 }, { id = 2, name = "Hilo", need = 1, have = 5, bank = 0 } })
+  assert(p and p.partial and p.extra == 0, "parcial")
+  assert(C.label(p):find("+Parcial Banco", 1, true))
+  assert(p.lines[1]:find("Paño de lana: 1 en el banco", 1, true) and p.lines[2]:find("Paño de lana: faltan 1", 1, true), table.concat(p.lines, " / "))
+  assert(C.calc({ { id = 1, name = "x", need = 1, have = 3, bank = 0 } }) == nil, "sin banco, nada")
+  assert(C.calc({ { id = 1, name = "x", need = 1, have = 3, bank = 2 }, { id = 2, name = "y", need = 5, have = 5, bank = 0 } }) == nil, "lo del banco no sirve: nada")
+  -- En la ventana: una fila con su receta y el banco anotado.
+  RebirthTrackBank = { v = 2, at = time(), containers = { { id = 6, slots = 2, items = { { id = 2592, n = 6 }, { id = 2592, n = 2 } } } } }
+  assert(C.totals()[2592] == 8)
+  TradeSkillFrame = CreateFrame("Frame")
+  TradeSkillSkill1 = CreateFrame("Button"); TradeSkillSkill1.GetID = function() return 3 end; TradeSkillSkill1.GetName = function() return "TradeSkillSkill1" end
+  function GetTradeSkillInfo(i) return "Venda de lana gruesa", "medium", 1 end
+  function GetTradeSkillNumReagents() return 1 end
+  function GetTradeSkillReagentInfo() return "Paño de lana", "tex", 2, 2 end
+  function GetTradeSkillReagentItemLink() return "|cffffffff|Hitem:2592::::::::|h[Paño de lana]|h|r" end
+  local hooked = 0
+  function TradeSkillFrame_Update() hooked = hooked + 1 end
+  C.hookAll()
+  TradeSkillFrame_Update()
+  local t = TradeSkillSkill1.rtBank
+  assert(hooked == 1 and t and t:IsShown(), "pone la etiqueta al actualizar la ventana")
+  assert(t.text:GetText():find("+Banco 4", 1, true) and t.text:GetText():find("(5)", 1, true), t.text:GetText())
+  t.scripts.OnEnter(t)
+  RebirthTrackBank = nil
+  TradeSkillFrame_Update()
+  assert(not t:IsShown(), "sin banco anotado, no hay etiqueta")
+  print("recetas con banco OK")
+end

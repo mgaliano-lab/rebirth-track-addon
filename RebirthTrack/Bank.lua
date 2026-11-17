@@ -133,6 +133,7 @@ local function scan()
   local bought = GetNumBankSlots and select(1, GetNumBankSlots()) or nil
   RebirthTrackBank = { v = 2, at = time(), bagSlots = bought, tabbed = lay.tabs and true or nil, containers = containers }
   if ns.refreshBank then ns.refreshBank() end
+  if ns.refreshBankCraft then pcall(ns.refreshBankCraft) end
 end
 ns.scanBank = scan
 
