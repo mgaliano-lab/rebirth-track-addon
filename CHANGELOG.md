@@ -13,6 +13,20 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.3] - 2026-11-17
+
+### Para todos
+
+- **Recetas con lo del banco**: en la ventana de tu profesión, cada receta te avisa si con lo que tenés en el banco podés hacer más. Por ejemplo, «[1] (+Banco 3) (4)» quiere decir que con el bolso hacés 1 y, trayendo lo del banco, 4. Con el mouse encima de «+Banco» ves qué componentes están en el banco.
+- Si en el banco tenés solo una parte de lo que falta, dice «(+Parcial Banco)» y, con el mouse encima, qué ítem está en el banco y cuál te falta.
+- Usa lo que anotó la ventana «Banco personal» la última vez que abriste el banco con ese personaje (sin abrirlo nunca, no aparece). Funciona en Classic, TBC/Anniversary y Forever.
+
+### Técnico
+
+- `BankCraft.lua` (nuevo): engancha `TradeSkillFrame_Update` y `CraftFrame_Update` (con `hooksecurefunc`, al cargar `Blizzard_TradeSkillUI`/`Blizzard_CraftUI` por `ADDON_LOADED`) y en cada fila (`TradeSkillSkillN`/`CraftN`, índice por `GetID`) cruza `Get*ReagentInfo` + `Get*ReagentItemLink` con los totales de `RebirthTrackBank`.
+- `calc`: bolso = mín(⌊tengo/pido⌋), total = mín(⌊(tengo+banco)/pido⌋); si total > bolso, «(+Banco extra) (total)»; si no, «(+Parcial Banco)» cuando un componente del banco sirve para la próxima y falta otro. La etiqueta es un botón con tooltip; el clic pasa a la fila, y si no entra se achica el nombre.
+- `Bank.lua`: al volver a anotar el banco, refresca las ventanas abiertas (`ns.refreshBankCraft`). Sin cambios en lo que se guarda ni en lo que se manda.
+
 ## [0.9.2] - 2026-11-17
 
 ### Para todos

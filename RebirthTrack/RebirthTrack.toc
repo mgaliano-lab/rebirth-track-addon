@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\RebirthTrack\icon
 ## Notes: Prende el registro de combate avanzado al entrar a una banda o mazmorra y anota la sesión.
 ## Author: Rebirth Knights
-## Version: 0.9.2
+## Version: 0.9.3
 ## X-Curse-Project-ID: 1757092
 ## SavedVariables: RebirthTrackDB
 ## SavedVariablesPerCharacter: RebirthTrackBank
@@ -15,6 +15,7 @@ Libs\HereBeDragons\HereBeDragons-Pins-2.0.lua
 RebirthTrack.lua
 Collect.lua
 Bank.lua
+BankCraft.lua
 Positions.lua
 Recruit.lua
 Plans.lua
