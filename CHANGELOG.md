@@ -13,6 +13,26 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.0] - 2026-11-16
+
+### Para todos
+
+- **Nuevo botón «Invitador»** en la ventana del addon (o `/rt invitar`): trae armado el mensaje para sumar gente a la guild, con lo mismo que dice la web (Horda, PvP y PvE en WoW Forever), la web y la invitación permanente al Discord.
+- Con un clic lo **gritás** o lo **mandás al canal de Mundo**. Si usás otro canal, «Canal ▸» lo cambia entre los que tenés abiertos.
+- Podés **editar el texto** antes de mandarlo: cada renglón sale como un mensaje. «Texto original» vuelve al de la web.
+- **Invitar a la guild**: escribís el nombre (o seleccionás al personaje) y le llega la invitación, si tu rango puede invitar.
+- Para que no te silencien por spam, el mismo envío se puede repetir cada 30 segundos. Los links salen como texto: en el chat del juego no se pueden clickear.
+
+### Técnico
+
+- `Recruit.lua` nuevo (en los 6 `.toc`, después de `Positions.lua`): `ns.openRecruit` / `ns.refreshRecruit`, botón `bRecruit` y comando `recruit` (`invitar`, `invitador`, `reclutar`, `invite`).
+- El texto se parte en mensajes por renglón y, si pasa 255 bytes, por palabras; saca los `|` (en el chat arrancan un código de escape). Tope de 4 mensajes por envío.
+- Todos los `SendChatMessage` (`YELL` o `CHANNEL` con el número del canal) van dentro del mismo `OnClick`: el envío a canales necesita un clic del jugador, y con un `C_Timer` no saldrían.
+- `GetChannelList()` se lee de a tres (id, nombre, desactivado) o de a dos en clientes viejos. Por defecto se usa el primer canal que arranque con `world`, `mundo` o `global`; si se elige otro, se guarda por nombre en `settings.recruitChannel`, porque el número cambia.
+- El texto propio queda en `settings.recruitText`; sin texto propio, el cuadro sigue al idioma y al nombre de la guild.
+- La invitación usa `C_GuildInfo.Invite` si existe, y si no `GuildInvite`, con `CanGuildInvite` antes. El Discord es `discord.gg/Qvy8qeJmmv`: la API de Discord lo da sin vencimiento.
+- Pruebas: partido de mensajes, elección y rotación del canal, anti-spam, grito, texto propio y restaurar, idioma, invitar por nombre, por objetivo y sin permiso.
+
 ## [0.8.3] - 2026-11-15
 
 ### Para todos

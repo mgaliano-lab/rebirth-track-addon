@@ -58,6 +58,7 @@ local TEXTS = {
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
+    bRecruit = "Invitador", tRecruit = "Mensaje para sumar gente a la guild (web y Discord): gritarlo o mandarlo al canal de Mundo, e invitar a la guild (/rt invitar).",
     bPositions = "Posiciones de la guild", tPositions = "Lista de las posiciones que llegaron por el canal (zona, coordenadas y hace cuánto) para ver que se esté sincronizando (/rt posiciones).",
     optPins = "Mostrar a la guild en el mapa del juego", optPinsTip = "Un punto del color de su clase por cada miembro que comparte su posición, en el mapa del mundo (el de Blizzard o el addon de mapa que uses). No reemplaza tu mapa.",
     bBank = "Banco personal", tBank = "Lo que tenés en el banco, sin ir al banco (/rt banco). Se anota cada vez que lo abrís y queda solo en tu PC.",
@@ -95,6 +96,7 @@ local TEXTS = {
       "/rt mazmorras · dungeons",
       "/rt posicion · position (compartir o no)",
       "/rt posiciones · positions (lista de la guild)",
+      "/rt invitar · invite (invitador: mensaje de reclutamiento e invitar a la guild)",
       "/rt opciones · options (Esc › Opciones › AddOns)",
       "/rt banco · bank (ventana con lo que tenés en el banco)",
       "/rt borrar · reset",
@@ -142,6 +144,7 @@ local TEXTS = {
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
+    bRecruit = "Recruiter", tRecruit = "Message to bring people into the guild (website and Discord): yell it or send it to the World channel, and invite to the guild (/rt invite).",
     bPositions = "Guild positions", tPositions = "List of the positions that arrived over the channel (zone, coordinates and how long ago) to check it's syncing (/rt positions).",
     optPins = "Show the guild on the game's map", optPinsTip = "A class-coloured dot for each member sharing their position, on the world map (Blizzard's or whatever map addon you use). It doesn't replace your map.",
     bBank = "Personal bank", tBank = "What's in your bank, without going there (/rt bank). Recorded every time you open it; stays on your PC only.",
@@ -179,6 +182,7 @@ local TEXTS = {
       "/rt dungeons · mazmorras",
       "/rt position · posicion (share or not)",
       "/rt positions · posiciones (guild list)",
+      "/rt invite · invitar (recruiter: recruiting message and guild invite)",
       "/rt options · opciones (Esc › Options › AddOns)",
       "/rt bank · banco (window with what's in your bank)",
       "/rt reset · borrar",
@@ -697,6 +701,7 @@ local function refreshUI()
   ui.dun:SetText(L("dungeons") .. (db().settings.dungeons and L("yes") or L("no")))
   ui.pos:SetText(L("position") .. (sharePos() and L("yes") or L("no")))
   if ns.refreshOptions then ns.refreshOptions() end
+  if ns.refreshRecruit then ns.refreshRecruit() end
   ui.state:SetText(LoggingCombat() and L("stateOn") .. (session and session.instance and (" · " .. session.instance.name) or "") or L("stateOff"))
   ui.lang:SetText(lang() == "es" and "EN" or "ES")
   for _, b in ipairs(ui.buttons) do b:SetText(b.label and L(b.label) or b:GetText()) end
@@ -820,6 +825,7 @@ local function createUI()
   button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
   button("bBank", "tBank", function() SlashCmdList.REBIRTHTRACK("banco") end)
   button("bPositions", "tPositions", function() SlashCmdList.REBIRTHTRACK("posiciones") end)
+  button("bRecruit", "tRecruit", function() SlashCmdList.REBIRTHTRACK("invitar") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
   button("bHelp", "tHelp", function() showHelp(true) end)
 
@@ -1193,6 +1199,7 @@ local COMMANDS = {
   opciones = "options", options = "options", config = "options",
   banco = "bank", bank = "bank",
   posiciones = "positions", positions = "positions", ubicaciones = "positions",
+  invitar = "recruit", invitador = "recruit", reclutar = "recruit", recruit = "recruit", invite = "recruit",
   borrar = "reset", reset = "reset",
   minimapa = "minimap", minimap = "minimap",
   idioma = "lang", language = "lang", lang = "lang",
@@ -1228,6 +1235,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     say(L("posSay"):format(on and L("shared") or L("notShared")))
   elseif cmd == "positions" then
     if ns.openPositions then ns.openPositions() end
+  elseif cmd == "recruit" then
+    if ns.openRecruit then ns.openRecruit() end
   elseif cmd == "bank" then
     if ns.openBank then ns.openBank() end
   elseif cmd == "options" then
