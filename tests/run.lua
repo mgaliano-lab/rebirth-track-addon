@@ -853,3 +853,54 @@ do
   SlashCmdList.REBIRTHTRACK("diag")
   print("plan con GetProfessions OK")
 end
+
+-- Plan en WoW Forever: talentos y Legado por C_ClassTalents + C_Traits (sin filas ni columnas).
+do
+  local body = table.concat({
+    "RTP1;ff01;Lonos;nightslayer;Orco;Mage;pve;1",
+    "B;0;Arcano", "B;1;Fuego", "B;2;Escarcha",
+    "T;0;1;2;5;5;Concentración arcana;11213,12574,12575,12576,12577;Arcane Focus",
+    "T;1;1;3;2;2;Impacto;11103,12357;Impact",
+    "T;2;2;1;3;3;Escarcha penetrante;;Piercing Ice",
+    "L;Aventura;2;3;Descanso profundo;Deep Rest",
+  }, "\n")
+  local plan = ns.planParse(body .. "\nZ;" .. ns.planCrc32(body))[1].plan
+  assert(plan.talents[1].spells[2] == 12574 and plan.talents[3].en == "Piercing Ice" and plan.legacy[1].en == "Deep Rest", "lee hechizos e inglés")
+  local saved = { GetNumTalentTabs, GetNumTalents, GetTalentInfo }
+  GetNumTalentTabs, GetNumTalents, GetTalentInfo = nil, nil, nil
+  -- Configuración activa 585381 (talentos) y el sistema 7 (Legado) con su propia configuración.
+  local NODES = {
+    [585381] = { tree = 1, nodes = {
+      { id = 1, spell = 11213, rank = 3, max = 5 },           -- Concentración arcana, a medias
+      { id = 2, spell = 11103, rank = 2, max = 2 },           -- Impacto, completo
+      { id = 3, spell = 99999, rank = 1, max = 3, name = "Piercing Ice" }, -- sin ID en el plan: por nombre inglés
+      { id = 4, spell = 55555, rank = 2, max = 2 },           -- fuera del plan
+      { id = 5, spell = 44444, rank = 0, max = 1 },
+    } },
+    [700] = { tree = 9, nodes = { { id = 9, spell = 77777, rank = 2, max = 3, name = "Deep Rest" } } },
+  }
+  local byNode = {}
+  for cfg, c in pairs(NODES) do for _, n in ipairs(c.nodes) do byNode[cfg .. ":" .. n.id] = n end end
+  C_ClassTalents = { GetActiveConfigID = function() return 585381 end }
+  C_Traits = {
+    GetConfigInfo = function(cfg) return NODES[cfg] and { name = "cfg" .. cfg, treeIDs = { NODES[cfg].tree } } end,
+    GetTreeNodes = function(tree) for _, c in pairs(NODES) do if c.tree == tree then local ids = {}; for _, n in ipairs(c.nodes) do ids[#ids + 1] = n.id end; return ids end end end,
+    GetNodeInfo = function(cfg, id) local n = byNode[cfg .. ":" .. id]; return n and { ranksPurchased = n.rank, maxRanks = n.max, activeEntry = { entryID = cfg .. ":" .. id } } end,
+    GetEntryInfo = function(cfg, entry) return { definitionID = entry } end,
+    GetDefinitionInfo = function(def) return { spellID = byNode[def].spell } end,
+    GetConfigIDBySystemID = function(sys) if sys == 7 then return 700 end if sys == 1 then return 585381 end return 0 end,
+  }
+  C_Spell = { GetSpellName = function(id) for _, n in pairs(byNode) do if n.spell == id then return n.name or ("Hechizo " .. id) end end end }
+  local pr = ns.planProgress(plan)
+  assert(pr.tal.planned == 10 and pr.tal.matched == 3 + 2 + 1, "cruza por hechizo y por nombre: " .. pr.tal.matched)
+  assert(pr.tal.spent == 8 and pr.tal.off == 1, "gastados y fuera del plan")
+  assert(pr.tal.next and pr.tal.next.t.en == "Arcane Focus" and pr.tal.next.have == 3, "próximo a tocar")
+  local st = ns._planTraits.state()
+  local lg = ns._planTraits.legacy(st)
+  local n = ns._planTraits.nodeFor(lg, plan.legacy[1])
+  assert(n and n.rank == 2, "Legado por el sistema de C_Traits")
+  ns.planDiag()
+  GetNumTalentTabs, GetNumTalents, GetTalentInfo = saved[1], saved[2], saved[3]
+  C_ClassTalents, C_Traits, C_Spell = nil, nil, nil
+  print("plan con C_Traits OK")
+end
