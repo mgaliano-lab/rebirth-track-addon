@@ -14,6 +14,7 @@ LibStub = function(name)
   }
 end
 assert(loadfile("RebirthTrack/Positions.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Recruit.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
@@ -671,3 +672,69 @@ local first = sentPos()
 ns._collect.collectPosition()
 assert(sentPos() == first, "quieto y antes del minuto, no manda")
 print("posiciones en el mapa OK")
+
+-- Invitador: el mensaje de la web partido en mensajes de chat, gritado o al canal de Mundo, e invitar.
+local R = ns._recruit
+RebirthTrackDB.settings.lang = "es"
+local def = R.defaultText()
+assert(def:find("<Rebirth Knights>", 1, true) and def:find("rebirthknights.fun", 1, true) and def:find("discord.gg/Qvy8qeJmmv", 1, true), "mensaje con guild, web y Discord")
+assert(def:find("PvP y PvE", 1, true), "dice PvP y PvE")
+local ps = R.parts(def)
+assert(#ps == 2, "un mensaje por renglón: " .. #ps)
+for _, m in ipairs(ps) do assert(#m <= 255, "cada uno entra en el chat: " .. #m) end
+local long = R.parts(string.rep("palabra ", 80) .. "|cff")
+assert(#long == 3, "un renglón largo se parte en palabras: " .. #long)
+for _, m in ipairs(long) do assert(#m <= 255 and not m:find("|", 1, true), "sin pasarse ni «|»") end
+assert(#R.parts("  \n \n") == 0, "vacío no manda nada")
+-- Canales: de a tres (id, nombre, desactivado); toma el de Mundo y «Canal ▸» rota entre los abiertos.
+chat = {}
+function SendChatMessage(msg, kind, _, target) table.insert(chat, { msg, kind, target }) end
+function GetChannelList() return 1, "General", false, 2, "Comercio", false, 4, "Mundo", false end
+assert(R.channel().name == "Mundo", "elige Mundo")
+rt("invitar")
+local rw = R.window()
+assert(rw and rw.shown, "abre el invitador")
+assert(rw.edit:GetText() == def, "con el texto armado")
+click("Mandar a Mundo")
+assert(#chat == 2 and chat[1][2] == "CHANNEL" and chat[1][3] == 4, "manda los 2 al canal 4")
+click("Mandar a Mundo")
+assert(#chat == 2, "no se repite enseguida (anti-spam)")
+click("Gritar")
+assert(#chat == 4 and chat[3][2] == "YELL", "grita los 2")
+click("Canal ▸")
+assert(RebirthTrackDB.settings.recruitChannel == "General", "rota al siguiente (vuelve al primero)")
+R.resetCooldown(); click("Mandar a General")
+assert(chat[#chat][3] == 1, "ahora a General")
+RebirthTrackDB.settings.recruitChannel = nil
+function GetChannelList() return 1, "General", false end
+chat = {}; R.resetCooldown(); R.sendChannel()
+assert(#chat == 0, "sin canal de Mundo no manda a cualquiera")
+-- Texto propio: se guarda y «Texto original» lo vuelve atrás.
+rw.edit:SetText("Hola\nChau"); rw.edit.scripts.OnTextChanged(rw.edit, true)
+assert(RebirthTrackDB.settings.recruitText == "Hola\nChau" and #R.parts(R.text()) == 2, "guarda el texto propio")
+click("Texto original")
+assert(RebirthTrackDB.settings.recruitText == nil and rw.edit:GetText() == def, "vuelve al de la web")
+-- En inglés el cuadro sigue al idioma.
+rt("idioma en")
+assert(rw.edit:GetText():find("Horde PvP and PvE", 1, true), "texto en inglés")
+rt("idioma es")
+-- Invitar: al nombre escrito o al objetivo, si el rango puede.
+invitedTo = {}
+function GuildInvite(n) table.insert(invitedTo, n) end
+function CanGuildInvite() return true end
+function UnitExists() return true end
+function UnitIsPlayer() return true end
+local realUnitName = UnitName
+UnitName = function(u) if u == "target" then return "Nuevito", nil end return realUnitName(u) end
+rw.name:SetText("Fulano"); click("Invitar a la guild")
+assert(invitedTo[1] == "Fulano" and rw.name:GetText() == "", "invita al nombre escrito")
+click("Invitar a la guild")
+assert(invitedTo[2] == "Nuevito", "vacío: invita al objetivo")
+function CanGuildInvite() return false end
+assert(not R.invite("Otro") and #invitedTo == 2, "sin permiso no invita")
+UnitName = realUnitName
+rt("invitar")
+assert(not rw.shown, "/rt invitar la cierra")
+click("Invitador")
+assert(rw.shown, "el botón de la ventana la abre")
+print("invitador OK")
