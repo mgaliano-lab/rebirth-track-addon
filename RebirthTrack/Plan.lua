@@ -153,7 +153,7 @@ end
 -- ── Lo que ve el juego ───────────────────────────────────────────────────────────────────────────
 local PROF_NAMES = {
   alchemy = { "Alchemy", "Alquimia" }, blacksmithing = { "Blacksmithing", "Herrería" }, enchanting = { "Enchanting", "Encantamiento" },
-  engineering = { "Engineering", "Ingeniería" }, leatherworking = { "Leatherworking", "Peletería" }, tailoring = { "Tailoring", "Sastrería" },
+  engineering = { "Engineering", "Ingeniería" }, leatherworking = { "Leatherworking", "Peletería" }, tailoring = { "Tailoring", "Sastrería", "Costura" },
   mining = { "Mining", "Minería" }, herbalism = { "Herbalism", "Herboristería", "Herbalismo" }, skinning = { "Skinning", "Desuello", "Desollar" },
   cooking = { "Cooking", "Cocina" }, firstaid = { "First Aid", "Primeros auxilios" }, fishing = { "Fishing", "Pesca" },
 }
