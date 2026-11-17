@@ -13,6 +13,19 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.6] - 2026-11-17
+
+### Para todos
+
+- **Plan en Forever: talentos y Legado**: la ventana Plan ya compara tus talentos y tu Legado con el plan en WoW Forever: cuántos puntos van bien, cuál es el próximo a tocar y cuáles están fuera del plan. En la pestaña Legado, cada ventaja muestra cuántos puntos tenés (con «?» las que no se pudieron leer).
+- Para que cruce bien, copiá otra vez el plan desde la web (o dejá que la app lo baje): los planes nuevos traen lo que hace falta para reconocer cada talento.
+
+### Técnico
+
+- `Plan.lua`: `talentState()` lee los talentos con `GetTalentInfo` (Classic) o, si no existe (Forever, visto con `/rt diag`: build 1.60.1, sin `GetNumTalentTabs`), con `C_ClassTalents.GetActiveConfigID` + `C_Traits` (`GetConfigInfo` → `GetTreeNodes` → `GetNodeInfo.ranksPurchased` → entrada → definición → `spellID`). Cada nodo se cruza con el plan por los hechizos de cada rango (`T;…;hechizos;inglés`, nuevo en la web 0.9.48) o por nombre (español o inglés).
+- Legado: nodos de las configuraciones de `C_Traits.GetConfigIDBySystemID(1..80)` distintas de la de talentos, cruzados por nombre (`L;…;inglés`).
+- `/rt diag` suma los nodos y puntos de talentos y de cada sistema de `C_Traits`, con nombres de muestra.
+
 ## [0.9.5] - 2026-11-17
 
 ### Para todos

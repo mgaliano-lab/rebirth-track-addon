@@ -12,7 +12,7 @@
 -- planeado (el juego todavía no lo muestra a los addons). Nada de esto sale del juego.
 --   RTP1;id;nombre;reino;raza;clase;modalidad;main
 --   P;oficio;nombre · S;oficio;desde;hasta;veces;hechizo;receta · M;oficio;ítem;cantidad;nombre
---   B;rama;nombre · T;rama;fila;columna;rango;máximo;nombre · L;rama;rango;máximo;nombre · N;notas
+--   B;rama;nombre · T;rama;fila;columna;rango;máximo;nombre;hechizos;inglés · L;rama;rango;máximo;nombre;inglés · N;notas
 local ADDON, ns = ...
 ns = ns or {}
 
@@ -26,7 +26,7 @@ local TX = {
     skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "▶ ahora",
     mats = "Materiales de toda la ruta (bolsas + banco)", noRoute = "Sin ruta (se sube recolectando).",
     planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
-    legacyNote = "El juego todavía no le muestra el Legado a los addons: tildalo a mano en el planificador del sitio.",
+    legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
     legend = "|cff40bf40verde|r: listo · |cffff8b3dnaranja|r: a medias · |cffffd100dorado|r: falta · |cffff4040rojo|r: fuera del plan",
     planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.",
@@ -40,7 +40,7 @@ local TX = {
     skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "▶ now",
     mats = "Materials for the whole route (bags + bank)", noRoute = "No route (leveled by gathering).",
     planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
-    legacyNote = "The game doesn't expose Legacy to addons yet: tick it by hand in the site's planner.",
+    legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
     legend = "|cff40bf40green|r: done · |cffff8b3dorange|r: partial · |cffffd100gold|r: to take · |cffff4040red|r: off plan",
     planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.",
@@ -85,6 +85,12 @@ local function fields(line)
   for v in (line .. ";"):gmatch("([^;]*);") do f[#f + 1] = v end
   return f
 end
+-- «123,456» → { 123, 456 } (los hechizos de cada rango; los planes viejos no los traen).
+local function idList(v)
+  local out = {}
+  for x in tostring(v or ""):gmatch("%d+") do out[#out + 1] = tonumber(x) end
+  return out
+end
 local function fromLines(lines)
   local h = fields(lines[1])
   local p = { id = h[2] or "", name = h[3] or "", realm = h[4] or "", race = h[5] or "", cls = h[6] or "", mode = h[7] or "", main = h[8] == "1",
@@ -98,8 +104,8 @@ local function fromLines(lines)
     elseif t == "S" and byKey[f[2]] then table.insert(byKey[f[2]].steps, { from = n(3), to = n(4), crafts = n(5), spell = n(6), name = f[7] or "" })
     elseif t == "M" and byKey[f[2]] then table.insert(byKey[f[2]].mats, { item = n(3), count = n(4), name = f[5] or "" })
     elseif t == "B" then p.trees[n(2) + 1] = f[3] or ""
-    elseif t == "T" then table.insert(p.talents, { tree = n(2), row = n(3), col = n(4), rank = n(5), max = n(6), name = f[7] or "" })
-    elseif t == "L" then table.insert(p.legacy, { tree = f[2] or "", rank = n(3), max = n(4), name = f[5] or "" })
+    elseif t == "T" then table.insert(p.talents, { tree = n(2), row = n(3), col = n(4), rank = n(5), max = n(6), name = f[7] or "", spells = idList(f[8]), en = f[9] or "" })
+    elseif t == "L" then table.insert(p.legacy, { tree = f[2] or "", rank = n(3), max = n(4), name = f[5] or "", en = f[6] or "" })
     elseif t == "N" then p.notes = table.concat(f, " ", 2)
     end
   end
@@ -189,6 +195,97 @@ local function skillOf(key)
 end
 ns._skillOf = skillOf
 
+-- Lo gastado en el juego, como lista de «nodos» { key | spells+name, rank }:
+--  · Classic: GetTalentInfo(rama, i) → clave «rama-fila-columna», la misma del plan.
+--  · WoW Forever: no tiene esa API; usa el sistema nuevo (C_ClassTalents + C_Traits). Ahí no hay filas
+--    ni columnas: cada nodo se cruza con el plan por el hechizo (los ID de cada rango que manda el sitio)
+--    o, en planes viejos, por el nombre.
+local function spellName(id)
+  if not id then return nil end
+  if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
+  return GetSpellInfo and (GetSpellInfo(id)) or nil
+end
+local function traitNodes(configID)
+  local out = {}
+  local T = C_Traits
+  local cfg = configID and T and T.GetConfigInfo and T.GetConfigInfo(configID)
+  if not cfg or not cfg.treeIDs then return out end
+  for _, treeID in ipairs(cfg.treeIDs) do
+    for _, nodeID in ipairs(T.GetTreeNodes(treeID) or {}) do
+      local node = T.GetNodeInfo(configID, nodeID)
+      if node and (node.maxRanks or 0) > 0 then
+        local entryID = (node.activeEntry and node.activeEntry.entryID) or (node.entryIDs and node.entryIDs[1])
+        local entry = entryID and T.GetEntryInfo(configID, entryID)
+        local def = entry and entry.definitionID and T.GetDefinitionInfo(entry.definitionID)
+        local spell = def and def.spellID
+        local name = (def and def.overrideName ~= "" and def.overrideName) or spellName(spell)
+        if spell or name then
+          out[#out + 1] = { spells = { [spell or 0] = true, [def and def.overriddenSpellID or 0] = true }, name = name and name:lower() or nil,
+            rank = node.ranksPurchased or node.currentRank or node.activeRank or 0, max = node.maxRanks, tree = treeID }
+        end
+      end
+    end
+  end
+  return out
+end
+-- Configuraciones de otros sistemas de C_Traits (el Legado de Forever va en uno propio).
+local function systemConfigs()
+  local out, seen = {}, {}
+  local T = C_Traits
+  if not (T and T.GetConfigIDBySystemID) then return out end
+  for sys = 1, 80 do
+    local ok, id = pcall(T.GetConfigIDBySystemID, sys)
+    if ok and id and id ~= 0 and not seen[id] then seen[id] = true; out[#out + 1] = { system = sys, config = id } end
+  end
+  return out
+end
+
+local function talentState()
+  local nodes = {}
+  if GetNumTalentTabs and GetNumTalents and GetTalentInfo then
+    for tab = 1, GetNumTalentTabs() do
+      for i = 1, GetNumTalents(tab) do
+        local name, _, tier, col, rank = GetTalentInfo(tab, i)
+        if name then nodes[#nodes + 1] = { key = (tab - 1) .. "-" .. tier .. "-" .. col, rank = rank or 0 } end
+      end
+    end
+    return { nodes = nodes, classic = true }
+  end
+  local active = C_ClassTalents and C_ClassTalents.GetActiveConfigID and C_ClassTalents.GetActiveConfigID()
+  local ok, list = pcall(traitNodes, active)
+  return { nodes = ok and list or {}, traits = true, config = active }
+end
+-- Los nodos de todos los sistemas (para el Legado), sin repetir la configuración de talentos.
+local function legacyNodes(state)
+  local out = {}
+  for _, c in ipairs(systemConfigs()) do
+    if c.config ~= state.config then
+      local ok, list = pcall(traitNodes, c.config)
+      if ok then for _, n in ipairs(list) do out[#out + 1] = n end end
+    end
+  end
+  return out
+end
+-- El nodo del juego que corresponde a un talento (o punto de Legado) del plan.
+local function nodeFor(nodes, t, key)
+  for _, n in ipairs(nodes) do
+    if key and n.key == key then return n end
+    if not n.key then
+      for _, id in ipairs(t.spells or {}) do if n.spells[id] then return n end end
+    end
+  end
+  -- Por nombre: el del plan (idioma del sitio) o el inglés (el del cliente de Forever en inglés).
+  for _, nm in ipairs({ t.name, t.en }) do
+    local name = nm and nm:lower()
+    if name and name ~= "" then for _, n in ipairs(nodes) do if not n.key and n.name == name then return n end end end
+  end
+  return nil
+end
+local function haveOf(state, t)
+  local n = nodeFor(state.nodes, t, state.classic and (t.tree .. "-" .. t.row .. "-" .. t.col) or nil)
+  return n and n.rank or 0, n
+end
+
 -- /rt diag: qué API de talentos, Legado y profesiones ofrece este cliente (para adaptar el addon a WoW
 -- Forever): las funciones conocidas y todo lo global con «Talent», «Legacy» o «Trait» en el nombre.
 function ns.planDiag()
@@ -214,6 +311,21 @@ function ns.planDiag()
   if GetTalentTabInfo then say("diag · GetTalentTabInfo(1) = " .. try(GetTalentTabInfo, 1)) end
   if C_ClassTalents and C_ClassTalents.GetActiveConfigID then say("diag · C_ClassTalents.GetActiveConfigID() = " .. try(C_ClassTalents.GetActiveConfigID)) end
   if GetProfessions then say("diag · GetProfessions() = " .. try(GetProfessions)) end
+  local st = talentState()
+  local spent = 0
+  for _, n in ipairs(st.nodes) do spent = spent + (n.rank or 0) end
+  say("diag · talentos: " .. (st.classic and "clásicos" or "C_Traits") .. ", " .. #st.nodes .. " nodos, " .. spent .. " puntos")
+  local shown = 0
+  for _, n in ipairs(st.nodes) do
+    if (n.rank or 0) > 0 and shown < 5 then shown = shown + 1; say("diag ·   " .. tostring(n.name) .. " " .. n.rank .. "/" .. tostring(n.max)) end
+  end
+  for _, c in ipairs(systemConfigs()) do
+    local ok, list = pcall(traitNodes, c.config)
+    local cfg = C_Traits.GetConfigInfo and C_Traits.GetConfigInfo(c.config)
+    local pts, sample = 0, {}
+    for _, n in ipairs(ok and list or {}) do pts = pts + (n.rank or 0); if #sample < 3 and n.name then sample[#sample + 1] = n.name end end
+    say("diag · sistema " .. c.system .. ": config " .. c.config .. " «" .. tostring(cfg and cfg.name) .. "» " .. (ok and #list or 0) .. " nodos, " .. pts .. " puntos · " .. table.concat(sample, ", "))
+  end
   local names = {}
   for k, v in pairs(_G) do
     if type(k) == "string" and (k:find("Talent") or k:find("Legacy") or k:find("Trait")) and (type(v) == "function" or (type(v) == "table" and k:match("^C_"))) then names[#names + 1] = k end
@@ -221,17 +333,7 @@ function ns.planDiag()
   table.sort(names)
   for i = 1, #names, 6 do say("diag · " .. table.concat(names, " ", i, math.min(#names, i + 5))) end
 end
-local function talentRanks()
-  local have = {}
-  if not (GetNumTalentTabs and GetNumTalents and GetTalentInfo) then return have end
-  for tab = 1, GetNumTalentTabs() do
-    for i = 1, GetNumTalents(tab) do
-      local name, _, tier, col, rank = GetTalentInfo(tab, i)
-      if name then have[(tab - 1) .. "-" .. tier .. "-" .. col] = rank or 0 end
-    end
-  end
-  return have
-end
+
 -- Las ramas de talentos del juego (de la clase del personaje), para dibujarlas como en la ventana de
 -- talentos: cada talento con su ícono, fila, columna, rango, máximo y requisito.
 local function talentTrees()
@@ -273,20 +375,19 @@ local function progress(p)
     table.insert(vals, math.min(1, (rank or 0) / 300))
   end
   if #p.talents > 0 then
-    local have, planned, matched, spent, next, off = talentRanks(), 0, 0, 0, nil, {}
-    local wanted = {}
+    local state, planned, matched, spent, next, off = talentState(), 0, 0, 0, nil, 0
+    local used = {}
     for _, t in ipairs(p.talents) do
-      local key = t.tree .. "-" .. t.row .. "-" .. t.col
-      wanted[key] = true
-      local h = have[key] or 0
+      local h, n = haveOf(state, t)
+      if n then used[n] = true end
       planned, matched = planned + t.rank, matched + math.min(h, t.rank)
       if not next and h < t.rank then next = { t = t, have = h } end
     end
-    for key, r in pairs(have) do
-      spent = spent + r
-      if r > 0 and not wanted[key] then table.insert(off, key) end
+    for _, n in ipairs(state.nodes) do
+      spent = spent + (n.rank or 0)
+      if (n.rank or 0) > 0 and not used[n] then off = off + 1 end
     end
-    out.tal = { planned = planned, matched = matched, spent = spent, next = next, off = #off }
+    out.tal = { planned = planned, matched = matched, spent = spent, next = next, off = off, state = state }
     if planned > 0 then table.insert(vals, matched / planned) end
   end
   local sum = 0
@@ -352,28 +453,35 @@ local function lines(p)
     end
   elseif tab == "talents" then
     if #p.talents == 0 then add(GRAY .. T("noTalents") .. "|r") else
-      local have = talentRanks()
+      local state = pr.tal.state
       add(T("planned") .. ": " .. pr.tal.planned .. " · " .. T("spent") .. ": " .. pr.tal.spent .. " · ✓ " .. pr.tal.matched)
       if pr.tal.next then add(GOLD .. T("next"):format(pr.tal.next.t.name, pr.tal.next.have, pr.tal.next.t.rank) .. "|r")
       elseif pr.tal.matched >= pr.tal.planned then add(GREEN .. "✓ " .. T("buildDone") .. "|r") end
       if pr.tal.off > 0 then add(ORANGE .. T("off"):format(pr.tal.off) .. "|r") end
       if canDraw(p) then add(T("legend")); return out end
-      if isMine(p) then add(""); add(GRAY .. T("otherClass") .. "|r") end
+      if isMine(p) and GetNumTalentTabs then add(""); add(GRAY .. T("otherClass") .. "|r") end -- en Forever no hay árbol: es la lista y no es de otra clase
       local last
       for _, t in ipairs(p.talents) do
         if t.tree ~= last then add(""); add(GOLD .. (p.trees[t.tree + 1] or ("#" .. t.tree)) .. "|r"); last = t.tree end
-        local h = have[t.tree .. "-" .. t.row .. "-" .. t.col] or 0
+        local h = haveOf(state, t)
         add((h >= t.rank and GREEN or h > 0 and ORANGE or GRAY) .. h .. "/" .. t.rank .. "|r  " .. t.name)
       end
     end
   elseif tab == "legacy" then
     if #p.legacy == 0 then add(GRAY .. T("noLegacy") .. "|r") else
-      local last
+      local nodes, last, found = legacyNodes(talentState()), nil, 0
       for _, l in ipairs(p.legacy) do
         if l.tree ~= last then add(GOLD .. l.tree .. "|r"); last = l.tree end
-        add("  " .. l.rank .. "/" .. l.max .. "  " .. l.name)
+        local n = nodeFor(nodes, l)
+        if n then
+          found = found + 1
+          local h = n.rank or 0
+          add("  " .. (h >= l.rank and GREEN or h > 0 and ORANGE or GRAY) .. h .. "/" .. l.rank .. "|r  " .. l.name)
+        else
+          add("  " .. GRAY .. "?/" .. l.rank .. "|r  " .. l.name)
+        end
       end
-      add(""); add(GRAY .. T("legacyNote") .. "|r")
+      if found == 0 then add(""); add(GRAY .. T("legacyNote") .. "|r") end
     end
   end
   return out
@@ -496,6 +604,7 @@ local function drawTalents(p)
   g:SetSize(3 * TREE_W + 16, math.max(1, height)); g:Show()
   return height
 end
+ns._planTraits = { state = function() return talentState() end, legacy = function(st) return legacyNodes(st) end, nodeFor = function(...) return nodeFor(...) end }
 ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end }
 
 local function refresh()
