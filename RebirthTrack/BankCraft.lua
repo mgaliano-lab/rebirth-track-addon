@@ -4,8 +4,8 @@
 --   · «Venda de lana gruesa [1] (+Banco 3) (4)»: con el bolso hacés 1 y, trayendo lo del banco, 4.
 --   · «(+Parcial Banco)»: el banco tiene parte de lo que falta, pero no alcanza para hacer una más.
 -- Con el mouse encima, qué componentes están en el banco (y cuáles faltan, si es parcial).
--- Solo en las ventanas clásicas (TradeSkillFrame y, en Vanilla, CraftFrame de Encantamiento). En Retail
--- el juego ya cuenta los bancos solo.
+-- En las ventanas clásicas (TradeSkillFrame y, en Vanilla, CraftFrame de Encantamiento) y en la nueva
+-- (ProfessionsFrame), que es la que usa WoW Forever. En Retail no: el juego ya cuenta los bancos solo.
 local ADDON, ns = ...
 ns = ns or {}
 
@@ -154,15 +154,19 @@ local function textWidth(fs)
   return (max > 0 and max < w) and max or w
 end
 
-local function place(btn, res)
+-- text/count: el nombre y el «[n]» de la fila. modern: la ventana nueva, que ajusta el ancho del
+-- nombre en cada fila (no hay que restaurarlo).
+local function place(btn, res, text, count, modern)
   local t = tag(btn)
-  local name = btn:GetName() or ""
-  local text = _G[name .. "Text"] or (btn.GetFontString and btn:GetFontString())
-  local count = _G[name .. "Count"]
-  if text and not text.rtW then text.rtW = text:GetWidth() end
+  if not modern then
+    local name = btn:GetName() or ""
+    text = _G[name .. "Text"] or (btn.GetFontString and btn:GetFontString())
+    count = _G[name .. "Count"]
+    if text and not text.rtW then text.rtW = text:GetWidth() end
+  end
   if not res then
     t.res = nil; t:Hide()
-    if text and text.rtW and text.rtW > 0 then text:SetWidth(text.rtW) end
+    if not modern and text and text.rtW and text.rtW > 0 then text:SetWidth(text.rtW) end
     return
   end
   t.res = res
@@ -170,9 +174,10 @@ local function place(btn, res)
   local lw = (t.text:GetStringWidth() or 0) + 2
   t:SetWidth(lw)
   -- Si no entra en la fila, se achica el nombre (el juego lo corta con «…»).
-  if text and text.rtW and text.rtW > 0 then
+  local cur = text and (modern and text:GetWidth() or text.rtW)
+  if cur and cur > 0 then
     local room = (btn:GetWidth() or 0) - 24 - textWidth(count) - lw
-    text:SetWidth(math.max(60, math.min(text.rtW, room)))
+    if room < cur then text:SetWidth(math.max(60, room)) elseif not modern then text:SetWidth(text.rtW) end
   end
   local after = (count and textWidth(count) > 0) and count or text
   t:ClearAllPoints()
@@ -195,6 +200,88 @@ local function refresh(kind)
   end
 end
 
+-- ── Ventana nueva (Forever y clientes con el motor de Retail) ────────────────────────────
+-- ProfessionsFrame: la lista es un ScrollBox con filas recicladas; cada fila trae su receta en
+-- GetElementData():GetData().recipeInfo, y los componentes salen de C_TradeSkillUI.GetRecipeSchematic.
+local schematics = {}
+local function basicType() return (Enum and Enum.CraftingReagentType and Enum.CraftingReagentType.Basic) or 1 end
+local function bagCount(id)
+  if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id) or 0 end
+  return GetItemCount and GetItemCount(id) or 0
+end
+local function itemName(id)
+  local n = C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(id)
+  return n or (GetItemInfo and GetItemInfo(id)) or ("#" .. id)
+end
+
+local function modernReagents(recipeID, totals)
+  local sch = schematics[recipeID]
+  if sch == nil then
+    sch = C_TradeSkillUI and C_TradeSkillUI.GetRecipeSchematic and C_TradeSkillUI.GetRecipeSchematic(recipeID, false) or false
+    schematics[recipeID] = sch
+  end
+  if not sch or not sch.reagentSlotSchematics then return {} end
+  local out = {}
+  for _, slot in ipairs(sch.reagentSlotSchematics) do
+    if (slot.reagentType == nil or slot.reagentType == basicType()) and (slot.required ~= false) then
+      -- Un hueco puede aceptar varias calidades del mismo componente: cuentan todas juntas.
+      local need, have, bank, first = slot.quantityRequired or 0, 0, 0, nil
+      for _, r in ipairs(slot.reagents or {}) do
+        if r.itemID then first = first or r.itemID; have = have + bagCount(r.itemID); bank = bank + (totals[r.itemID] or 0) end
+      end
+      if first and need > 0 then out[#out + 1] = { id = first, name = itemName(first), need = need, have = have, bank = bank } end
+    end
+  end
+  return out
+end
+
+local function recipeOfRow(row)
+  local ed = row.GetElementData and row:GetElementData()
+  local data = ed and ed.GetData and ed:GetData()
+  local info = data and data.recipeInfo
+  if not info or not info.recipeID or info.learned == false then return nil end
+  return info.recipeID
+end
+
+local function modernList()
+  local pf = _G.ProfessionsFrame
+  local list = pf and pf.CraftingPage and pf.CraftingPage.RecipeList
+  return pf, list and list.ScrollBox
+end
+
+local function refreshModern()
+  local pf, box = modernList()
+  if not pf or not pf:IsShown() or not box or not box.ForEachFrame then return end
+  local totals = bankTotals()
+  box:ForEachFrame(function(row)
+    local id = recipeOfRow(row)
+    local ok, res = false, nil
+    if id and totals then ok, res = pcall(calc, modernReagents(id, totals)) end
+    pcall(place, row, ok and res or nil, row.Label, row.Count, true)
+  end)
+end
+
+-- Las filas se reciclan al bajar por la lista o al buscar: mientras la ventana está abierta se repasa
+-- cada cuarto de segundo (son unas 15 filas, no pesa).
+local ticker = CreateFrame("Frame")
+ticker:Hide()
+local acc = 0
+ticker:SetScript("OnUpdate", function(_, e)
+  acc = acc + (e or 0)
+  if acc < 0.25 then return end
+  acc = 0
+  pcall(refreshModern)
+end)
+local modernHooked = false
+local function hookModern()
+  local pf = _G.ProfessionsFrame
+  if modernHooked or not pf or not pf.HookScript then return end
+  modernHooked = true
+  pf:HookScript("OnShow", function() schematics = {}; acc = 1; ticker:Show() end)
+  pf:HookScript("OnHide", function() ticker:Hide() end)
+  if pf:IsShown() then ticker:Show() end
+end
+
 -- ── Ganchos ──────────────────────────────────────────────────────────────────────────────
 local hooked = {}
 local function hook(kind)
@@ -203,11 +290,13 @@ local function hook(kind)
   hooked[kind] = true
   hooksecurefunc(api.update, function() refresh(kind) end)
 end
-local function hookAll() hook("trade"); hook("craft") end
+local function hookAll() hook("trade"); hook("craft"); hookModern() end
 
 -- Cuando se vuelve a anotar el banco, se actualizan las ventanas abiertas.
-ns.refreshBankCraft = function() refresh("trade"); refresh("craft") end
+ns.refreshBankCraft = function() refresh("trade"); refresh("craft"); pcall(refreshModern) end
 
+local RETAIL = WOW_PROJECT_ID == (WOW_PROJECT_MAINLINE or 1)
+if RETAIL then hookAll = function() end end
 local f = CreateFrame("Frame")
 pcall(f.RegisterEvent, f, "ADDON_LOADED")
 pcall(f.RegisterEvent, f, "PLAYER_LOGIN")
@@ -215,4 +304,4 @@ f:SetScript("OnEvent", function() hookAll() end)
 hookAll()
 
 -- Para las pruebas.
-ns._bankCraft = { calc = calc, label = label, totals = bankTotals, refresh = refresh, hookAll = hookAll }
+ns._bankCraft = { calc = calc, label = label, totals = bankTotals, refresh = refresh, hookAll = hookAll, refreshModern = refreshModern, ticker = ticker }

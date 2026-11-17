@@ -768,7 +768,9 @@ local function createUI()
 
   local title = ui:CreateFontString(nil, "OVERLAY", "GameFontNormal")
   title:SetPoint("TOP", 8, -14)
-  title:SetText("Rebirth Track")
+  -- Con la versión, para saber cuál está cargada en el juego.
+  local ver = addonVersion()
+  title:SetText(ver ~= "" and ("Rebirth Track |cff9d9d9dv" .. ver .. "|r") or "Rebirth Track")
   local logo = ui:CreateTexture(nil, "OVERLAY")
   logo:SetSize(18, 18)
   logo:SetPoint("RIGHT", title, "LEFT", -4, 0)
