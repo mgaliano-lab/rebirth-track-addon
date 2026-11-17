@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.2] - 2026-11-17
+
+### Para todos
+
+- **Plan de Sastrería**: si tu juego en español llama «Costura» a Sastrería, el Plan ya encuentra tu nivel y muestra el avance.
+
+### Técnico
+
+- `Plan.lua`: «Costura» se suma a los nombres de `tailoring` en `PROF_NAMES` (lo que usa `skillOf` para leer el nivel con `GetSkillLineInfo`).
+
 ## [0.9.1] - 2026-11-17
 
 ### Para todos
