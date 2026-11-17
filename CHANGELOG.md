@@ -13,6 +13,20 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.1] - 2026-11-17
+
+### Para todos
+
+- **Plan del personaje › Talentos como en el juego**: las tres ramas una al lado de la otra, con el ícono de cada talento en su lugar y las flechas de los requisitos. En cada talento ves lo que tenés contra lo planeado: verde listo, naranja a medias, dorado falta, rojo fuera del plan. El próximo a tocar se marca en blanco y, al pasar el mouse, aparece la tooltip del juego con lo planeado.
+- Si el plan es de otra clase que el personaje con el que estás, se sigue viendo como lista.
+- La ventana del plan es un poco más ancha para que entren las tres ramas.
+
+### Técnico
+
+- `Plan.lua`: `talentTrees()` lee las ramas con `GetTalentTabInfo`, `GetTalentInfo` (ícono, fila, columna, rango, máximo) y `GetTalentPrereqs`. `drawTalents()` arma con pools de frames las ramas y las celdas de 28 px cada 34 px, y las flechas como texturas en L.
+- El árbol se dibuja solo si la clase del plan es la del personaje (`canDraw`); en cualquier otro caso queda la lista de antes. La ventana pasa de 440×500 a 500×520.
+- Pruebas: dibuja las tres ramas, los estados de cada talento, la flecha del requisito, y vuelve a la lista con otra clase o en otra pestaña.
+
 ## [0.9.0] - 2026-11-16
 
 ### Para todos
