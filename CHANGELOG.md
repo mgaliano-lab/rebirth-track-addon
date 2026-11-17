@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.9.5] - 2026-11-17
+
+### Para todos
+
+- **Plan en Forever: profesiones**: la ventana Plan mostraba todas las profesiones «sin aprender» en WoW Forever, así que no comparaba el avance. Ahora lee tu nivel de cada profesión y marca en qué paso de la ruta estás.
+- **Nuevo /rt diag**: muestra en el chat qué le deja ver el juego al addon de talentos y Legado. Forever no le muestra los talentos a los addons como el Classic de siempre; con lo que diga este comando se arma la comparación de talentos y Legado del Plan.
+
+### Técnico
+
+- `Plan.lua` `skillOf`: si no hay `GetSkillLineInfo` (Forever, motor nuevo), usa `GetProfessions` + `GetProfessionInfo`, por línea de habilidad (171, 164, 333…) o por nombre. Es el mismo respaldo que ya tenía `collectSkills` en `Collect.lua`.
+- `/rt diag` (`ns.planDiag`): proyecto, build, si existen `GetNumTalentTabs`, `GetTalentInfo`, `C_ClassTalents`, `C_Traits`, `C_SpecializationInfo`… con una llamada de muestra, y los globales con «Talent», «Legacy» o «Trait». En producción no hay ningún `t1` de Forever: `collectTalents` nunca pudo leer ahí.
+
 ## [0.9.4] - 2026-11-17
 
 ### Para todos

@@ -835,3 +835,21 @@ do
   ProfessionsFrame.scripts.OnHide(); assert(not C.ticker:IsShown())
   print("recetas con banco (ventana nueva) OK")
 end
+
+-- Plan: en Forever las profesiones salen de GetProfessions (no hay GetSkillLineInfo).
+do
+  local oldN, oldI = GetNumSkillLines, GetSkillLineInfo
+  GetNumSkillLines, GetSkillLineInfo = nil, nil
+  GetProfessions = function() return 1, 2, nil, 3, 4 end
+  GetProfessionInfo = function(i)
+    local t = { { "Encantamiento", 1, 137, 150, 0, 0, 333 }, { "Sastrería", 1, 80, 150, 0, 0, 197 }, { "Pesca", 1, 1, 75, 0, 0, 356 }, { "Cocina", 1, 40, 75, 0, 0, 185 } }
+    return table.unpack(t[i])
+  end
+  local r, m = ns._skillOf("enchanting"); assert(r == 137 and m == 150, "encantamiento por GetProfessions")
+  assert(ns._skillOf("cooking") == 40 and ns._skillOf("fishing") == 1)
+  assert(ns._skillOf("alchemy") == nil)
+  GetNumSkillLines, GetSkillLineInfo = oldN, oldI
+  ns.planDiag()
+  SlashCmdList.REBIRTHTRACK("diag")
+  print("plan con GetProfessions OK")
+end
