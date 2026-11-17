@@ -355,6 +355,36 @@ assert(RebirthTrackDB.plans.ab12, "queda guardado el pegado")
 RebirthTrackPlans = { at = 1, plans = { (PLAN:gsub("ab12", "zz99"):gsub("Z;f4d8b72e", "Z;00000000")) } }
 ns.planRefresh() -- uno de la app con la suma mal no rompe nada
 for _, k in ipairs({ "Profesiones", "Talentos", "Legado", "Resumen" }) do click(k) end
+-- Talentos como árbol: las ramas del juego con lo planeado encima (el plan es de pícaro, como el personaje).
+function GetTalentTabInfo(tab) return ({ "Asesinato", "Combate", "Sutileza" })[tab], "icon" .. tab end
+function GetNumTalents(tab) return tab == 1 and 2 or 1 end
+function GetTalentInfo(tab, i)
+  if tab == 1 and i == 1 then return "Remate mejorado", "ic1", 1, 1, 3, 3 end
+  if tab == 1 and i == 2 then return "Golpes letales", "ic2", 3, 1, 0, 5 end
+  if tab == 3 then return "Otro", "ic3", 1, 1, 1, 5 end
+  return "Precisión", "ic4", 1, 2, 2, 5
+end
+function GetTalentPrereqs(tab, i) if tab == 1 and i == 2 then return 1, 1 end end
+ns.openPlan(PLAN)
+click("Talentos")
+local D2 = ns._planDraw
+assert(D2.canDraw(blocks[1].plan), "mismo pícaro: se dibuja")
+local g = D2.grid()
+assert(g.shown and #g.trees == 3, "tres ramas")
+local c1 = g.trees[1].cells
+assert(c1[1].rank.text == "3/3" and c1[2].rank.text == "", "Remate mejorado listo; Golpes letales sin plan")
+assert(g.trees[2].cells[1].rank.text == "2/5", "Precisión a medias")
+assert(g.trees[3].cells[1].rank.text == "1", "Otro: fuera del plan")
+assert(g.trees[1].lines[1] and g.trees[1].lines[1].shown, "flecha del requisito")
+assert(g.trees[1].title.text:find("Asesinato", 1, true), "nombre de la rama")
+-- Otra clase: queda la lista.
+local realUnitClass = UnitClass
+UnitClass = function() return "Mago", "MAGE" end
+ns.planRefresh()
+assert(not g.shown, "otra clase: sin árbol")
+UnitClass = realUnitClass
+click("Resumen")
+assert(not g.shown, "otra pestaña: sin árbol")
 click("Borrar pegados"); assert(not next(RebirthTrackDB.plans))
 print("plan OK")
 

@@ -28,6 +28,8 @@ local TX = {
     planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
     legacyNote = "El juego todavía no le muestra el Legado a los addons: tildalo a mano en el planificador del sitio.",
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
+    legend = "|cff40bf40verde|r: listo · |cffff8b3dnaranja|r: a medias · |cffffd100dorado|r: falta · |cffff4040rojo|r: fuera del plan",
+    planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.",
   },
   en = {
     title = "Character plan", none = "No plan for this character.", noneHint = "Copy the plan at rebirthknights.fun (Character planner › For the addon) and paste it with «Paste plan». With the app, linked characters arrive on their own.",
@@ -40,6 +42,8 @@ local TX = {
     planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
     legacyNote = "The game doesn't expose Legacy to addons yet: tick it by hand in the site's planner.",
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
+    legend = "|cff40bf40green|r: done · |cffff8b3dorange|r: partial · |cffffd100gold|r: to take · |cffff4040red|r: off plan",
+    planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.",
   },
 }
 local function T(k) local l = ns.lang and ns.lang() or "es"; return (TX[l] or TX.es)[k] or TX.es[k] or k end
@@ -175,6 +179,28 @@ local function talentRanks()
   end
   return have
 end
+-- Las ramas de talentos del juego (de la clase del personaje), para dibujarlas como en la ventana de
+-- talentos: cada talento con su ícono, fila, columna, rango, máximo y requisito.
+local function talentTrees()
+  local out = {}
+  if not (GetNumTalentTabs and GetNumTalents and GetTalentInfo) then return out end
+  for tab = 1, GetNumTalentTabs() do
+    local tname, ticon = GetTalentTabInfo and GetTalentTabInfo(tab)
+    local tree = { tab = tab, name = tname, icon = ticon, talents = {}, rows = 1 }
+    for i = 1, GetNumTalents(tab) do
+      local name, icon, tier, col, rank, max = GetTalentInfo(tab, i)
+      if name and tier and col then
+        local pt, pc
+        if GetTalentPrereqs then pt, pc = GetTalentPrereqs(tab, i) end
+        table.insert(tree.talents, { i = i, name = name, icon = icon, row = tier, col = col, rank = rank or 0, max = max or 1,
+          key = (tab - 1) .. "-" .. tier .. "-" .. col, pre = pt and pc and ((tab - 1) .. "-" .. pt .. "-" .. pc) or nil })
+        if tier > tree.rows then tree.rows = tier end
+      end
+    end
+    table.insert(out, tree)
+  end
+  return out
+end
 local function slug(s) return (tostring(s or ""):lower():gsub("[^%w]", "")) end
 local function isMine(p)
   local me = UnitName("player")
@@ -220,6 +246,15 @@ ns.planProgress = progress
 -- ── Ventana ──────────────────────────────────────────────────────────────────────────────────────
 local GOLD, GREEN, GRAY, ORANGE = "|cffffd100", "|cff40bf40", "|cff9d9d9d", "|cffff8b3d"
 local pw, sel, tab = nil, nil, "summary"
+
+-- El árbol se dibuja con las ramas del juego: solo si el plan es de la clase del personaje con el que
+-- estás (si no, las ramas no son las del plan y queda la lista).
+local function canDraw(p)
+  if #p.talents == 0 or not (GetNumTalentTabs and GetTalentInfo) then return false end
+  if not UnitClass then return false end
+  local _, token = UnitClass("player")
+  return token ~= nil and token:upper() == (p.cls or ""):upper()
+end
 
 local function lines(p)
   local pr, out = progress(p), {}
@@ -269,6 +304,8 @@ local function lines(p)
       if pr.tal.next then add(GOLD .. T("next"):format(pr.tal.next.t.name, pr.tal.next.have, pr.tal.next.t.rank) .. "|r")
       elseif pr.tal.matched >= pr.tal.planned then add(GREEN .. "✓ " .. T("buildDone") .. "|r") end
       if pr.tal.off > 0 then add(ORANGE .. T("off"):format(pr.tal.off) .. "|r") end
+      if canDraw(p) then add(T("legend")); return out end
+      if isMine(p) then add(""); add(GRAY .. T("otherClass") .. "|r") end
       local last
       for _, t in ipairs(p.talents) do
         if t.tree ~= last then add(""); add(GOLD .. (p.trees[t.tree + 1] or ("#" .. t.tree)) .. "|r"); last = t.tree end
@@ -289,6 +326,125 @@ local function lines(p)
   return out
 end
 
+-- ── Árbol de talentos ────────────────────────────────────────────────────────────────────────────
+-- Las tres ramas una al lado de la otra, como la ventana de talentos del juego y la ficha del personaje
+-- del sitio: ícono de cada talento en su fila y columna, flechas de requisitos y, por talento, lo que
+-- tenés contra lo planeado (borde y número del color del estado). Pasando el mouse, la tooltip del juego.
+local CELL, STEP, PADX, HEAD = 28, 34, 5, 20
+local TREE_W = PADX * 2 + 3 * STEP + CELL
+local COLORS = { done = { 0.25, 0.75, 0.25 }, part = { 1, 0.55, 0.24 }, todo = { 1, 0.82, 0 }, off = { 1, 0.25, 0.25 }, none = { 0.3, 0.3, 0.3 } }
+local function cellAt(tree, t) return PADX + (t.col - 1) * STEP, -(HEAD + 4 + (t.row - 1) * STEP) end
+
+local function treeFrame(i)
+  local g = pw.grid
+  g.trees = g.trees or {}
+  local f = g.trees[i]
+  if f then return f end
+  f = CreateFrame("Frame", nil, g, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  if f.SetBackdrop then
+    f:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+      tile = true, tileSize = 16, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+    f:SetBackdropColor(0, 0, 0, 0.55); f:SetBackdropBorderColor(0.45, 0.35, 0.2)
+  end
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); f.title:SetPoint("TOPLEFT", 6, -5); f.title:SetPoint("TOPRIGHT", -6, -5); f.title:SetJustifyH("LEFT")
+  f.cells, f.lines = {}, {}
+  g.trees[i] = f
+  return f
+end
+local function line(f, n)
+  local l = f.lines[n]
+  if not l then l = f:CreateTexture(nil, "ARTWORK"); f.lines[n] = l end
+  l:ClearAllPoints(); l:Show()
+  return l
+end
+local function cell(f, n)
+  local b = f.cells[n]
+  if b then return b end
+  b = CreateFrame("Button", nil, f)
+  b:SetSize(CELL, CELL)
+  b.border = b:CreateTexture(nil, "BACKGROUND"); b.border:SetPoint("TOPLEFT", -2, 2); b.border:SetPoint("BOTTOMRIGHT", 2, -2)
+  b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetAllPoints()
+  b.rank = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.rank:SetPoint("BOTTOMRIGHT", 4, -3)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    if GameTooltip.SetTalent then GameTooltip:SetTalent(self.tab, self.i) else GameTooltip:AddLine(self.tname or "", 1, 1, 1) end
+    if self.want > 0 then GameTooltip:AddLine(T("planRank"):format(self.want, self.max), 1, 0.82, 0)
+    else GameTooltip:AddLine(T("notPlanned"), 0.6, 0.6, 0.6) end
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  f.cells[n] = b
+  return b
+end
+
+local function stateOf(have, want)
+  if want > 0 then return have >= want and "done" or have > 0 and "part" or "todo" end
+  return have > 0 and "off" or "none"
+end
+
+-- Dibuja el árbol debajo del texto; devuelve el alto que ocupa.
+local function drawTalents(p)
+  local g = pw.grid
+  local wanted = {}
+  for _, t in ipairs(p.talents) do wanted[t.tree .. "-" .. t.row .. "-" .. t.col] = t.rank end
+  local pr = progress(p)
+  local nextKey = pr.tal and pr.tal.next and (pr.tal.next.t.tree .. "-" .. pr.tal.next.t.row .. "-" .. pr.tal.next.t.col)
+  local trees, height = talentTrees(), 0
+  for ti, tree in ipairs(trees) do
+    local f = treeFrame(ti)
+    local h = HEAD + 8 + tree.rows * STEP
+    f:ClearAllPoints(); f:SetPoint("TOPLEFT", (ti - 1) * (TREE_W + 8), 0); f:SetSize(TREE_W, h); f:Show()
+    local spent, plan = 0, 0
+    for _, t in ipairs(tree.talents) do spent = spent + t.rank; plan = plan + (wanted[t.key] or 0) end
+    f.title:SetText((tree.name or ("#" .. ti)) .. "  " .. GRAY .. spent .. "/" .. plan .. "|r")
+    local byKey = {}
+    for _, t in ipairs(tree.talents) do byKey[t.key] = t end
+    -- Flechas de requisito (por debajo de los íconos): vertical, o en L desde la fila del requisito.
+    local nl = 0
+    for _, t in ipairs(tree.talents) do
+      local pre = t.pre and byKey[t.pre]
+      if pre then
+        local x1, y1 = cellAt(tree, pre)
+        local x2, y2 = cellAt(tree, t)
+        local on = (wanted[t.key] or 0) > 0 and (wanted[pre.key] or 0) > 0
+        local r, gg, bb = 0.35, 0.35, 0.35
+        if on then r, gg, bb = 1, 0.82, 0 end
+        if x1 ~= x2 then
+          nl = nl + 1
+          local l = line(f, nl); l:SetColorTexture(r, gg, bb, 0.9)
+          l:SetPoint("TOPLEFT", math.min(x1, x2) + CELL / 2, y1 - CELL / 2 + 2); l:SetSize(math.abs(x2 - x1), 4)
+        end
+        if y1 ~= y2 then
+          nl = nl + 1
+          local l = line(f, nl); l:SetColorTexture(r, gg, bb, 0.9)
+          l:SetPoint("TOPLEFT", x2 + CELL / 2 - 2, (x1 ~= x2) and (y1 - CELL / 2) or (y1 - CELL)); l:SetSize(4, math.abs(y2 - y1) - ((x1 ~= x2) and CELL / 2 or CELL))
+        end
+      end
+    end
+    for k = nl + 1, #f.lines do f.lines[k]:Hide() end
+    for n, t in ipairs(tree.talents) do
+      local b = cell(f, n)
+      local want = wanted[t.key] or 0
+      local st = stateOf(t.rank, want)
+      local c = COLORS[st]
+      b.tab, b.i, b.tname, b.want, b.max = tree.tab, t.i, t.name, want, t.max
+      b:ClearAllPoints(); b:SetPoint("TOPLEFT", cellAt(tree, t)); b:Show()
+      b.icon:SetTexture(t.icon)
+      if b.icon.SetDesaturated then b.icon:SetDesaturated(st == "none") end
+      b.icon:SetAlpha(st == "none" and 0.45 or 1)
+      if t.key == nextKey then b.border:SetColorTexture(1, 1, 1, 1) else b.border:SetColorTexture(c[1], c[2], c[3], st == "none" and 0.6 or 1) end
+      b.rank:SetText(want > 0 and (t.rank .. "/" .. want) or (t.rank > 0 and tostring(t.rank) or ""))
+      b.rank:SetTextColor(c[1], c[2], c[3])
+    end
+    for k = #tree.talents + 1, #f.cells do f.cells[k]:Hide() end
+    if h > height then height = h end
+  end
+  for k = #trees + 1, #(g.trees or {}) do g.trees[k]:Hide() end
+  g:SetSize(3 * TREE_W + 16, math.max(1, height)); g:Show()
+  return height
+end
+ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end }
+
 local function refresh()
   if not pw then return end
   local list = allPlans()
@@ -301,13 +457,16 @@ local function refresh()
   pw.pasteBtn:SetText(T("paste")); pw.read:SetText(T("read")); pw.clear:SetText(T("clear")); pw.hint:SetText(T("pasteHint"))
   local p = list[sel or 0]
   pw.body:SetText(p and table.concat(lines(p), "\n") or (T("none") .. "\n\n" .. GRAY .. T("noneHint") .. "|r"))
-  if pw.body.GetStringHeight then pw.child:SetHeight(math.max(1, (pw.body:GetStringHeight() or 0) + 8)) end
+  local textH = pw.body.GetStringHeight and (pw.body:GetStringHeight() or 0) or 0
+  local treeH = 0
+  if p and tab == "talents" and canDraw(p) then treeH = drawTalents(p) + 10 else pw.grid:Hide() end
+  pw.child:SetHeight(math.max(1, textH + 8 + treeH))
 end
 ns.planRefresh = refresh
 
 local function create()
   pw = CreateFrame("Frame", "RebirthTrackPlanFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  pw:SetSize(440, 500); pw:SetPoint("CENTER"); pw:SetFrameStrata("DIALOG")
+  pw:SetSize(500, 520); pw:SetPoint("CENTER"); pw:SetFrameStrata("DIALOG")
   pw:SetMovable(true); pw:EnableMouse(true); pw:RegisterForDrag("LeftButton")
   pw:SetScript("OnDragStart", pw.StartMoving); pw:SetScript("OnDragStop", pw.StopMovingOrSizing)
   if pw.SetBackdrop then pw:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }) end
@@ -327,11 +486,12 @@ local function create()
   end
   pw.scroll = CreateFrame("ScrollFrame", "RebirthTrackPlanScroll", pw, "UIPanelScrollFrameTemplate")
   pw.scroll:SetPoint("TOPLEFT", 16, -66); pw.scroll:SetPoint("BOTTOMRIGHT", -34, 44)
-  pw.child = CreateFrame("Frame", nil, pw.scroll); pw.child:SetSize(380, 1)
+  pw.child = CreateFrame("Frame", nil, pw.scroll); pw.child:SetSize(440, 1)
   pw.scroll:SetScrollChild(pw.child)
   pw.body = pw.child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  pw.body:SetPoint("TOPLEFT", 2, -2); pw.body:SetWidth(376); pw.body:SetJustifyH("LEFT"); pw.body:SetJustifyV("TOP")
+  pw.body:SetPoint("TOPLEFT", 2, -2); pw.body:SetWidth(436); pw.body:SetJustifyH("LEFT"); pw.body:SetJustifyV("TOP")
   if pw.body.SetSpacing then pw.body:SetSpacing(2) end
+  pw.grid = CreateFrame("Frame", nil, pw.child); pw.grid:SetPoint("TOPLEFT", pw.body, "BOTTOMLEFT", 0, -10); pw.grid:Hide()
   -- Pegar: un cuadro de varias líneas (el plan trae una línea por dato).
   pw.paste = CreateFrame("Frame", nil, pw, BackdropTemplateMixin and "BackdropTemplate" or nil)
   pw.paste:SetPoint("TOPLEFT", 12, -62); pw.paste:SetPoint("BOTTOMRIGHT", -12, 40); pw.paste:SetFrameLevel((pw:GetFrameLevel() or 1) + 10); pw.paste:Hide()
@@ -339,7 +499,7 @@ local function create()
   pw.hint = pw.paste:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); pw.hint:SetPoint("TOPLEFT", 6, -6); pw.hint:SetPoint("TOPRIGHT", -6, -6); pw.hint:SetJustifyH("LEFT")
   local ps = CreateFrame("ScrollFrame", "RebirthTrackPlanPasteScroll", pw.paste, "UIPanelScrollFrameTemplate")
   ps:SetPoint("TOPLEFT", 6, -26); ps:SetPoint("BOTTOMRIGHT", -28, 6)
-  pw.edit = CreateFrame("EditBox", nil, ps); pw.edit:SetMultiLine(true); pw.edit:SetAutoFocus(false); pw.edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall); pw.edit:SetWidth(360)
+  pw.edit = CreateFrame("EditBox", nil, ps); pw.edit:SetMultiLine(true); pw.edit:SetAutoFocus(false); pw.edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall); pw.edit:SetWidth(420)
   if pw.edit.SetMaxLetters then pw.edit:SetMaxLetters(0) end
   pw.edit:SetScript("OnEscapePressed", function(e) e:ClearFocus() end)
   ps:SetScrollChild(pw.edit)
