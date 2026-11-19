@@ -3,6 +3,9 @@
 # en el canal de novedades de Discord. También lo sube al CDN de rebirthknights.fun
 # (scripts/release.sh → addon/latest.json), que es de donde la app uploader saca la versión nueva.
 # La versión del tag tiene que coincidir con "## Version:" del .toc.
+# Versión de prueba: el tag vX.Y.Z-pre la sube solo al CDN como addon/beta.json (la baja la app de los
+# admins y el GM) y a un GitHub Release marcado «prerelease»; ni CurseForge ni Discord. Después, el tag
+# vX.Y.Z hace el release de siempre y pasa a latest.json el mismo zip que se probó.
 name: release
 
 on:
@@ -29,7 +32,10 @@ jobs:
         id: v
         run: |
           v=$(sed -n 's/^## Version: *//p' RebirthTrack/RebirthTrack.toc | tr -d '\r')
-          if [[ "$GITHUB_REF_TYPE" == tag && "${GITHUB_REF_NAME#v}" != "$v" ]]; then
+          tag="${GITHUB_REF_NAME#v}"; pre=false
+          if [[ "$GITHUB_REF_TYPE" == tag && "$tag" == *-pre ]]; then tag="${tag%-pre}"; pre=true; fi
+          echo "pre=$pre" >> "$GITHUB_OUTPUT"
+          if [[ "$GITHUB_REF_TYPE" == tag && "$tag" != "$v" ]]; then
             echo "El tag $GITHUB_REF_NAME no coincide con ## Version: $v del .toc" >&2; exit 1
           fi
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then scripts/changelog-check.sh "$v"; else scripts/changelog-check.sh; fi
@@ -42,6 +48,7 @@ jobs:
           zip -qrX "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" RebirthTrack -x '*.DS_Store'
 
       - name: CurseForge
+        if: steps.v.outputs.pre != 'true'
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
         run: scripts/curseforge.sh "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip"
@@ -50,8 +57,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ steps.v.outputs.version }}" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" \
-            --title "Rebirth Track ${{ steps.v.outputs.version }}" --notes-file notes.md
+          if [[ "${{ steps.v.outputs.pre }}" == true ]]; then
+            gh release create "$GITHUB_REF_NAME" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" --prerelease \
+              --title "Rebirth Track ${{ steps.v.outputs.version }} (prueba)" --notes-file notes.md
+          else
+            gh release create "v${{ steps.v.outputs.version }}" "dist/RebirthTrack-${{ steps.v.outputs.version }}.zip" \
+              --title "Rebirth Track ${{ steps.v.outputs.version }}" --notes-file notes.md
+          fi
 
       - name: CDN (app uploader)
         if: github.ref_type == 'tag'
@@ -59,8 +71,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.CDN_AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CDN_AWS_SECRET_ACCESS_KEY }}
           AWS_DEFAULT_REGION: us-east-1
-        run: scripts/release.sh
+        run: scripts/release.sh ${{ steps.v.outputs.pre == 'true' && '--beta' || '' }}
 
       - name: Anunciar en Discord
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' && steps.v.outputs.pre != 'true'
         run: scripts/announce-release.sh addon "${{ steps.v.outputs.version }}"

@@ -119,6 +119,13 @@ instala y actualiza este addon sola.
    Los sube a `ast.rebirthknights.fun/addon/` y actualiza `latest.json`, que es lo que ofrece la
    pantalla de Raids. Una versión ya publicada no se pisa.
 
+**Versión de prueba (antes del release):** pusheá el tag `vX.Y.Z-pre` (misma versión que los `.toc`).
+El workflow corre las pruebas, sube el zip y `addon/beta.json` al CDN y crea un GitHub Release marcado
+«prerelease». No sube a CurseForge ni anuncia en Discord. La app de la PC de los que prueban (admins
+del sitio y quien tenga un personaje Guild Master; lo decide `/api/uploader/config` del sitio) baja esa
+versión; el resto sigue con `latest.json`. Para pasarla a todos, pusheá `vX.Y.Z`: CurseForge, GitHub
+Release y Discord como siempre, y `latest.json` pasa a apuntar al mismo zip que se probó.
+
 ## Pruebas
 
 `lua tests/run.lua` corre el addon con una simulación mínima de la API de WoW (ventana, botones, comandos y que `/rt` quede registrado).
