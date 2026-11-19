@@ -100,7 +100,7 @@ local function textWidth(fs) return (fs and fs.GetStringWidth and fs:GetStringWi
 U.textWidth = textWidth
 
 -- ── Ventana ──────────────────────────────────────────────────────────────────────────────
--- U.window("RebirthTrackXFrame", w, h, título, { strata, point, noClose, onClose })
+-- U.window("RebirthTrackXFrame", w, h, título, { point, noClose, onClose })
 -- Deja .header (franja de 32 px), .title, .close y .top = -33 (donde empieza el contenido).
 local HEADER = 32
 U.HEADER = HEADER
@@ -108,10 +108,15 @@ function U.window(name, w, h, title, opts)
   opts = opts or {}
   local f = CreateFrame("Frame", name, UIParent)
   f:SetSize(w, h)
-  f:SetFrameStrata(opts.strata or "DIALOG")
+  -- Todas las ventanas del addon en la misma capa y «de primer nivel»: la que tocás (o abrís) pasa
+  -- adelante entera, con todo lo de adentro, y las otras quedan detrás sin mezclarse.
+  f:SetFrameStrata("HIGH")
+  if f.SetToplevel then f:SetToplevel(true) end
   f:SetClampedToScreen(true)
   f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", f.StartMoving)
+  f:SetScript("OnDragStart", function(self) if self.Raise then self:Raise() end; self:StartMoving() end)
+  f:SetScript("OnMouseDown", function(self) if self.Raise then self:Raise() end end)
+  if f.HookScript then f:HookScript("OnShow", function(self) if self.Raise then self:Raise() end end) end
   f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); if opts.onMoved then opts.onMoved(self) end end)
   local p = opts.point or { "CENTER", 0, 40 }
   f:SetPoint(p[1], UIParent, p[1], p[2] or 0, p[3] or 0)

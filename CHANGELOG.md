@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.11.2] - 2026-11-19
+
+### Para todos
+
+- Con varias ventanas del addon abiertas ya no se mezclan: la que tocás (o abrís) pasa adelante entera y las demás quedan detrás.
+
+### Técnico
+
+- `UI.lua`: todas las ventanas en la capa `HIGH` con `SetToplevel(true)` y `Raise()` al abrirlas, al hacer clic y al arrastrarlas (antes tenían capas distintas, MEDIUM/HIGH/DIALOG, y el mismo nivel, así que los botones de una se veían sobre la otra). Se ignora `opts.strata`.
+
 ## [0.11.1] - 2026-11-19
 
 ### Para todos
