@@ -17,8 +17,15 @@ anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
 ### Para todos
 
-- «Opciones» en combate ya no da error: avisa en el chat y las abre solas cuando termina el combate.
-- Esc también cierra la ventana principal del addon, como las demás.
+Todo lo nuevo desde la 0.9.6 (las 0.10 y 0.11 se probaron antes con el GM):
+
+- **Interfaz nueva en todas las ventanas**: fondos casi opacos que se leen sobre cualquier escenario, tablas con columnas, íconos de los ítems con el color de su calidad y barras de avance. La ventana que tocás pasa adelante y Esc las cierra a todas.
+- **Ventana principal en mosaicos**: tu personaje y si se está registrando arriba, Mazmorras y Posición como botoncitos, y cada ventana del addon es un mosaico con ícono. «Pedidos» muestra cuántos esperan revisión. Al pasar el mouse por «Registrar» explica qué se registra.
+- **Pedidos de materiales a la guild**: en la ventana de profesión, al lado de cada componente, tildá «Solicitar a la Guild» y elegí la cantidad (propone lo que te falta, descontando bolsas y banco). El GM, los oficiales y los revisores los trasladan a toda la guild desde «Pedidos de la guild» (`/rt pedidos`) o desde la web.
+- Lo que pide la guild aparece en el tooltip del ítem («Requerido por la guild» y quién); **Alt+clic** abre los nombres para copiar, y te avisa al ir a vender o destruir algo que alguien necesita.
+- **Plan del personaje**: los talentos como el árbol del juego y el Legado con sus 3 ramas (Aventura, Ingenio y Oficios).
+- **Banco personal** con buscador que resalta lo que coincide y filtros (Componentes, Equipo, Consumibles, Pedidos).
+- **Opciones** agrupadas, con «Opacidad del fondo» y para apagar los pedidos o lo del banco en las recetas. En combate se abren solas al terminar la pelea.
 
 ### Técnico
 
