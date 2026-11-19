@@ -185,11 +185,17 @@ local function place(btn, res, text, count, modern)
   t:Show()
 end
 
+-- Esc › Opciones › AddOns › Rebirth Track › «Mostrar lo del banco en las recetas» (prendido por defecto).
+local function enabled()
+  local d = ns.db and ns.db()
+  return not (d and d.settings and d.settings.bankCraft == false)
+end
+
 local function refresh(kind)
   local api = API[kind]
   local frame = _G[api.frame]
   if not frame or (frame.IsShown and not frame:IsShown()) then return end
-  local totals = bankTotals()
+  local totals = enabled() and bankTotals() or nil
   for i = 1, 60 do
     local btn = _G[api.prefix .. i]
     if not btn then break end
@@ -252,7 +258,7 @@ end
 local function refreshModern()
   local pf, box = modernList()
   if not pf or not pf:IsShown() or not box or not box.ForEachFrame then return end
-  local totals = bankTotals()
+  local totals = enabled() and bankTotals() or nil
   box:ForEachFrame(function(row)
     local id = recipeOfRow(row)
     local ok, res = false, nil
@@ -302,6 +308,17 @@ pcall(f.RegisterEvent, f, "ADDON_LOADED")
 pcall(f.RegisterEvent, f, "PLAYER_LOGIN")
 f:SetScript("OnEvent", function() hookAll() end)
 hookAll()
+
+-- Lo que pide la receta elegida (para «Solicitar a la Guild», Requests.lua): { id, name, need, have, bank }.
+-- kind = "trade" o "craft" con el índice de la fila, o "modern" con el recipeID. Con el banco
+-- anotado aunque la opción de mostrarlo esté apagada: para pedir solo lo que de verdad falta.
+function ns.recipeReagents(kind, index)
+  local totals = bankTotals() or {}
+  if kind == "modern" then return modernReagents(index, totals) end
+  local api = API[kind]
+  if not api or not index or index <= 0 or api.isHeader(index) then return {} end
+  return reagentsOf(api, index, totals)
+end
 
 -- Para las pruebas.
 ns._bankCraft = { calc = calc, label = label, totals = bankTotals, refresh = refresh, hookAll = hookAll, refreshModern = refreshModern, ticker = ticker }

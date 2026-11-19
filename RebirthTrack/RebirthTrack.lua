@@ -62,6 +62,9 @@ local TEXTS = {
     bPositions = "Posiciones de la guild", tPositions = "Lista de las posiciones que llegaron por el canal (zona, coordenadas y hace cuánto) para ver que se esté sincronizando (/rt posiciones).",
     optPins = "Mostrar a la guild en el mapa del juego", optPinsTip = "Un punto del color de su clase por cada miembro que comparte su posición, en el mapa del mundo (el de Blizzard o el addon de mapa que uses). No reemplaza tu mapa.",
     bBank = "Banco personal", tBank = "Lo que tenés en el banco, sin ir al banco (/rt banco). Se anota cada vez que lo abrís y queda solo en tu PC.",
+    bRequests = "Pedidos de la guild", tRequests = "Materiales que pide la gente de la guild para sus recetas. El GM, los oficiales y los revisores los trasladan a toda la guild (/rt pedidos).",
+    optRequests = "Pedidos de materiales a la guild", optRequestsTip = "«Solicitar a la Guild» en las recetas, los pedidos por el canal de la guild, «Requerido por» en el tooltip de los ítems y los avisos al vender o destruir. Apagado, el addon no muestra ni reenvía pedidos.",
+    optBankCraft = "Mostrar lo del banco en las recetas", optBankCraftTip = "En la ventana de profesión, «(+Banco n) (total)» y «(+Parcial Banco)» al lado de cada receta, con lo que anotó tu banco personal.",
     back = "Volver", tLang = "Cambiar el idioma a inglés (/rt idioma en).",
     mmOpen = "Clic: abrir o cerrar la ventana", mmLink = "Clic derecho: vincular este personaje",
     mmMove = "Arrastrar: moverlo · /rt minimapa: ocultarlo", tResize = "Arrastrar para cambiar el tamaño",
@@ -80,6 +83,7 @@ local TEXTS = {
       "• |cffffffffRegistrar / Detener|r: a mano, si querés registrar fuera de una instancia.",
       "• |cffffffffMazmorras|r: incluir o no las mazmorras (vienen incluidas).",
       "• |cffffffffBanco personal|r: lo que tenés en el banco, sin ir al banco (queda solo en tu PC).",
+      "• |cffffffffPedidos de la guild|r: tildá «Solicitar a la Guild» en una receta para pedir lo que te falta. El GM y los oficiales lo trasladan a la guild y, desde ahí, el tooltip del ítem muestra quién lo necesita (Alt+clic para copiar los nombres).",
       "• |cffffffffPosición|r: compartir o no dónde está tu personaje con la guild, para el mapa del sitio (viene compartida).",
       "• |cffffffffES / EN|r: idioma del addon.",
       "",
@@ -99,6 +103,7 @@ local TEXTS = {
       "/rt invitar · invite (invitador: mensaje de reclutamiento e invitar a la guild)",
       "/rt opciones · options (Esc › Opciones › AddOns)",
       "/rt banco · bank (ventana con lo que tenés en el banco)",
+      "/rt pedidos · requests (pedidos de materiales de la guild)",
       "/rt borrar · reset",
       "/rt minimapa · minimap",
       "/rt idioma · language (es / en)",
@@ -148,6 +153,9 @@ local TEXTS = {
     bPositions = "Guild positions", tPositions = "List of the positions that arrived over the channel (zone, coordinates and how long ago) to check it's syncing (/rt positions).",
     optPins = "Show the guild on the game's map", optPinsTip = "A class-coloured dot for each member sharing their position, on the world map (Blizzard's or whatever map addon you use). It doesn't replace your map.",
     bBank = "Personal bank", tBank = "What's in your bank, without going there (/rt bank). Recorded every time you open it; stays on your PC only.",
+    bRequests = "Guild requests", tRequests = "Materials guild members need for their recipes. The GM, officers and reviewers promote them to the whole guild (/rt requests).",
+    optRequests = "Guild material requests", optRequestsTip = "«Request from the Guild» on recipes, requests over the guild channel, «Needed by» on item tooltips and the warnings when selling or destroying. Off, the addon neither shows nor relays requests.",
+    optBankCraft = "Show bank items on recipes", optBankCraftTip = "In the profession window, «(+Bank n) (total)» and «(+Partial Bank)» next to each recipe, from what your personal bank recorded.",
     back = "Back", tLang = "Switch the language to Spanish (/rt language es).",
     mmOpen = "Click: open or close the window", mmLink = "Right-click: link this character",
     mmMove = "Drag: move it · /rt minimap: hide it", tResize = "Drag to resize",
@@ -166,6 +174,7 @@ local TEXTS = {
       "• |cffffffffRecord / Stop|r: manually, if you want to record outside an instance.",
       "• |cffffffffDungeons|r: include dungeons or not (included by default).",
       "• |cffffffffPersonal bank|r: what's in your bank, without going there (stays on your PC).",
+      "• |cffffffffGuild requests|r: tick «Request from the Guild» on a recipe to ask for what you're missing. The GM and officers promote it to the guild, and from then on the item tooltip shows who needs it (Alt+click to copy the names).",
       "• |cffffffffPosition|r: share where your character is with the guild, for the site's map (shared by default).",
       "• |cffffffffES / EN|r: addon language.",
       "",
@@ -185,6 +194,7 @@ local TEXTS = {
       "/rt invite · invitar (recruiter: recruiting message and guild invite)",
       "/rt options · opciones (Esc › Options › AddOns)",
       "/rt bank · banco (window with what's in your bank)",
+      "/rt requests · pedidos (guild material requests)",
       "/rt reset · borrar",
       "/rt minimap · minimapa",
       "/rt language · idioma (es / en)",
@@ -826,6 +836,7 @@ local function createUI()
   button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
   button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
   button("bBank", "tBank", function() SlashCmdList.REBIRTHTRACK("banco") end)
+  button("bRequests", "tRequests", function() SlashCmdList.REBIRTHTRACK("pedidos") end)
   button("bPositions", "tPositions", function() SlashCmdList.REBIRTHTRACK("posiciones") end)
   button("bRecruit", "tRecruit", function() SlashCmdList.REBIRTHTRACK("invitar") end)
   button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
@@ -986,6 +997,10 @@ local function createOptions()
     function(on) db().settings.dungeons = on; checkZone() end)
   check("optMinimap", "optMinimapTip", function() return ui_db().minimap ~= false end,
     function(on) ui_db().minimap = on; if mm then mm:SetShown(on) end end)
+  check("optRequests", "optRequestsTip", function() return db().settings.requests ~= false end,
+    function(on) db().settings.requests = on end)
+  check("optBankCraft", "optBankCraftTip", function() return db().settings.bankCraft ~= false end,
+    function(on) db().settings.bankCraft = on; if ns.refreshBankCraft then pcall(ns.refreshBankCraft) end end)
 
   local function button(w, onClick)
     local b = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
@@ -1200,6 +1215,7 @@ local COMMANDS = {
   posicion = "position", ["posición"] = "position", position = "position", ubicacion = "position", mapa = "position",
   opciones = "options", options = "options", config = "options",
   banco = "bank", bank = "bank",
+  pedidos = "requests", pedido = "requests", requests = "requests", request = "requests", requeridos = "requests",
   posiciones = "positions", positions = "positions", ubicaciones = "positions",
   invitar = "recruit", invitador = "recruit", reclutar = "recruit", recruit = "recruit", invite = "recruit",
   borrar = "reset", reset = "reset",
@@ -1244,6 +1260,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     if ns.openRecruit then ns.openRecruit() end
   elseif cmd == "bank" then
     if ns.openBank then ns.openBank() end
+  elseif cmd == "requests" then
+    if ns.openRequests then ns.openRequests() end
   elseif cmd == "options" then
     if ns.openOptions then ns.openOptions() end
   elseif cmd == "minimap" then

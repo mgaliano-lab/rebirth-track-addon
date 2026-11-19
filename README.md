@@ -50,6 +50,7 @@ addon **no sube nada** (no puede: los addons de WoW no tienen acceso a internet)
   | `/rt minimapa` · `minimap` | Muestra u oculta el botón del minimapa (clic: ventana · clic derecho: vincular · arrastrar: mover). |
   | `/rt datos` · `data` | Cuenta qué datos del juego hay anotados (personajes, profesiones, eventos) para que la app los suba. Ver el encabezado de `RebirthTrack/Collect.lua`. |
   | `/rt reparto` · `loot` | Reparto de botín por consejo: responder por los ítems del jefe, votar (consejo) y adjudicar (master looter). `agregar [ítem]` suma ítems desde las bolsas; `cerrar` lo cierra. Ver el encabezado de `RebirthTrack/Council.lua`. |
+  | `/rt pedidos` · `requests` | Pedidos de materiales a la guild: «Solicitar a la Guild» × N en la receta, panel con pestañas (Mis pedidos · Pendientes · En la guild · Revisores) donde el GM, los oficiales y los revisores trasladan, cierran o ponen vencimiento; «Requerido por» en el tooltip (Alt+clic copia los nombres) y aviso al vender o destruir. Ver el encabezado de `RebirthTrack/Requests.lua`. |
 
 - El juego escribe lo anotado en
   `WTF/Account/<CUENTA>/SavedVariables/RebirthTrack.lua` **recién al hacer `/reload`, al salir o al
@@ -117,6 +118,13 @@ instala y actualiza este addon sola.
 
    Los sube a `ast.rebirthknights.fun/addon/` y actualiza `latest.json`, que es lo que ofrece la
    pantalla de Raids. Una versión ya publicada no se pisa.
+
+**Versión de prueba (antes del release):** pusheá el tag `vX.Y.Z-pre` (misma versión que los `.toc`).
+El workflow corre las pruebas, sube el zip y `addon/beta.json` al CDN y crea un GitHub Release marcado
+«prerelease». No sube a CurseForge ni anuncia en Discord. La app de la PC de los que prueban (admins
+del sitio y quien tenga un personaje Guild Master; lo decide `/api/uploader/config` del sitio) baja esa
+versión; el resto sigue con `latest.json`. Para pasarla a todos, pusheá `vX.Y.Z`: CurseForge, GitHub
+Release y Discord como siempre, y `latest.json` pasa a apuntar al mismo zip que se probó.
 
 ## Pruebas
 

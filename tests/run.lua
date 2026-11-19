@@ -18,6 +18,7 @@ assert(loadfile("RebirthTrack/Positions.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Recruit.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Requests.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -903,4 +904,210 @@ do
   GetNumTalentTabs, GetNumTalents, GetTalentInfo = saved[1], saved[2], saved[3]
   C_ClassTalents, C_Traits, C_Spell = nil, nil, nil
   print("plan con C_Traits OK")
+end
+
+-- Pedidos de materiales a la guild (Requests.lua).
+do
+  local R = ns._requests
+  local function lastSent(pat) for i = #sentAddon, 1, -1 do local s = sentAddon[i]; if s[1] == "RTK1" and s[2]:match(pat) then return s[2] end end end
+  local function count(t) local n = 0 for _ in pairs(t) do n = n + 1 end return n end
+  RebirthTrackDB.requests = nil
+  RebirthTrackDB.settings.requests = nil
+  C_Item = C_Item or {}
+  C_Item.GetItemNameByID = function(id) return ({ [1001] = "Morning Glory Dew", [1002] = "Mountain Silversage" })[id] end
+
+  -- Ida y vuelta de la línea; la receta se acorta para que entre en un mensaje.
+  local r0 = { id = "abc", who = "Healz", created = 100, at = 110, status = "p", by = "Healz-Nightslayer", expires = 0, recipe = "Sage's Tea",
+    items = { { id = 1001, n = 1 }, { id = 1002, n = 2 } } }
+  local line = R.build(r0)
+  assert(line == "rq1;abc;Healz-Nightslayer;100;110;p;Healz-Nightslayer;0;Sage's Tea;1001:1,1002:2", line)
+  local back = R.parse(line)
+  assert(back.who == "Healz-Nightslayer" and back.items[2].n == 2 and back.recipe == "Sage's Tea")
+  local long = R.build({ id = "x", who = "Nombre Apellido", created = 1792530000, at = 1792530000, status = "p", by = "Nombre Apellido-Nightslayer", expires = 0,
+    recipe = string.rep("Receta larguísima ", 20), items = { { id = 111111, n = 20 }, { id = 222222, n = 20 }, { id = 333333, n = 20 }, { id = 444444, n = 20 }, { id = 555555, n = 20 }, { id = 666666, n = 20 }, { id = 777777, n = 20 }, { id = 888888, n = 20 } } })
+  assert(#("Q;" .. long) <= 255 and R.parse(long), "entra en un mensaje: " .. #long)
+
+  -- Lo que falta × N (con bolsas y banco).
+  local miss = R.missing({ { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 1, bank = 1 }, { id = 1003, need = 1, have = 9, bank = 0 } }, 2)
+  assert(#miss == 2 and miss[1].n == 2 and miss[2].n == 2, "1×2 y 2×2−1−1")
+
+  -- Pedir desde la receta: queda guardado y sale por el canal como «Q;».
+  local mine = R.request("Sage's Tea", { { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 0, bank = 0 } }, 1)
+  assert(mine and mine.status == "p" and mine.who == "Roguebash-Nightslayer" and #mine.items == 2, "pedido propio")
+  assert(lastSent("^Q;rq1;" .. mine.id .. ";Roguebash%-Nightslayer;"), "sale por el canal")
+  assert(R.mineFor("Sage's Tea"), "el checkbox lo ve tildado")
+  -- Cambiar N actualiza el mismo pedido.
+  local again = R.request("Sage's Tea", { { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 0, bank = 0 } }, 3)
+  assert(again.id == mine.id and again.items[2].n == 6, "× 3")
+  assert(R.request("Sage's Tea", { { id = 1001, need = 1, have = 5, bank = 0 } }, 1) == nil, "ya tiene todo: nada que pedir")
+  assert(not R.mineFor("Sage's Tea"), "y se cierra el que había")
+
+  -- De otro miembro, por el canal: lo manda su autor (Q) o un reenvío (W) si el autor podía.
+  local hz = R.build({ id = "hz1", who = "Healz", created = 200, at = 200, status = "p", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1001, n = 1 }, { id = 1002, n = 2 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hz, "GUILD", "Otro-Dreamscythe")
+  assert(not R.store().lines.hz1, "un Q de otro que no es el autor no vale")
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hz, "GUILD", "Healz-Nightslayer")
+  assert(R.store().lines.hz1, "el pedido de Healz entra")
+  -- Healz (rango 3) no puede trasladarlo ni ponerle vencimiento.
+  local up = R.build({ id = "hz1", who = "Healz", created = 200, at = 210, status = "g", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1001, n = 1 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. up, "GUILD", "Healz-Nightslayer")
+  assert(R.parse(R.store().lines.hz1).status == "p", "un miembro no traslada")
+  local exp = R.build({ id = "hz1", who = "Healz", created = 200, at = 211, status = "p", by = "Healz", expires = 999999999999, recipe = "Sage's Tea", items = { { id = 1001, n = 1 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. exp, "GUILD", "Healz-Nightslayer")
+  assert(R.parse(R.store().lines.hz1).expires == 0, "ni le pone vencimiento")
+  -- Lo pendiente: el revisor lo ve; un miembro no.
+  local tabs = R.tabRows("pending")
+  assert(#tabs == 1 and tabs[1].id == "hz1", "pendientes del revisor")
+  assert(#R.forItem(1002) == 1, "el revisor lo ve en el tooltip (pendiente)")
+  local realName = GetUnitName
+  GetUnitName = function() return "Otro-Dreamscythe" end
+  assert(#R.forItem(1002) == 0, "un miembro no ve lo pendiente")
+  GetUnitName = realName
+
+  -- Trasladar (un oficial, rango 1): ahora lo ve toda la guild.
+  local moved = R.setStatus(R.parse(R.store().lines.hz1), "g")
+  assert(moved.status == "g" and moved.by == "Roguebash-Nightslayer", "trasladado")
+  assert(lastSent("^Q;rq1;hz1;Healz%-Nightslayer;%d+;%d+;g;Roguebash%-Nightslayer;"), "el traslado sale por el canal")
+  GetUnitName = function() return "Otro-Dreamscythe" end
+  assert(#R.forItem(1002) == 1 and #R.tabRows("guild") == 1, "ya trasladado, lo ve cualquiera")
+  GetUnitName = realName
+  -- El que pidió cambia la cantidad sin perder el traslado.
+  local qty = R.build({ id = "hz1", who = "Healz", created = 200, at = moved.at + 5, status = "g", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1002, n = 4 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. qty, "GUILD", "Healz-Nightslayer")
+  local now = R.parse(R.store().lines.hz1)
+  assert(now.status == "g" and now.items[1].n == 4, "cantidad nueva, sigue en la guild")
+
+  -- Tooltip: «Requerido por la guild» con los nombres; en el vendedor, el aviso de no venderlo.
+  local tt = { lines = {} }
+  function tt:AddLine(t) self.lines[#self.lines + 1] = t end
+  function tt:Show() end
+  R.addLines(tt, 1002)
+  assert(tt.lines[1] == "Requerido por la guild:" and tt.lines[2]:find("Healz ×4", 1, true), table.concat(tt.lines, " / "))
+  MerchantFrame = CreateFrame("Frame")
+  tt.lines = {}; R.addLines(tt, 1002)
+  assert(tt.lines[3]:find("No lo vendas", 1, true), table.concat(tt.lines, " / "))
+  MerchantFrame = nil
+  tt.lines = {}; R.addLines(tt, 4242)
+  assert(#tt.lines == 0, "ítem que nadie pide: nada")
+
+  -- Vencimiento: nunca → 7 → 14 → 30 → nunca (solo revisores).
+  local e = R.cycleExpiry(now); assert(e.expires == time() + 7 * 86400, "7 días")
+  e = R.cycleExpiry(e); assert(e.expires == time() + 14 * 86400)
+  e = R.cycleExpiry(e); assert(e.expires == time() + 30 * 86400)
+  e = R.cycleExpiry(e); assert(e.expires == 0, "vuelve a nunca")
+
+  -- Avisos al vender (bolsas) y al destruir.
+  C_Container = { GetContainerNumSlots = function(b) return b == 0 and 2 or 0 end, GetContainerItemID = function(b, s) return s == 1 and 1002 or 5 end }
+  local w = R.warnBags()
+  assert(w and w:find("Mountain Silversage (Healz)", 1, true), tostring(w))
+  local dialogText = CreateFrame("Frame"); dialogText:SetText("¿Destruir Mountain Silversage?")
+  function GetCursorInfo() return "item", 1002 end
+  function StaticPopup_FindVisible() return { text = dialogText } end
+  R.onDeletePopup("DELETE_ITEM")
+  assert(dialogText:GetText():find("Alguien de la guild necesita este ítem: Healz", 1, true), dialogText:GetText())
+  C_Container, GetCursorInfo, StaticPopup_FindVisible = nil, nil, nil
+
+  -- Alt+clic: los nombres listos para copiar.
+  assert(R.showCopy(1002), "abre la ventanita")
+  assert(not R.showCopy(4242), "si nadie lo pide, no")
+
+  -- El que pidió lo cierra destildando; un miembro no cierra pedidos ajenos.
+  local otherClose = R.build({ id = "hz1", who = "Healz", created = 200, at = e.at + 5, status = "c", by = "Otro", expires = 0, recipe = "Sage's Tea", items = { { id = 1002, n = 4 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. otherClose, "GUILD", "Otro-Dreamscythe")
+  assert(R.parse(R.store().lines.hz1).status == "g", "Otro no lo cierra")
+  local close = R.build({ id = "hz1", who = "Healz", created = 200, at = e.at + 6, status = "c", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1002, n = 4 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. close, "GUILD", "Healz-Nightslayer")
+  assert(R.parse(R.store().lines.hz1).status == "c" and #R.forItem(1002) == 0, "cerrado: ya no aparece")
+
+  -- Lo del sitio (Plans.lua) entra solo desde el archivo; por el canal, solo si lo reenvía un revisor.
+  local web = "rq1;wb1;Healz-Nightslayer;300;400;g;@web;0;Poción;1001:5"
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. web, "GUILD", "Healz-Nightslayer")
+  assert(not R.store().lines.wb1, "un miembro no puede hacerse pasar por el sitio")
+  RebirthTrackRequests = { at = 400, lines = { anniversary = { web } } }
+  local before = #sentAddon
+  assert(R.loadWeb() == 1 and R.parse(R.store().lines.wb1).status == "g", "lo trasladado en el sitio llega al juego")
+  assert(#sentAddon > before and lastSent("^Q;rq1;wb1;"), "y un revisor lo reenvía a la guild")
+  assert(R.loadWeb() == 0, "dos veces no")
+  RebirthTrackRequests = nil
+
+  -- Al entrar: «R;desde» y se le reenvía lo más nuevo («W;»), que vale si el autor podía.
+  fire("CHAT_MSG_ADDON", "RTK1", "R;0", "GUILD", "Otro-Dreamscythe")
+  assert(lastSent("^W;rq1;"), "reenvía lo que tiene")
+  local relay = R.build({ id = "rl1", who = "Healz", created = 500, at = 500, status = "p", by = "Healz", expires = 0, recipe = "Venda", items = { { id = 2592, n = 3 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "W;" .. relay, "GUILD", "Otro-Dreamscythe")
+  assert(R.store().lines.rl1, "un reenvío del pedido de Healz vale")
+
+  -- Revisores: solo el GM cambia la lista; los que agrega revisan.
+  assert(not R.setReviewers({ "Otro-Dreamscythe" }), "Roguebash (rango 1) no es GM")
+  local realRoster = GetGuildRosterInfo
+  GetGuildRosterInfo = function(i) if i == 3 then return "Otro-Dreamscythe", "Guild Master", 0 end return realRoster(i) end
+  fire("CHAT_MSG_ADDON", "RTK1", "Y;rv1;600;Healz-Nightslayer;Healz-Nightslayer", "GUILD", "Healz-Nightslayer")
+  assert(not R.store().reviewers, "la lista de alguien que no es GM no vale")
+  fire("CHAT_MSG_ADDON", "RTK1", "Y;rv1;600;Otro-Dreamscythe;Healz-Nightslayer", "GUILD", "Otro-Dreamscythe")
+  GetGuildRosterInfo = realRoster
+  assert(R.store().reviewers and R.isReviewer("Healz-Nightslayer"), "Healz ahora revisa")
+
+  -- Ventana con pestañas.
+  ns.openRequests("guild")
+  assert(_G.RebirthTrackRequestsFrame == nil or true)
+  R.refreshWin()
+  ns.openRequests("reviewers")
+  SlashCmdList.REBIRTHTRACK("pedidos")
+
+  -- Apagado desde las opciones: ni tooltip ni canal ni ventana.
+  RebirthTrackDB.settings.requests = false
+  local n = count(R.store().lines)
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. R.build({ id = "off1", who = "Healz", created = 700, at = 700, status = "p", by = "Healz", expires = 0, recipe = "X", items = { { id = 1, n = 1 } } }), "GUILD", "Healz-Nightslayer")
+  assert(count(R.store().lines) == n, "apagado no recibe")
+  tt.lines = {}; R.addLines(tt, 2592); assert(#tt.lines == 0, "apagado no muestra")
+  RebirthTrackDB.settings.requests = nil
+
+  -- Se olvidan los cerrados hace más de 30 días.
+  R.store().lines.old = "rq1;old;Healz-Nightslayer;1;2;c;Healz-Nightslayer;0;Vieja;1:1"
+  R.prune()
+  assert(not R.store().lines.old and R.store().lines.rl1, "limpia lo viejo")
+  print("pedidos a la guild OK")
+end
+
+-- Opción «Mostrar lo del banco en las recetas»: apagada, no hay etiquetas.
+do
+  local C = ns._bankCraft
+  RebirthTrackBank = { v = 2, at = time(), containers = { { id = 6, slots = 2, items = { { id = 2592, n = 6 } } } } }
+  TradeSkillFrame = CreateFrame("Frame")
+  TradeSkillSkill1 = CreateFrame("Button"); TradeSkillSkill1.GetID = function() return 3 end; TradeSkillSkill1.GetName = function() return "TradeSkillSkill1" end
+  function GetTradeSkillInfo() return "Venda de lana gruesa", "medium", 1 end
+  function GetTradeSkillNumReagents() return 1 end
+  function GetTradeSkillReagentInfo() return "Paño de lana", "tex", 2, 2 end
+  function GetTradeSkillReagentItemLink() return "|cffffffff|Hitem:2592::::::::|h[Paño de lana]|h|r" end
+  C.refresh("trade")
+  assert(TradeSkillSkill1.rtBank:IsShown(), "prendida por defecto")
+  RebirthTrackDB.settings.bankCraft = false
+  C.refresh("trade")
+  assert(not TradeSkillSkill1.rtBank:IsShown(), "apagada: sin etiqueta")
+  RebirthTrackDB.settings.bankCraft = nil
+  -- Lo que pide la receta elegida, para «Solicitar a la Guild».
+  local rs = ns.recipeReagents("trade", 3)
+  assert(#rs == 1 and rs[1].id == 2592 and rs[1].need == 2 and rs[1].bank == 6, "componentes con el banco")
+  -- El checkbox «Solicitar a la Guild» al lado de «Componentes:» de la receta elegida.
+  local R = ns._requests
+  ProfessionsFrame = nil
+  TradeSkillReagentLabel = CreateFrame("Frame")
+  function GetTradeSkillSelectionIndex() return 3 end
+  function GetTradeSkillReagentInfo() return "Paño de lana", "tex", 2, 0 end
+  local box = R.box()
+  box.update()
+  assert(box:IsShown() and box.label:GetText() == "Solicitar a la Guild", "se ve en la receta")
+  box.n:SetText("5")
+  box.check.GetChecked = function() return true end
+  box.check.scripts.OnClick(box.check)
+  local mine = R.mineFor("Venda de lana gruesa")
+  assert(mine and mine.items[1].id == 2592 and mine.items[1].n == 2 * 5 - 6, "pide lo que falta × 5 (descuenta el banco)")
+  box.check.GetChecked = function() return false end
+  box.check.scripts.OnClick(box.check)
+  assert(not R.mineFor("Venda de lana gruesa"), "destildar lo cierra")
+  RebirthTrackDB.settings.requests = false
+  box.update(); assert(not box:IsShown(), "apagado: sin checkbox")
+  RebirthTrackDB.settings.requests = nil
+  RebirthTrackBank = nil
+  print("opción banco en recetas OK")
 end
