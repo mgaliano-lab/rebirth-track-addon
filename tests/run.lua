@@ -545,6 +545,16 @@ click("Posición")
 assert(RebirthTrackDB.settings.sharePos == false, "el botón de la ventana la apaga")
 rt("posicion on")
 rt("opciones") -- sin panel de opciones en este cliente: no falla
+do -- en combate no abre (el panel del juego es protegido): avisa y espera a que termine
+  local opened, combat = 0, true
+  local oldIC, oldS = InCombatLockdown, Settings
+  InCombatLockdown = function() return combat end
+  rt("opciones")
+  combat = false
+  fire("PLAYER_REGEN_ENABLED")
+  InCombatLockdown, Settings = oldIC, oldS
+  print("opciones en combate OK")
+end
 print("posición OK")
 
 -- Banco personal: se anota al abrir el banco, por personaje (RebirthTrackBank) y NUNCA en

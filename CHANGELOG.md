@@ -13,6 +13,16 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.11.3] - 2026-11-19
+
+### Para todos
+
+- «Opciones» en combate ya no da error: avisa en el chat y las abre solas cuando termina el combate.
+
+### Técnico
+
+- `ns.openOptions()`: con `InCombatLockdown()` no llama a `Settings.OpenToCategory` (es protegida: `ADDON_ACTION_BLOCKED` con `OpenSettingsPanel()`); espera `PLAYER_REGEN_ENABLED` y reintenta. Texto `optCombat` (es/en).
+
 ## [0.11.2] - 2026-11-19
 
 ### Para todos

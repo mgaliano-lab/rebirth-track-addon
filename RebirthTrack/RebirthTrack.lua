@@ -79,7 +79,7 @@ local TEXTS = {
     dungeonsSay = "mazmorras %s.", included = "INCLUIDAS", excluded = "excluidas",
     mmSay = "botón del minimapa %s.", visible = "visible", hidden = "oculto (/rt minimapa para mostrarlo)",
     resetSay = "sesiones borradas.", unknown = "no conozco «%s». Probá /rt ayuda (o /rt help).",
-    langSay = "idioma: español.",
+    langSay = "idioma: español.", optCombat = "en combate no se pueden abrir las opciones: se abren solas al terminar el combate.",
     dataSay = "datos anotados: %d personajes tuyos, %d de la guild (recibidos por el canal del addon), %d profesiones y %d eventos. La app los sube cuando el juego guarda (/reload o al salir).",
     help = {
       "|cffe3a42cQué hace|r",
@@ -178,7 +178,7 @@ local TEXTS = {
     dungeonsSay = "dungeons %s.", included = "INCLUDED", excluded = "excluded",
     mmSay = "minimap button %s.", visible = "visible", hidden = "hidden (/rt minimap to show it)",
     resetSay = "sessions cleared.", unknown = "unknown command «%s». Try /rt help (or /rt ayuda).",
-    langSay = "language: English.",
+    langSay = "language: English.", optCombat = "options can't open during combat: they'll open by themselves when combat ends.",
     dataSay = "recorded data: %d of your characters, %d from the guild (received over the addon channel), %d professions and %d events. The app uploads them when the game saves (/reload or logout).",
     help = {
       "|cffe3a42cWhat it does|r",
@@ -1117,8 +1117,23 @@ local function createOptions()
   refreshOptions()
 end
 
+-- El panel de opciones del juego es protegido: en combate no se puede abrir (ADDON_ACTION_BLOCKED).
+-- Se avisa y se abre solo al salir de combate.
+local optionsWaiting
 function ns.openOptions()
   createOptions()
+  if InCombatLockdown and InCombatLockdown() then
+    if not optionsWaiting then
+      optionsWaiting = CreateFrame("Frame")
+      optionsWaiting:SetScript("OnEvent", function(self)
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        ns.openOptions()
+      end)
+    end
+    optionsWaiting:RegisterEvent("PLAYER_REGEN_ENABLED")
+    say(L("optCombat"))
+    return
+  end
   if optionsCategory and Settings and Settings.OpenToCategory then
     Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
   elseif InterfaceOptionsFrame_OpenToCategory then
