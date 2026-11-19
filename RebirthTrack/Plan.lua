@@ -30,6 +30,12 @@ local TX = {
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
     legend = "|cff40bf40verde|r: listo · |cffff8b3dnaranja|r: a medias · |cffffd100dorado|r: falta · |cffff4040rojo|r: fuera del plan",
     planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.",
+    ofPlan = "del plan", nextShort = "próximo: %s (%d→%d)", byTree = "Talentos por rama", seeTree = "Ver el árbol ›",
+    matsReady = "%d de %d listos", spentOf = "/ %d · %d gastados", lgCard = "/ 16 · plan %d",
+    lgTotal = "/ 16 puntos repartidos · plan %d", lgTree = "%s en la rama · plan %d", lgNext = "Próximo: %s %d → %d", lgDone = "Legado completo.",
+    gate = "%d en rama", lgRank = "rango %s/%d", lgGateTip = "Pide %d puntos en la rama.", lgReqTip = "Pide: %s", nextTip = "El próximo a tocar.",
+    lgOther = "Otros del plan", lgDoneL = "listo", lgPart = "a medias", lgTodo = "falta", lgOff = "fuera del plan", lgNextL = "el próximo",
+    lgNone = "no está en el plan", lgReserved = "reservado (Blizzard la suma después)", lgGateL = "«5 en rama»: puntos que pide la rama",
   },
   en = {
     title = "Character plan", none = "No plan for this character.", noneHint = "Copy the plan at rebirthknights.fun (Character planner › For the addon) and paste it with «Paste plan». With the app, linked characters arrive on their own.",
@@ -44,6 +50,12 @@ local TX = {
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
     legend = "|cff40bf40green|r: done · |cffff8b3dorange|r: partial · |cffffd100gold|r: to take · |cffff4040red|r: off plan",
     planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.",
+    ofPlan = "of the plan", nextShort = "next: %s (%d→%d)", byTree = "Talents by tree", seeTree = "See the tree ›",
+    matsReady = "%d of %d ready", spentOf = "/ %d · %d spent", lgCard = "/ 16 · plan %d",
+    lgTotal = "/ 16 points spent · plan %d", lgTree = "%s in the tree · plan %d", lgNext = "Next: %s %d → %d", lgDone = "Legacy done.",
+    gate = "%d in tree", lgRank = "rank %s/%d", lgGateTip = "Needs %d points in the tree.", lgReqTip = "Requires: %s", nextTip = "Next to take.",
+    lgOther = "Others in the plan", lgDoneL = "done", lgPart = "partial", lgTodo = "to take", lgOff = "off plan", lgNextL = "next",
+    lgNone = "not in the plan", lgReserved = "reserved (Blizzard adds it later)", lgGateL = "«5 in tree»: points the tree needs",
   },
 }
 local function T(k) local l = ns.lang and ns.lang() or "es"; return (TX[l] or TX.es)[k] or TX.es[k] or k end
@@ -397,9 +409,41 @@ local function progress(p)
 end
 ns.planProgress = progress
 
+
 -- ── Ventana ──────────────────────────────────────────────────────────────────────────────────────
-local GOLD, GREEN, GRAY, ORANGE = "|cffffd100", "|cff40bf40", "|cff9d9d9d", "|cffff8b3d"
+-- Con el kit «Obsidiana» (UI.lua): franja de título con ‹ › para pasar de plan, cabecera del personaje
+-- (nombre en el color de su clase, raza · clase · de dónde vino y el % del plan), pestañas planas y,
+-- abajo, Pegar plan / Leer / Borrar pegados.
+local GOLD, GREEN, GRAY, ORANGE, RED, WHITE_C = "|cfff2c14e", "|cff5fd49b", "|cff8a909d", "|cfff0b64f", "|cffff7a7e", "|cffffffff"
+local WHITE = "Interface\\Buttons\\WHITE8x8"
+local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local W, H, HERO_H = 720, 640, 60
+local CW = W - 44 -- ancho del contenido (lo que deja la barra del scroll)
+local BLUE, PURPLE, BOARD, DARK = { 0.290, 0.639, 0.941 }, { 0.773, 0.545, 1 }, { 0.059, 0.071, 0.094 }, { 0.039, 0.047, 0.063 }
+local CELLBG = { 0.102, 0.114, 0.141 }
+-- Estados (borde, texto del rango): como el sitio.
+local ST = {
+  done = { { 0.298, 0.765, 0.541 }, { 0.373, 0.831, 0.608 } }, part = { { 0.941, 0.714, 0.310 }, { 0.941, 0.714, 0.310 } },
+  todo = { { 0.788, 0.588, 0.180 }, { 0.788, 0.588, 0.180 } }, off = { { 0.898, 0.282, 0.302 }, { 1, 0.478, 0.494 } },
+  none = { { 0.180, 0.200, 0.239 }, { 0.420, 0.443, 0.490 } }, next = { { 1, 1, 1 }, { 1, 1, 1 } },
+}
 local pw, sel, tab = nil, nil, "summary"
+local function lang() return ns.lang and ns.lang() or "es" end
+local function tw(fs) return (fs and fs.GetStringWidth and fs:GetStringWidth()) or 0 end
+local function th(fs) return (fs and fs.GetStringHeight and fs:GetStringHeight()) or 0 end
+local function nowrap(fs) if fs.SetWordWrap then fs:SetWordWrap(false) end return fs end
+-- Textura lisa con subnivel (para apilar borde, fondo e ícono) y, si `round`, redonda.
+local function ltex(frame, layer, sub, c, a, round)
+  local t = frame:CreateTexture(nil, layer, nil, sub)
+  t:SetTexture(WHITE)
+  if round and t.SetMask then pcall(t.SetMask, t, MASK) end
+  if c and t.SetVertexColor then t:SetVertexColor(c[1], c[2], c[3], a or 1) end
+  return t
+end
+local function tint(t, c, a) if t and t.SetVertexColor then t:SetVertexColor(c[1], c[2], c[3], a or 1) end end
+local function color(fs, c) if fs and fs.SetTextColor then fs:SetTextColor(c[1], c[2], c[3]) end end
+local function pool(list, i, make) local x = list[i]; if not x then x = make(); list[i] = x end; x:Show(); return x end
+local function hideFrom(list, n) for k = n, #list do list[k]:Hide() end end
 
 -- El árbol se dibuja con las ramas del juego: solo si el plan es de la clase del personaje con el que
 -- estás (si no, las ramas no son las del plan y queda la lista).
@@ -410,79 +454,46 @@ local function canDraw(p)
   return token ~= nil and token:upper() == (p.cls or ""):upper()
 end
 
-local function lines(p)
-  local pr, out = progress(p), {}
+local function stateOf(have, want)
+  if want > 0 then return have >= want and "done" or have > 0 and "part" or "todo" end
+  return have > 0 and "off" or "none"
+end
+
+-- Texto de la pestaña Profesiones (la ruta paso a paso y los materiales).
+local function profLines(pr)
+  local out = {}
   local add = function(s) out[#out + 1] = s end
-  local cls = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[p.cls:upper()]) or p.cls
-  local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[p.cls:upper()]
-  add((color and ("|c" .. (color.colorStr or "ffffffff")) or GOLD) .. p.name .. "|r  " .. GRAY .. p.race .. " · " .. cls .. (p.main and (" · ★ " .. T("main")) or "") .. " · " .. T(p.source == "app" and "fromApp" or "pasted") .. "|r")
-  if not isMine(p) then add(ORANGE .. T("other"):format(p.name .. (p.realm ~= "" and ("-" .. p.realm) or "")) .. "|r") end
-  add("")
-  if tab == "summary" then
-    add(GOLD .. T("total") .. ": " .. pr.pct .. "%|r")
-    add(T("level") .. ": " .. pr.level .. "/60")
-    for _, x in ipairs(pr.profs) do
-      local s = x.rank and (x.rank .. "/" .. (x.max or 300)) or (GRAY .. T("notLearned") .. "|r")
-      local st = x.step and x.prof.steps[x.step]
-      add(x.prof.name .. ": " .. s .. (st and (GRAY .. " · " .. st.name .. " ×" .. st.crafts .. "|r") or ""))
+  for _, x in ipairs(pr.profs) do
+    add(GOLD .. x.prof.name .. "|r  " .. T("skill") .. ": " .. (x.rank and (x.rank .. "/" .. (x.max or 300)) or T("notLearned")))
+    if #x.prof.steps == 0 then add(GRAY .. T("noRoute") .. "|r")
+    elseif not x.step and x.rank then add(GREEN .. "✓ " .. T("done") .. "|r")
+    else add(GRAY .. T("step"):format(x.step or 1, #x.prof.steps) .. "|r") end
+    for i, s in ipairs(x.prof.steps) do
+      local mark = i == x.step and (GOLD .. T("now") .. " ") or ((x.step and i < x.step or (not x.step and x.rank)) and GREEN .. "✓ " or GRAY .. "  ")
+      add(mark .. s.from .. "→" .. s.to .. "  " .. s.name .. " ×" .. s.crafts .. "|r")
     end
-    if pr.tal then
-      add(T("tTalents") .. ": " .. pr.tal.matched .. "/" .. pr.tal.planned)
-      if pr.tal.next then add(GRAY .. T("next"):format(pr.tal.next.t.name, pr.tal.next.have, pr.tal.next.t.rank) .. "|r") end
-    end
-    if #p.legacy > 0 then add(T("tLegacy") .. ": " .. #p.legacy) end
-    if p.notes ~= "" then add(""); add(GOLD .. T("notes") .. "|r: " .. p.notes) end
-  elseif tab == "prof" then
-    for _, x in ipairs(pr.profs) do
-      add(GOLD .. x.prof.name .. "|r  " .. T("skill") .. ": " .. (x.rank and (x.rank .. "/" .. (x.max or 300)) or T("notLearned")))
-      if #x.prof.steps == 0 then add(GRAY .. T("noRoute") .. "|r")
-      elseif not x.step and x.rank then add(GREEN .. "✓ " .. T("done") .. "|r")
-      else add(GRAY .. T("step"):format(x.step or 1, #x.prof.steps) .. "|r") end
-      for i, s in ipairs(x.prof.steps) do
-        local mark = i == x.step and (GOLD .. T("now") .. " ") or ((x.step and i < x.step or (not x.step and x.rank)) and GREEN .. "✓ " or GRAY .. "  ")
-        add(mark .. s.from .. "→" .. s.to .. "  " .. s.name .. " ×" .. s.crafts .. "|r")
-      end
-      if #x.prof.mats > 0 then
-        add(""); add(GRAY .. T("mats") .. "|r")
-        for _, m in ipairs(x.prof.mats) do
-          local have = GetItemCount and GetItemCount(m.item, true) or 0
-          add((have >= m.count and GREEN or ORANGE) .. have .. "/" .. m.count .. "|r  " .. m.name)
-        end
-      end
-      add("")
-    end
-  elseif tab == "talents" then
-    if #p.talents == 0 then add(GRAY .. T("noTalents") .. "|r") else
-      local state = pr.tal.state
-      add(T("planned") .. ": " .. pr.tal.planned .. " · " .. T("spent") .. ": " .. pr.tal.spent .. " · ✓ " .. pr.tal.matched)
-      if pr.tal.next then add(GOLD .. T("next"):format(pr.tal.next.t.name, pr.tal.next.have, pr.tal.next.t.rank) .. "|r")
-      elseif pr.tal.matched >= pr.tal.planned then add(GREEN .. "✓ " .. T("buildDone") .. "|r") end
-      if pr.tal.off > 0 then add(ORANGE .. T("off"):format(pr.tal.off) .. "|r") end
-      if canDraw(p) then add(T("legend")); return out end
-      if isMine(p) and GetNumTalentTabs then add(""); add(GRAY .. T("otherClass") .. "|r") end -- en Forever no hay árbol: es la lista y no es de otra clase
-      local last
-      for _, t in ipairs(p.talents) do
-        if t.tree ~= last then add(""); add(GOLD .. (p.trees[t.tree + 1] or ("#" .. t.tree)) .. "|r"); last = t.tree end
-        local h = haveOf(state, t)
-        add((h >= t.rank and GREEN or h > 0 and ORANGE or GRAY) .. h .. "/" .. t.rank .. "|r  " .. t.name)
+    if #x.prof.mats > 0 then
+      add(""); add(GRAY .. T("mats") .. "|r")
+      for _, m in ipairs(x.prof.mats) do
+        local have = GetItemCount and GetItemCount(m.item, true) or 0
+        add((have >= m.count and GREEN or RED) .. have .. "/" .. m.count .. "|r  " .. m.name)
       end
     end
-  elseif tab == "legacy" then
-    if #p.legacy == 0 then add(GRAY .. T("noLegacy") .. "|r") else
-      local nodes, last, found = legacyNodes(talentState()), nil, 0
-      for _, l in ipairs(p.legacy) do
-        if l.tree ~= last then add(GOLD .. l.tree .. "|r"); last = l.tree end
-        local n = nodeFor(nodes, l)
-        if n then
-          found = found + 1
-          local h = n.rank or 0
-          add("  " .. (h >= l.rank and GREEN or h > 0 and ORANGE or GRAY) .. h .. "/" .. l.rank .. "|r  " .. l.name)
-        else
-          add("  " .. GRAY .. "?/" .. l.rank .. "|r  " .. l.name)
-        end
-      end
-      if found == 0 then add(""); add(GRAY .. T("legacyNote") .. "|r") end
-    end
+    add("")
+  end
+  return out
+end
+
+-- Talentos como lista (WoW Forever, o plan de otra clase).
+local function talentLines(p, pr)
+  local out = {}
+  local add = function(s) out[#out + 1] = s end
+  if isMine(p) and GetNumTalentTabs then add(GRAY .. T("otherClass") .. "|r") end -- en Forever no hay árbol: es la lista y no es de otra clase
+  local last
+  for _, t in ipairs(p.talents) do
+    if t.tree ~= last then add(""); add(GOLD .. (p.trees[t.tree + 1] or ("#" .. t.tree)) .. "|r"); last = t.tree end
+    local h = haveOf(pr.tal.state, t)
+    add((h >= t.rank and GREEN or h > 0 and ORANGE or GRAY) .. h .. "/" .. t.rank .. "|r  " .. t.name)
   end
   return out
 end
@@ -491,46 +502,70 @@ end
 -- Las tres ramas una al lado de la otra, como la ventana de talentos del juego y la ficha del personaje
 -- del sitio: ícono de cada talento en su fila y columna, flechas de requisitos y, por talento, lo que
 -- tenés contra lo planeado (borde y número del color del estado). Pasando el mouse, la tooltip del juego.
-local CELL, STEP, PADX, HEAD = 28, 34, 5, 20
+local CELL, STEP, PADX, HEAD, PADY, GAP = 32, 44, 18, 30, 12, 12
 local TREE_W = PADX * 2 + 3 * STEP + CELL
-local COLORS = { done = { 0.25, 0.75, 0.25 }, part = { 1, 0.55, 0.24 }, todo = { 1, 0.82, 0 }, off = { 1, 0.25, 0.25 }, none = { 0.3, 0.3, 0.3 } }
-local function cellAt(tree, t) return PADX + (t.col - 1) * STEP, -(HEAD + 4 + (t.row - 1) * STEP) end
+local function cellAt(t) return PADX + (t.col - 1) * STEP, -(HEAD + PADY + (t.row - 1) * STEP) end
+
+-- Panel plano de una rama: cabecera (emblema, nombre, gastado/planeado) y el tablero.
+local function treePanel(parent, w)
+  local U, C = ns.ui, ns.ui.C
+  local f = CreateFrame("Frame", nil, parent)
+  f:SetWidth(w)
+  U.fill(f, BOARD, 1); U.edge(f, C.line, 1)
+  f.head = CreateFrame("Frame", nil, f)
+  f.head:SetPoint("TOPLEFT", 1, -1); f.head:SetPoint("TOPRIGHT", -1, -1)
+  U.fill(f.head, C.strip, 1)
+  f.headLine = U.tex(f.head, "ARTWORK", C.line); f.headLine:SetHeight(1)
+  f.headLine:SetPoint("BOTTOMLEFT", 0, 0); f.headLine:SetPoint("BOTTOMRIGHT", 0, 0)
+  f.cells, f.lines, f.tiers = {}, {}, {}
+  return f
+end
 
 local function treeFrame(i)
   local g = pw.grid
   g.trees = g.trees or {}
   local f = g.trees[i]
   if f then return f end
-  f = CreateFrame("Frame", nil, g, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  if f.SetBackdrop then
-    f:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      tile = true, tileSize = 16, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    f:SetBackdropColor(0, 0, 0, 0.55); f:SetBackdropBorderColor(0.45, 0.35, 0.2)
-  end
-  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); f.title:SetPoint("TOPLEFT", 6, -5); f.title:SetPoint("TOPRIGHT", -6, -5); f.title:SetJustifyH("LEFT")
-  f.cells, f.lines = {}, {}
+  local C = ns.ui.C
+  f = treePanel(g, TREE_W)
+  f.head:SetHeight(HEAD - 1)
+  f.emb = ltex(f.head, "ARTWORK", 1, nil, nil, true); f.emb:SetSize(18, 18); f.emb:SetPoint("LEFT", 8, 0)
+  f.count = ns.ui.font(f.head, "GameFontHighlightSmall", C.muted, "RIGHT"); f.count:SetPoint("RIGHT", -8, 0)
+  f.title = nowrap(ns.ui.font(f.head, "GameFontNormalSmall", C.text, "LEFT")); f.title:SetPoint("LEFT", f.emb, "RIGHT", 6, 0)
+  f.title:SetWidth(TREE_W - 90)
   g.trees[i] = f
   return f
 end
 local function line(f, n)
   local l = f.lines[n]
-  if not l then l = f:CreateTexture(nil, "ARTWORK"); f.lines[n] = l end
+  if not l then l = ltex(f, "ARTWORK", 2, ns.ui.C.btnLine); f.lines[n] = l end
   l:ClearAllPoints(); l:Show()
   return l
 end
 local function cell(f, n)
   local b = f.cells[n]
   if b then return b end
+  local C = ns.ui.C
   b = CreateFrame("Button", nil, f)
   b:SetSize(CELL, CELL)
-  b.border = b:CreateTexture(nil, "BACKGROUND"); b.border:SetPoint("TOPLEFT", -2, 2); b.border:SetPoint("BOTTOMRIGHT", 2, -2)
-  b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetAllPoints()
-  b.rank = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.rank:SetPoint("BOTTOMRIGHT", 4, -3)
+  b.glow = ltex(b, "BACKGROUND", -8, { 1, 1, 1 }, 0.3); b.glow:SetPoint("TOPLEFT", -3, 3); b.glow:SetPoint("BOTTOMRIGHT", 3, -3)
+  b.border = ltex(b, "BACKGROUND", 1, ST.none[1]); b.border:SetAllPoints()
+  b.inner = ltex(b, "BORDER", 1, { 0, 0, 0 }); b.inner:SetPoint("TOPLEFT", 2, -2); b.inner:SetPoint("BOTTOMRIGHT", -2, 2)
+  b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetPoint("TOPLEFT", 3, -3); b.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+  if b.icon.SetTexCoord then b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+  -- El rango en una pastilla redonda en la esquina.
+  b.badge = CreateFrame("Frame", nil, b)
+  b.badge:SetSize(26, 14); b.badge:SetPoint("CENTER", b, "BOTTOMRIGHT", -3, 1)
+  if b.badge.SetFrameLevel then b.badge:SetFrameLevel((b:GetFrameLevel() or 1) + 2) end
+  b.badge.o = ltex(b.badge, "ARTWORK", 1, C.btnLine, 1, true); b.badge.o:SetAllPoints()
+  b.badge.i = ltex(b.badge, "ARTWORK", 2, DARK, 1, true); b.badge.i:SetPoint("TOPLEFT", 1, -1); b.badge.i:SetPoint("BOTTOMRIGHT", -1, 1)
+  b.rank = b.badge:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.rank:SetPoint("CENTER", 0, 0)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if GameTooltip.SetTalent then GameTooltip:SetTalent(self.tab, self.i) else GameTooltip:AddLine(self.tname or "", 1, 1, 1) end
-    if self.want > 0 then GameTooltip:AddLine(T("planRank"):format(self.want, self.max), 1, 0.82, 0)
-    else GameTooltip:AddLine(T("notPlanned"), 0.6, 0.6, 0.6) end
+    if self.want > 0 then GameTooltip:AddLine(T("planRank"):format(self.want, self.max), 0.95, 0.76, 0.31)
+    else GameTooltip:AddLine(T("notPlanned"), 0.54, 0.56, 0.62) end
+    if self.isNext then GameTooltip:AddLine(T("nextTip"), 1, 1, 1) end
     GameTooltip:Show()
   end)
   b:SetScript("OnLeave", function() GameTooltip:Hide() end)
@@ -538,47 +573,53 @@ local function cell(f, n)
   return b
 end
 
-local function stateOf(have, want)
-  if want > 0 then return have >= want and "done" or have > 0 and "part" or "todo" end
-  return have > 0 and "off" or "none"
-end
-
--- Dibuja el árbol debajo del texto; devuelve el alto que ocupa.
+-- Dibuja las tres ramas en pw.grid; devuelve el alto que ocupan.
 local function drawTalents(p)
   local g = pw.grid
+  local C = ns.ui.C
   local wanted = {}
   for _, t in ipairs(p.talents) do wanted[t.tree .. "-" .. t.row .. "-" .. t.col] = t.rank end
   local pr = progress(p)
   local nextKey = pr.tal and pr.tal.next and (pr.tal.next.t.tree .. "-" .. pr.tal.next.t.row .. "-" .. pr.tal.next.t.col)
   local trees, height = talentTrees(), 0
+  local x0 = math.max(0, math.floor((CW - (3 * TREE_W + 2 * GAP)) / 2))
   for ti, tree in ipairs(trees) do
     local f = treeFrame(ti)
-    local h = HEAD + 8 + tree.rows * STEP
-    f:ClearAllPoints(); f:SetPoint("TOPLEFT", (ti - 1) * (TREE_W + 8), 0); f:SetSize(TREE_W, h); f:Show()
+    local h = HEAD + PADY * 2 + (tree.rows - 1) * STEP + CELL + 6
+    f:ClearAllPoints(); f:SetPoint("TOPLEFT", x0 + (ti - 1) * (TREE_W + GAP), 0); f:SetHeight(h); f:Show()
     local spent, plan = 0, 0
     for _, t in ipairs(tree.talents) do spent = spent + t.rank; plan = plan + (wanted[t.key] or 0) end
-    f.title:SetText((tree.name or ("#" .. ti)) .. "  " .. GRAY .. spent .. "/" .. plan .. "|r")
+    f.title:SetText(tree.name or ("#" .. ti))
+    f.count:SetText(((plan > 0 and spent >= plan) and GREEN or ORANGE) .. spent .. "|r " .. GRAY .. "/ " .. plan .. "|r")
+    if tree.icon then f.emb:SetTexture(tree.icon); tint(f.emb, { 1, 1, 1 }) else f.emb:SetTexture(WHITE); tint(f.emb, C.line) end
+    -- Una línea tenue por fila.
+    for r = 1, tree.rows do
+      local tl = f.tiers[r]
+      if not tl then tl = ltex(f, "BORDER", 1, { 0.102, 0.118, 0.153 }); tl:SetHeight(1); f.tiers[r] = tl end
+      tl:ClearAllPoints(); tl:SetPoint("TOPLEFT", 1, -(HEAD + PADY + (r - 1) * STEP + CELL / 2)); tl:SetPoint("TOPRIGHT", -1, -(HEAD + PADY + (r - 1) * STEP + CELL / 2)); tl:Show()
+    end
+    for k = tree.rows + 1, #f.tiers do f.tiers[k]:Hide() end
     local byKey = {}
     for _, t in ipairs(tree.talents) do byKey[t.key] = t end
-    -- Flechas de requisito (por debajo de los íconos): vertical, o en L desde la fila del requisito.
+    -- Flechas de requisito (por debajo de los íconos): vertical, o en L desde la fila del requisito;
+    -- doradas si las dos puntas están en el plan.
     local nl = 0
     for _, t in ipairs(tree.talents) do
       local pre = t.pre and byKey[t.pre]
       if pre then
-        local x1, y1 = cellAt(tree, pre)
-        local x2, y2 = cellAt(tree, t)
+        local x1, y1 = cellAt(pre)
+        local x2, y2 = cellAt(t)
         local on = (wanted[t.key] or 0) > 0 and (wanted[pre.key] or 0) > 0
-        local r, gg, bb = 0.35, 0.35, 0.35
-        if on then r, gg, bb = 1, 0.82, 0 end
+        local c = on and C.action or C.btnLine
         if x1 ~= x2 then
           nl = nl + 1
-          local l = line(f, nl); l:SetColorTexture(r, gg, bb, 0.9)
-          l:SetPoint("TOPLEFT", math.min(x1, x2) + CELL / 2, y1 - CELL / 2 + 2); l:SetSize(math.abs(x2 - x1), 4)
+          local l = line(f, nl); tint(l, c)
+          l:SetPoint("TOPLEFT", math.min(x1, x2) + CELL / 2, y1 - CELL / 2 + 1); l:SetSize(math.abs(x2 - x1) + 1, 3)
         end
         if y1 ~= y2 then
           nl = nl + 1
-          local l = line(f, nl); l:SetColorTexture(r, gg, bb, 0.9)
-          l:SetPoint("TOPLEFT", x2 + CELL / 2 - 2, (x1 ~= x2) and (y1 - CELL / 2) or (y1 - CELL)); l:SetSize(4, math.abs(y2 - y1) - ((x1 ~= x2) and CELL / 2 or CELL))
+          local l = line(f, nl); tint(l, c)
+          l:SetPoint("TOPLEFT", x2 + CELL / 2 - 1, (x1 ~= x2) and (y1 - CELL / 2) or (y1 - CELL)); l:SetSize(3, math.max(1, math.abs(y2 - y1) - ((x1 ~= x2) and CELL / 2 or CELL)))
         end
       end
     end
@@ -587,25 +628,528 @@ local function drawTalents(p)
       local b = cell(f, n)
       local want = wanted[t.key] or 0
       local st = stateOf(t.rank, want)
-      local c = COLORS[st]
-      b.tab, b.i, b.tname, b.want, b.max = tree.tab, t.i, t.name, want, t.max
-      b:ClearAllPoints(); b:SetPoint("TOPLEFT", cellAt(tree, t)); b:Show()
+      local isNext = t.key == nextKey
+      b.tab, b.i, b.tname, b.want, b.max, b.isNext = tree.tab, t.i, t.name, want, t.max, isNext
+      b:ClearAllPoints(); b:SetPoint("TOPLEFT", cellAt(t)); b:Show()
       b.icon:SetTexture(t.icon)
       if b.icon.SetDesaturated then b.icon:SetDesaturated(st == "none") end
-      b.icon:SetAlpha(st == "none" and 0.45 or 1)
-      if t.key == nextKey then b.border:SetColorTexture(1, 1, 1, 1) else b.border:SetColorTexture(c[1], c[2], c[3], st == "none" and 0.6 or 1) end
-      b.rank:SetText(want > 0 and (t.rank .. "/" .. want) or (t.rank > 0 and tostring(t.rank) or ""))
-      b.rank:SetTextColor(c[1], c[2], c[3])
+      b.icon:SetAlpha(st == "none" and 0.4 or (t.rank > 0 and 1 or 0.7))
+      tint(b.border, ST[isNext and "next" or st][1])
+      b.glow:SetShown(isNext)
+      local rank = want > 0 and (t.rank .. "/" .. want) or (t.rank > 0 and tostring(t.rank) or "")
+      b.rank:SetText(rank)
+      color(b.rank, ST[st][2])
+      b.badge:SetShown(rank ~= "")
     end
     for k = #tree.talents + 1, #f.cells do f.cells[k]:Hide() end
     if h > height then height = h end
   end
   for k = #trees + 1, #(g.trees or {}) do g.trees[k]:Hide() end
-  g:SetSize(3 * TREE_W + 16, math.max(1, height)); g:Show()
+  g:SetSize(CW, math.max(1, height)); g:Show()
   return height
 end
+
+-- ── Legado ───────────────────────────────────────────────────────────────────────────────────────
+-- Las tres verticales del Legado (la cuenta, no el personaje) con la misma disposición que el sitio:
+-- 4×4 por rama, puntos que pide la rama («5 en rama»), requisitos y los casilleros reservados que
+-- Blizzard todavía no llenó. El plan no trae filas ni columnas: van acá, por el nombre inglés.
+local function P(en, row, col, max, gate, req) return { en = en, row = row, col = col, max = max, gate = gate, req = req } end
+local function R(row, col) return { row = row, col = col, reserved = true } end
+local LEGACY = {
+  { es = "Aventura", en = "Adventure", color = { 0.290, 0.639, 0.941 }, glyph = { 0.227, 0.431, 0.659 }, perks = {
+    P("High Alert", 1, 2, 2, 5), P("Well Rested", 2, 1, 5), P("Talented", 2, 2, 5, 5, "Well Rested"), R(2, 3), R(2, 4),
+    P("Thrill of Adventure", 3, 1, 5), P("Field Guide", 3, 2, 3, 5), P("Frequent Flier", 3, 3, 1, 10, "Field Guide"), P("Field Medicine", 4, 2, 2, 5) } },
+  { es = "Ingenio", en = "Resourcefulness", color = { 0.298, 0.765, 0.541 }, glyph = { 0.180, 0.420, 0.290 }, perks = {
+    P("For Great Honor", 1, 2, 5, 5), P("Gourmand", 2, 1, 3), P("Permanence", 2, 2, 2, 5, "Gourmand"), R(2, 3), R(2, 4),
+    P("The Quick and the Dead", 3, 1, 2), P("Reagent Economy", 3, 3, 1, 10, "The Quick and the Dead"), P("Reinforce", 4, 1, 5), P("Diplomat", 4, 2, 5, 5) } },
+  { es = "Oficios", en = "Professions", color = { 0.773, 0.545, 1 }, glyph = { 0.486, 0.357, 0.722 }, perks = {
+    P("Master Chef", 1, 2, 5, 5), P("Working Overtime", 2, 1, 5), P("Bartering", 2, 2, 2, 5), P("Dedicated Study", 2, 3, 1, 10, "Bartering"),
+    P("Bountiful Harvest", 3, 1, 5), P("Performance Bonus", 3, 2, 3, 5, "Bountiful Harvest"), R(3, 3), R(3, 4), P("Luremaster", 4, 2, 2, 5) } },
+}
+local LCELL, LSX, LSY, LPADX, LPADY, LHEAD = 36, 50, 60, 14, 18, 58
+local LTREE_W = LPADX * 2 + 3 * LSX + LCELL
+local LTREE_H = LHEAD + LPADY + 3 * LSY + LCELL + 16
+local function lcellAt(pk) return LPADX + (pk.col - 1) * LSX, -(LHEAD + LPADY + (pk.row - 1) * LSY) end
+
+-- El plan de Legado contra el juego, en la disposición de arriba. Lo del plan que no está en la tabla
+-- (planes viejos sin nombre inglés) queda en `extra`.
+local function legacyInfo(p)
+  local nodes = legacyNodes(talentState())
+  local byName = {}
+  for _, l in ipairs(p.legacy) do
+    for _, k in ipairs({ l.en, l.name }) do if k and k ~= "" and not byName[k:lower()] then byName[k:lower()] = l end end
+  end
+  local info = { trees = {}, spent = 0, planned = 0, matched = 0, found = 0, extra = {} }
+  local used, cellOf = {}, {}
+  for ti, def in ipairs(LEGACY) do
+    local tr = { def = def, cells = {}, spent = 0, planned = 0, byEn = {} }
+    for _, pk in ipairs(def.perks) do
+      local c = { pk = pk, want = 0 }
+      if not pk.reserved then
+        local l = byName[pk.en:lower()]
+        if l and not used[l] then used[l] = true; cellOf[l] = c; c.plan = l; c.want = l.rank or 0 end
+        local n = nodeFor(nodes, { name = (l and l.name ~= "" and l.name) or pk.en, en = pk.en })
+        c.have = n and (n.rank or 0) or nil
+        c.name = (l and l.name ~= "" and l.name) or pk.en
+        if n then info.found = info.found + 1; tr.spent = tr.spent + c.have end
+        tr.planned = tr.planned + c.want
+        info.matched = info.matched + math.min(c.have or 0, c.want)
+        tr.byEn[pk.en] = c
+      end
+      tr.cells[#tr.cells + 1] = c
+    end
+    info.spent, info.planned = info.spent + tr.spent, info.planned + tr.planned
+    info.trees[ti] = tr
+  end
+  for _, l in ipairs(p.legacy) do
+    if not used[l] then
+      local n = nodeFor(nodes, l)
+      if n then info.found = info.found + 1 end
+      info.planned = info.planned + (l.rank or 0)
+      info.matched = info.matched + math.min(n and n.rank or 0, l.rank or 0)
+      info.extra[#info.extra + 1] = { l = l, have = n and (n.rank or 0) or nil }
+    end
+  end
+  for _, l in ipairs(p.legacy) do
+    local c = cellOf[l]
+    if c and (c.have or 0) < c.want then info.next = c; break end
+  end
+  return info
+end
+
+local function legacyTree(i)
+  local g = pw.lgrid
+  local f = g.trees[i]
+  if f then return f end
+  local U, C = ns.ui, ns.ui.C
+  local def = LEGACY[i]
+  f = treePanel(g, LTREE_W)
+  f:SetHeight(LTREE_H)
+  f.head:SetHeight(LHEAD - 1)
+  f.emb = ltex(f.head, "ARTWORK", 1, def.color, 1, true); f.emb:SetSize(18, 18); f.emb:SetPoint("TOP", 0, -7)
+  f.title = U.font(f.head, "GameFontNormal", C.gold, "CENTER"); f.title:SetPoint("TOP", 0, -27)
+  f.count = U.font(f.head, "GameFontHighlightSmall", C.muted, "CENTER"); f.count:SetPoint("TOP", 0, -42)
+  -- Requisitos: flecha horizontal de la ventaja que se pide a la que la pide (siempre en la misma fila).
+  local byEn = {}
+  for _, pk in ipairs(def.perks) do if pk.en then byEn[pk.en] = pk end end
+  for _, pk in ipairs(def.perks) do
+    local req = pk.req and byEn[pk.req]
+    if req then
+      local x1, y1 = lcellAt(req)
+      local x2 = lcellAt(pk)
+      local l = ltex(f, "ARTWORK", 2, C.btnLine)
+      l:SetPoint("TOPLEFT", x1 + LCELL, y1 - LCELL / 2 + 1); l:SetSize(math.max(1, x2 - x1 - LCELL), 3)
+      f.lines[#f.lines + 1] = { tex = l, from = req.en, to = pk.en }
+    end
+  end
+  for n, pk in ipairs(def.perks) do
+    local b = CreateFrame("Button", nil, f)
+    b:SetSize(LCELL, LCELL)
+    b:SetPoint("TOPLEFT", lcellAt(pk))
+    b.pk, b.def = pk, def
+    b.glow = ltex(b, "BACKGROUND", -8, { 1, 1, 1 }, 0.3, true); b.glow:SetPoint("TOPLEFT", -4, 4); b.glow:SetPoint("BOTTOMRIGHT", 4, -4)
+    b.ring = ltex(b, "BORDER", 1, ST.none[1], 1, true); b.ring:SetAllPoints()
+    b.inner = ltex(b, "BORDER", 2, CELLBG, 1, true); b.inner:SetPoint("TOPLEFT", 2, -2); b.inner:SetPoint("BOTTOMRIGHT", -2, 2)
+    b.gl = ltex(b, "ARTWORK", 1, def.glyph, 1, true); b.gl:SetPoint("TOPLEFT", 6, -6); b.gl:SetPoint("BOTTOMRIGHT", -6, 6)
+    b.icon = b:CreateTexture(nil, "ARTWORK", nil, 2); b.icon:SetPoint("TOPLEFT", 5, -5); b.icon:SetPoint("BOTTOMRIGHT", -5, 5)
+    if b.icon.SetMask then pcall(b.icon.SetMask, b.icon, MASK) end
+    b.icon:Hide()
+    if pk.gate then
+      b.gate = nowrap(U.font(b, "GameFontHighlightSmall", C.muted, "CENTER")); b.gate:SetPoint("BOTTOM", b, "TOP", 0, 1)
+      local font = b.gate.GetFont and b.gate:GetFont() -- más chico: dos vecinos con «5 en rama» y «10 en rama» no se pisan
+      if font then b.gate:SetFont(font, 8, "") end
+    end
+    if not pk.reserved then
+      b.badge = CreateFrame("Frame", nil, b)
+      b.badge:SetSize(28, 14); b.badge:SetPoint("CENTER", b, "BOTTOM", 0, -1)
+      if b.badge.SetFrameLevel then b.badge:SetFrameLevel((b:GetFrameLevel() or 1) + 2) end
+      b.badge.o = ltex(b.badge, "ARTWORK", 1, C.btnLine, 1, true); b.badge.o:SetAllPoints()
+      b.badge.i = ltex(b.badge, "ARTWORK", 2, DARK, 1, true); b.badge.i:SetPoint("TOPLEFT", 1, -1); b.badge.i:SetPoint("BOTTOMRIGHT", -1, 1)
+      b.rank = b.badge:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.rank:SetPoint("CENTER", 0, 0)
+    else
+      tint(b.ring, C.btnLine, 0.6); tint(b.inner, BOARD); b.gl:Hide(); b.glow:Hide()
+    end
+    b:SetScript("OnEnter", function(self)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      local tname = lang() == "en" and self.def.en or self.def.es
+      if self.pk.reserved then GameTooltip:AddLine(T("lgReserved"), 0.54, 0.56, 0.62); GameTooltip:Show(); return end
+      local c = self.c or {}
+      GameTooltip:AddLine(c.name or self.pk.en, 1, 1, 1)
+      GameTooltip:AddLine(tname .. " · " .. T("lgRank"):format(c.have and tostring(c.have) or "?", self.pk.max), 0.54, 0.56, 0.62)
+      if self.pk.gate then GameTooltip:AddLine(T("lgGateTip"):format(self.pk.gate), 0.54, 0.56, 0.62) end
+      if self.pk.req then GameTooltip:AddLine(T("lgReqTip"):format(self.reqName or self.pk.req), 0.54, 0.56, 0.62) end
+      if (c.want or 0) > 0 then GameTooltip:AddLine(T("planRank"):format(c.want, self.pk.max), 0.95, 0.76, 0.31)
+      else GameTooltip:AddLine(T("notPlanned"), 0.54, 0.56, 0.62) end
+      if self.isNext then GameTooltip:AddLine(T("nextTip"), 1, 1, 1) end
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    f.cells[n] = b
+  end
+  g.trees[i] = f
+  return f
+end
+
+local function spellIcon(n)
+  for id in pairs(n and n.spells or {}) do
+    if id ~= 0 then
+      local t = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)) or (GetSpellTexture and GetSpellTexture(id))
+      if t then return t end
+    end
+  end
+  return nil
+end
+
+-- Dibuja las tres verticales en pw.lgrid; devuelve el alto.
+local function drawLegacyTrees(info)
+  local g = pw.lgrid
+  local C = ns.ui.C
+  local x0 = math.max(0, math.floor((CW - (3 * LTREE_W + 2 * GAP)) / 2))
+  local nextC = info.next
+  for ti, tr in ipairs(info.trees) do
+    local f = legacyTree(ti)
+    f:ClearAllPoints(); f:SetPoint("TOPLEFT", x0 + (ti - 1) * (LTREE_W + GAP), 0); f:Show()
+    f.title:SetText(lang() == "en" and tr.def.en or tr.def.es)
+    local spent = info.found > 0 and tostring(tr.spent) or "?"
+    f.count:SetText(T("lgTree"):format(((tr.planned > 0 and tr.spent >= tr.planned) and GREEN or ORANGE) .. spent .. "|r", tr.planned))
+    for _, l in ipairs(f.lines) do
+      local a, b = tr.byEn[l.from], tr.byEn[l.to]
+      tint(l.tex, (a and b and a.want > 0 and b.want > 0) and C.action or C.btnLine)
+    end
+    for n, c in ipairs(tr.cells) do
+      local b = f.cells[n]
+      b.c = c
+      if b.gate then b.gate:SetText(T("gate"):format(c.pk.gate)) end
+      if not c.pk.reserved then
+        local isNext = c == nextC
+        local st = stateOf(c.have or 0, c.want)
+        b.isNext = isNext
+        b.reqName = c.pk.req and tr.byEn[c.pk.req] and tr.byEn[c.pk.req].name or nil
+        tint(b.ring, ST[isNext and "next" or st][1])
+        b.glow:SetShown(isNext)
+        b.gl:SetAlpha(st == "none" and 0.25 or ((c.have or 0) > 0 and 1 or 0.5))
+        local icon = c.have and spellIcon(c.node)
+        if icon then b.icon:SetTexture(icon); b.icon:Show(); b.icon:SetAlpha(st == "none" and 0.35 or 1) else b.icon:Hide() end
+        b.rank:SetText((c.have and tostring(c.have) or "?") .. "/" .. (c.want > 0 and c.want or c.pk.max))
+        color(b.rank, ST[st][2])
+      end
+    end
+  end
+  g:SetSize(CW, LTREE_H); g:Show()
+  return LTREE_H
+end
+
+-- ── Piezas de la ventana ─────────────────────────────────────────────────────────────────────────
+local function newCard(parent)
+  local U, C = ns.ui, ns.ui.C
+  local f = CreateFrame("Frame", nil, parent)
+  U.fill(f, C.sub, 1); U.edge(f, C.line, 1)
+  f.lbl = U.label(f, ""); f.lbl:SetPoint("TOPLEFT", 10, -9)
+  return f
+end
+local function setLbl(fs, text) fs:SetText((text or ""):upper()) end
+
+-- Tarjeta con un número grande, el detalle al lado y una barra.
+local function statCard(parent, w)
+  local U, C = ns.ui, ns.ui.C
+  local f = newCard(parent); f:SetSize(w, 66)
+  f.w = w
+  f.big = U.font(f, "GameFontNormalLarge", C.text, "LEFT"); f.big:SetPoint("TOPLEFT", 10, -24)
+  f.small = nowrap(U.font(f, "GameFontHighlightSmall", C.muted, "LEFT")); f.small:SetPoint("LEFT", f.big, "RIGHT", 5, 0)
+  f.bar = U.bar(f, w - 20, 8); f.bar:SetPoint("BOTTOMLEFT", 10, 10)
+  function f.Set(self, big, small, frac, c)
+    self.big:SetText(tostring(big or ""))
+    self.small:SetText(small or "")
+    self.small:SetWidth(math.max(20, self.w - 25 - tw(self.big)))
+    self.bar:SetValue(frac or 0, c)
+  end
+  return f
+end
+
+-- Fila nombre · barra · valor.
+local BAR_NAME, BAR_VAL = 110, 80
+local function barRow(parent)
+  local U, C = ns.ui, ns.ui.C
+  local r = CreateFrame("Frame", nil, parent); r:SetHeight(18)
+  r.name = nowrap(U.font(r, "GameFontHighlightSmall", C.text, "LEFT")); r.name:SetPoint("LEFT", 0, 0); r.name:SetWidth(BAR_NAME)
+  r.val = nowrap(U.font(r, "GameFontHighlightSmall", C.muted, "RIGHT")); r.val:SetPoint("RIGHT", 0, 0); r.val:SetWidth(BAR_VAL)
+  r.bar = U.bar(r, CW - 20 - BAR_NAME - BAR_VAL - 16, 8); r.bar:SetPoint("LEFT", BAR_NAME + 8, 0)
+  return r
+end
+
+-- Franja de arriba de Talentos y Legado: número grande, detalle, barra, el próximo y (a la derecha) lo de fuera del plan.
+local function strip(parent)
+  local U, C = ns.ui, ns.ui.C
+  local f = CreateFrame("Frame", nil, parent); f:SetSize(CW, 34)
+  U.fill(f, C.sub, 1); U.edge(f, C.line, 1)
+  f.big = U.font(f, "GameFontNormalLarge", C.text, "LEFT"); f.big:SetPoint("LEFT", 10, 0)
+  f.small = nowrap(U.font(f, "GameFontHighlightSmall", C.muted, "LEFT")); f.small:SetPoint("LEFT", f.big, "RIGHT", 5, 0)
+  f.bar = U.bar(f, 120, 6)
+  f.right = nowrap(U.font(f, "GameFontHighlightSmall", C.red, "RIGHT")); f.right:SetPoint("RIGHT", -10, 0)
+  f.next = nowrap(U.font(f, "GameFontHighlightSmall", C.text, "LEFT"))
+  function f.Set(self, big, small, frac, nextText, right)
+    self.big:SetText(tostring(big or "")); self.small:SetText(small or ""); self.right:SetText(right or "")
+    self.small:SetWidth(math.max(20, math.min(260, tw(self.small) + 2)))
+    local x = 10 + tw(self.big) + 5 + tw(self.small) + 12
+    self.bar:ClearAllPoints(); self.bar:SetPoint("LEFT", x, 0); self.bar:SetValue(frac or 0)
+    self.next:ClearAllPoints(); self.next:SetPoint("LEFT", x + 132, 0)
+    self.next:SetWidth(math.max(40, CW - x - 132 - 20 - tw(self.right)))
+    self.next:SetText(nextText or "")
+  end
+  return f
+end
+
+-- Leyenda de colores (cuadrada para talentos, redonda para el Legado); se acomoda en filas.
+local function legend(parent, round)
+  local U, C = ns.ui, ns.ui.C
+  local f = CreateFrame("Frame", nil, parent); f:SetWidth(CW)
+  U.fill(f, C.sub, 1); U.edge(f, C.line, 1)
+  f.items = {}
+  function f.Set(self, list)
+    local x, y, rowH = 10, -9, 16
+    for i, it in ipairs(list) do
+      local e = self.items[i]
+      if not e then
+        e = {}
+        e.o = ltex(self, "ARTWORK", 1, C.line, 1, round); e.o:SetSize(12, 12)
+        e.i = ltex(self, "ARTWORK", 2, CELLBG, 1, round); e.i:SetSize(8, 8); e.i:SetPoint("CENTER", e.o, "CENTER", 0, 0)
+        e.fs = nowrap(U.font(self, "GameFontHighlightSmall", C.muted, "LEFT"))
+        self.items[i] = e
+      end
+      e.fs:SetText(it[2])
+      local sw = it[1] and 17 or 0
+      local w = sw + math.ceil(tw(e.fs)) + 14
+      if x + w > CW - 10 and x > 10 then x = 10; y = y - rowH end
+      e.o:SetShown(it[1] ~= nil); e.i:SetShown(it[1] ~= nil)
+      if it[1] then tint(e.o, it[1]); e.o:ClearAllPoints(); e.o:SetPoint("TOPLEFT", x, y - 1) end
+      e.fs:ClearAllPoints(); e.fs:SetPoint("TOPLEFT", x + sw, y)
+      e.fs:Show()
+      x = x + w
+    end
+    for k = #list + 1, #self.items do local e = self.items[k]; e.o:Hide(); e.i:Hide(); e.fs:Hide() end
+    local h = -y + rowH + 4
+    self:SetHeight(h)
+    return h
+  end
+  return f
+end
+
+-- ── Pestañas ─────────────────────────────────────────────────────────────────────────────────────
+local function showBody(y, text)
+  pw.body:ClearAllPoints(); pw.body:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 2, y)
+  pw.body:SetText(text or "")
+  return -y + th(pw.body) + 8
+end
+
+local function drawSummary(p, pr)
+  local s = pw.sum
+  local C = ns.ui.C
+  s:Show()
+  local y = 0
+  local w3 = math.floor((CW - 20) / 3)
+  s.lvl:ClearAllPoints(); s.lvl:SetPoint("TOPLEFT", 0, y)
+  setLbl(s.lvl.lbl, T("level")); s.lvl:Set(pr.level, "/ 60", pr.level / 60, BLUE)
+  s.tal:ClearAllPoints(); s.tal:SetPoint("TOPLEFT", w3 + 10, y)
+  setLbl(s.tal.lbl, T("tTalents"))
+  if pr.tal then
+    local nx = pr.tal.next and (" · " .. T("nextShort"):format(pr.tal.next.t.name, pr.tal.next.have, pr.tal.next.t.rank)) or ""
+    s.tal:Set(pr.tal.matched, "/ " .. pr.tal.planned .. nx, pr.tal.planned > 0 and pr.tal.matched / pr.tal.planned or 0, C.green)
+  else s.tal:Set("—", T("noTalents"), 0) end
+  s.leg:ClearAllPoints(); s.leg:SetPoint("TOPLEFT", 2 * (w3 + 10), y)
+  setLbl(s.leg.lbl, T("tLegacy"))
+  if #p.legacy > 0 then
+    local li = legacyInfo(p)
+    s.leg:Set(li.found > 0 and li.spent or "?", T("lgCard"):format(li.planned), li.planned > 0 and li.matched / li.planned or 0, C.gold)
+  else s.leg:Set("—", T("noLegacy"), 0) end
+  y = y - 66 - 10
+
+  -- Profesiones: habilidad de cada una y el paso de la ruta en el que estás.
+  local c = s.prof
+  if #pr.profs > 0 then
+    c:ClearAllPoints(); c:SetPoint("TOPLEFT", 0, y); c:SetWidth(CW); c:Show()
+    setLbl(c.lbl, T("tProf"))
+    local ry = -28
+    for i, x in ipairs(pr.profs) do
+      local r = pool(c.rows, i, function() return barRow(c) end)
+      r:ClearAllPoints(); r:SetPoint("TOPLEFT", 10, ry); r:SetPoint("TOPRIGHT", -10, ry)
+      r.name:SetText(x.prof.name)
+      r.val:SetText(x.rank and (x.rank .. "/" .. (x.max or 300)) or T("notLearned"))
+      r.bar:SetValue((x.rank or 0) / 300, PURPLE)
+      ry = ry - 22
+    end
+    hideFrom(c.rows, #pr.profs + 1)
+    local nn = 0
+    for _, x in ipairs(pr.profs) do
+      local st = x.step and x.prof.steps[x.step]
+      if st then
+        nn = nn + 1
+        if nn == 1 then c.sep:ClearAllPoints(); c.sep:SetPoint("TOPLEFT", 10, ry - 2); c.sep:SetPoint("TOPRIGHT", -10, ry - 2); c.sep:Show(); ry = ry - 8 end
+        local fs = c.now[nn]
+        if not fs then fs = nowrap(ns.ui.font(c, "GameFontHighlightSmall", C.text, "LEFT")); fs:SetWidth(CW - 20); c.now[nn] = fs end
+        fs:ClearAllPoints(); fs:SetPoint("TOPLEFT", 10, ry); fs:Show()
+        fs:SetText(GOLD .. T("now") .. "|r  " .. GRAY .. x.prof.name .. ":|r " .. st.name .. GRAY .. "  ×" .. st.crafts .. " · " .. st.from .. "→" .. st.to .. "|r")
+        ry = ry - 16
+      end
+    end
+    if nn == 0 then c.sep:Hide() end
+    for k = nn + 1, #c.now do c.now[k]:Hide() end
+    c:SetHeight(-ry + 8)
+    y = y - (-ry + 8) - 10
+  else c:Hide() end
+
+  -- Materiales (bolsas + banco), con el ícono del ítem y lo que tenés contra lo que pide.
+  c = s.mats
+  local mats = {}
+  for _, x in ipairs(pr.profs) do for _, m in ipairs(x.prof.mats) do mats[#mats + 1] = m end end
+  if #mats > 0 then
+    c:ClearAllPoints(); c:SetPoint("TOPLEFT", 0, y); c:SetWidth(CW); c:Show()
+    setLbl(c.lbl, T("mats"))
+    local ready = 0
+    local mw = math.floor((CW - 20) / 3)
+    for i, m in ipairs(mats) do
+      local it = pool(c.items, i, function()
+        local f = CreateFrame("Frame", nil, c); f:SetSize(mw, 30)
+        f.icon = ns.ui.icon(f, 26); f.icon:SetPoint("LEFT", 0, 0)
+        f.name = nowrap(ns.ui.font(f, "GameFontHighlightSmall", C.text, "LEFT")); f.name:SetPoint("TOPLEFT", f.icon, "TOPRIGHT", 6, -1); f.name:SetWidth(mw - 40)
+        f.cnt = ns.ui.font(f, "GameFontHighlightSmall", C.green, "LEFT"); f.cnt:SetPoint("BOTTOMLEFT", f.icon, "BOTTOMRIGHT", 6, 1)
+        return f
+      end)
+      local have = GetItemCount and GetItemCount(m.item, true) or 0
+      if have >= m.count then ready = ready + 1 end
+      it:ClearAllPoints(); it:SetPoint("TOPLEFT", 10 + ((i - 1) % 3) * mw, -26 - math.floor((i - 1) / 3) * 36)
+      it.icon:SetItem(m.item > 0 and m.item or nil, m.count)
+      it.name:SetText(m.name)
+      it.cnt:SetText(have .. " / " .. m.count); color(it.cnt, have >= m.count and C.green or C.red)
+    end
+    hideFrom(c.items, #mats + 1)
+    c.right:SetText(T("matsReady"):format(ready, #mats))
+    local hh = 26 + math.ceil(#mats / 3) * 36 + 4
+    c:SetHeight(hh)
+    y = y - hh - 10
+  else c:Hide() end
+
+  -- Talentos por rama.
+  c = s.trees
+  if pr.tal and #p.talents > 0 then
+    c:ClearAllPoints(); c:SetPoint("TOPLEFT", 0, y); c:SetWidth(CW); c:Show()
+    setLbl(c.lbl, T("byTree"))
+    c.see:SetLabel(T("seeTree"))
+    local per, order = {}, {}
+    for _, t in ipairs(p.talents) do
+      local e = per[t.tree]
+      if not e then e = { planned = 0, matched = 0, tree = t.tree }; per[t.tree] = e; order[#order + 1] = e end
+      local h = haveOf(pr.tal.state, t)
+      e.planned, e.matched = e.planned + t.rank, e.matched + math.min(h, t.rank)
+    end
+    table.sort(order, function(a, b) return a.tree < b.tree end)
+    local ry = -30
+    for i, e in ipairs(order) do
+      local r = pool(c.rows, i, function() return barRow(c) end)
+      r:ClearAllPoints(); r:SetPoint("TOPLEFT", 10, ry); r:SetPoint("TOPRIGHT", -10, ry)
+      r.name:SetText(p.trees[e.tree + 1] or ("#" .. e.tree))
+      r.val:SetText(e.matched .. "/" .. e.planned)
+      r.bar:SetValue(e.planned > 0 and e.matched / e.planned or 0, e.matched >= e.planned and C.green or C.gold)
+      ry = ry - 22
+    end
+    hideFrom(c.rows, #order + 1)
+    c:SetHeight(-ry + 6)
+    y = y - (-ry + 6) - 10
+  else c:Hide() end
+
+  -- Notas.
+  c = s.notes
+  if p.notes ~= "" then
+    c:ClearAllPoints(); c:SetPoint("TOPLEFT", 0, y); c:SetWidth(CW); c:Show()
+    setLbl(c.lbl, T("notes"))
+    c.text:SetText(p.notes)
+    local hh = 30 + math.max(14, th(c.text)) + 8
+    c:SetHeight(hh)
+    y = y - hh - 10
+  else c:Hide() end
+  return -y
+end
+
+local function talentLegend()
+  return { { ST.done[1], T("lgDoneL") }, { ST.part[1], T("lgPart") }, { ST.todo[1], T("lgTodo") }, { ST.off[1], T("lgOff") },
+    { ST.next[1], T("lgNextL") }, { ST.none[1], T("lgNone") } }
+end
+
+local function drawTalentTab(p, pr)
+  if #p.talents == 0 then return showBody(0, GRAY .. T("noTalents") .. "|r") end
+  local s = pw.tstrip
+  s:Show()
+  local nx = pr.tal.next and (GRAY .. T("next"):format(WHITE_C .. pr.tal.next.t.name .. GRAY, pr.tal.next.have, pr.tal.next.t.rank) .. "|r")
+    or (pr.tal.matched >= pr.tal.planned and (GREEN .. "✓ " .. T("buildDone") .. "|r")) or ""
+  s:Set(pr.tal.matched, T("spentOf"):format(pr.tal.planned, pr.tal.spent), pr.tal.planned > 0 and pr.tal.matched / pr.tal.planned or 0,
+    nx, pr.tal.off > 0 and T("off"):format(pr.tal.off) or "")
+  local y = -44
+  if canDraw(p) then
+    pw.grid:ClearAllPoints(); pw.grid:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y)
+    y = y - drawTalents(p) - 10
+    local lg = pw.tlegend
+    lg:ClearAllPoints(); lg:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y); lg:Show()
+    y = y - lg:Set(talentLegend())
+    return -y
+  end
+  return showBody(y, table.concat(talentLines(p, pr), "\n"))
+end
+
+local function drawLegacyTab(p)
+  local info = legacyInfo(p)
+  local s = pw.lstrip
+  s:Show()
+  local nx = ""
+  if #p.legacy == 0 then nx = GRAY .. T("noLegacy") .. "|r"
+  elseif info.next then nx = GRAY .. T("lgNext"):format(WHITE_C .. info.next.name .. GRAY, info.next.have or 0, info.next.want) .. "|r"
+  elseif info.found > 0 and info.matched >= info.planned then nx = GREEN .. "✓ " .. T("lgDone") .. "|r" end
+  s:Set(info.found > 0 and info.spent or "?", T("lgTotal"):format(info.planned),
+    info.planned > 0 and info.matched / info.planned or info.spent / 16, nx, "")
+  local y = -44
+  pw.lgrid:ClearAllPoints(); pw.lgrid:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y)
+  y = y - drawLegacyTrees(info) - 10
+  local lg = pw.llegend
+  lg:ClearAllPoints(); lg:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y); lg:Show()
+  local items = talentLegend()
+  items[#items + 1] = { ns.ui.C.btnLine, T("lgReserved") }
+  items[#items + 1] = { nil, T("lgGateL") }
+  y = y - lg:Set(items) - 8
+  local out = {}
+  if #info.extra > 0 then
+    out[#out + 1] = GOLD .. T("lgOther") .. "|r"
+    for _, e in ipairs(info.extra) do
+      local h = e.have
+      out[#out + 1] = "  " .. (h and (h >= e.l.rank and GREEN or h > 0 and ORANGE or GRAY) or GRAY) .. (h or "?") .. "/" .. e.l.rank .. "|r  " .. e.l.name .. (e.l.tree ~= "" and (GRAY .. " · " .. e.l.tree .. "|r") or "")
+    end
+  end
+  if #p.legacy > 0 and info.found == 0 then
+    if #out > 0 then out[#out + 1] = "" end
+    out[#out + 1] = GRAY .. T("legacyNote") .. "|r"
+  end
+  if #out == 0 then return -y end
+  return showBody(y, table.concat(out, "\n"))
+end
+
 ns._planTraits = { state = function() return talentState() end, legacy = function(st) return legacyNodes(st) end, nodeFor = function(...) return nodeFor(...) end }
-ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end }
+ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end,
+  legacy = function(p) return legacyInfo(p) end, legacyLayout = LEGACY }
+
+-- Cabecera del personaje.
+local function drawHero(p, pr)
+  local h = pw.hero
+  if not p then h:Hide(); return end
+  h:Show()
+  local token = (p.cls or ""):upper()
+  local cname = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[token]) or p.cls
+  local cc = ns.ui.classColor(token)
+  tint(h.dot, cc)
+  h.name:SetText(p.name .. (p.main and ("  " .. GOLD .. "★ " .. T("main") .. "|r") or ""))
+  color(h.name, cc)
+  h.sub:SetText(p.race .. " · " .. cname .. " · " .. T(p.source == "app" and "fromApp" or "pasted"))
+  h.other:SetText(not isMine(p) and T("other"):format(p.name .. (p.realm ~= "" and ("-" .. p.realm) or "")) or "")
+  h.pct:SetText(pr.pct .. " %")
+  h.of:SetText(T("ofPlan"))
+  h.bar:SetValue(pr.pct / 100, ns.ui.C.gold)
+end
 
 local function refresh()
   if not pw then return end
@@ -613,72 +1157,120 @@ local function refresh()
   if sel and not list[sel] then sel = nil end
   if not sel then for i, p in ipairs(list) do if isMine(p) then sel = i; break end end end
   if not sel and #list > 0 then sel = 1 end
-  pw.title:SetText(T("title") .. (#list > 1 and ("  (" .. sel .. "/" .. #list .. ")") or ""))
-  pw.prev:SetShown(#list > 1); pw.next:SetShown(#list > 1)
-  for k, b in pairs(pw.tabs) do b:SetText(T(b.key)); if b.SetEnabled then b:SetEnabled(tab ~= k) end end
-  pw.pasteBtn:SetText(T("paste")); pw.read:SetText(T("read")); pw.clear:SetText(T("clear")); pw.hint:SetText(T("pasteHint"))
+  local multi = #list > 1
+  pw.title:SetText(T("title"))
+  pw.count:SetText(multi and (sel .. " / " .. #list) or "")
+  pw.title:ClearAllPoints()
+  if multi then pw.title:SetPoint("LEFT", pw.next, "RIGHT", 8, 0) else pw.title:SetPoint("LEFT", pw.header, "LEFT", 12, 0) end
+  pw.prev:SetShown(multi); pw.next:SetShown(multi)
+  local labels = { summary = T("tSummary"), prof = T("tProf"), talents = T("tTalents"), legacy = T("tLegacy") }
+  pw.tabs:Update(tab, nil, nil, labels)
+  for _, b in ipairs(pw.tabs.items) do b.text = labels[b.key] end -- (para las pruebas: el texto de la pestaña)
+  pw.pasteBtn:SetLabel(T("paste")); pw.read:SetLabel(T("read")); pw.clear:SetLabel(T("clear")); pw.hint:SetText(T("pasteHint"))
+  pw.read:SetShown(pw.paste:IsShown() and true or false)
   local p = list[sel or 0]
-  pw.body:SetText(p and table.concat(lines(p), "\n") or (T("none") .. "\n\n" .. GRAY .. T("noneHint") .. "|r"))
-  local textH = pw.body.GetStringHeight and (pw.body:GetStringHeight() or 0) or 0
-  local treeH = 0
-  if p and tab == "talents" and canDraw(p) then treeH = drawTalents(p) + 10 else pw.grid:Hide() end
-  pw.child:SetHeight(math.max(1, textH + 8 + treeH))
+  local pr = p and progress(p)
+  drawHero(p, pr)
+  pw.sum:Hide(); pw.grid:Hide(); pw.lgrid:Hide(); pw.tstrip:Hide(); pw.lstrip:Hide(); pw.tlegend:Hide(); pw.llegend:Hide()
+  pw.body:SetText("")
+  local h
+  if not p then h = showBody(-4, T("none") .. "\n\n" .. GRAY .. T("noneHint") .. "|r")
+  elseif tab == "summary" then h = drawSummary(p, pr)
+  elseif tab == "prof" then h = showBody(0, table.concat(profLines(pr), "\n"))
+  elseif tab == "talents" then h = drawTalentTab(p, pr)
+  else h = drawLegacyTab(p) end
+  pw.child:SetHeight(math.max(1, h or 1))
 end
 ns.planRefresh = refresh
 
 local function create()
-  pw = CreateFrame("Frame", "RebirthTrackPlanFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  pw:SetSize(500, 520); pw:SetPoint("CENTER"); pw:SetFrameStrata("DIALOG")
-  pw:SetMovable(true); pw:EnableMouse(true); pw:RegisterForDrag("LeftButton")
-  pw:SetScript("OnDragStart", pw.StartMoving); pw:SetScript("OnDragStop", pw.StopMovingOrSizing)
-  if pw.SetBackdrop then pw:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }) end
-  pw.title = pw:CreateFontString(nil, "OVERLAY", "GameFontNormal"); pw.title:SetPoint("TOP", 0, -14)
-  local close = CreateFrame("Button", nil, pw, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -4, -4)
-  pw.prev = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); pw.prev:SetSize(24, 20); pw.prev:SetPoint("TOPLEFT", 14, -10); pw.prev:SetText("<")
-  pw.prev:SetScript("OnClick", function() local n = #allPlans(); sel = ((sel or 1) - 2) % n + 1; refresh() end)
-  pw.next = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); pw.next:SetSize(24, 20); pw.next:SetPoint("LEFT", pw.prev, "RIGHT", 2, 0); pw.next:SetText(">")
-  pw.next:SetScript("OnClick", function() local n = #allPlans(); sel = (sel or 1) % n + 1; refresh() end)
-  pw.tabs = {}
-  local order = { { "summary", "tSummary" }, { "prof", "tProf" }, { "talents", "tTalents" }, { "legacy", "tLegacy" } }
-  for i, x in ipairs(order) do
-    local b = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); b:SetSize(100, 22); b:SetPoint("TOPLEFT", 16 + (i - 1) * 102, -36)
-    b.key = x[2]; b:SetText(T(x[2]))
-    b:SetScript("OnClick", function() tab = x[1]; refresh() end)
-    pw.tabs[x[1]] = b
-  end
+  local U, C = ns.ui, ns.ui.C
+  pw = U.window("RebirthTrackPlanFrame", W, H, T("title"))
+  pw.prev = U.iconButton(pw.header, 22, "‹", function() local n = #allPlans(); if n > 0 then sel = ((sel or 1) - 2) % n + 1 end; refresh() end)
+  pw.prev:SetPoint("LEFT", 6, 0)
+  pw.next = U.iconButton(pw.header, 22, "›", function() local n = #allPlans(); if n > 0 then sel = (sel or 1) % n + 1 end; refresh() end)
+  pw.next:SetPoint("LEFT", pw.prev, "RIGHT", 2, 0)
+  pw.count = U.font(pw.header, "GameFontHighlightSmall", C.muted, "LEFT"); pw.count:SetPoint("LEFT", pw.title, "RIGHT", 8, 0)
+
+  -- Cabecera del personaje: punto del color de la clase, nombre, raza · clase · origen y el % del plan.
+  local hero = CreateFrame("Frame", nil, pw)
+  hero:SetPoint("TOPLEFT", 1, pw.top); hero:SetPoint("TOPRIGHT", -1, pw.top); hero:SetHeight(HERO_H)
+  hero.ring = ltex(hero, "ARTWORK", 1, C.border, 1, true); hero.ring:SetSize(42, 42); hero.ring:SetPoint("LEFT", 12, 0)
+  hero.dot = ltex(hero, "ARTWORK", 2, C.text, 1, true); hero.dot:SetSize(36, 36); hero.dot:SetPoint("CENTER", hero.ring, "CENTER", 0, 0)
+  hero.name = nowrap(U.font(hero, "GameFontNormalLarge", C.text, "LEFT")); hero.name:SetPoint("TOPLEFT", 66, -10); hero.name:SetWidth(W - 66 - 200)
+  hero.sub = nowrap(U.font(hero, "GameFontHighlightSmall", C.muted, "LEFT")); hero.sub:SetPoint("TOPLEFT", hero.name, "BOTTOMLEFT", 0, -3); hero.sub:SetWidth(W - 66 - 200)
+  hero.other = nowrap(U.font(hero, "GameFontHighlightSmall", C.amber, "LEFT")); hero.other:SetPoint("TOPLEFT", hero.sub, "BOTTOMLEFT", 0, -2); hero.other:SetWidth(W - 66 - 200)
+  hero.of = U.font(hero, "GameFontHighlightSmall", C.muted, "RIGHT"); hero.of:SetPoint("TOPRIGHT", -14, -14)
+  hero.pct = U.font(hero, "GameFontNormalLarge", C.gold, "RIGHT"); hero.pct:SetPoint("RIGHT", hero.of, "LEFT", -5, 0)
+  hero.bar = U.bar(hero, 150, 8); hero.bar:SetPoint("TOPRIGHT", -14, -36)
+  pw.hero = hero
+
+  pw.tabs = U.tabs(pw, pw.top - HERO_H, { { "summary", T("tSummary") }, { "prof", T("tProf") }, { "talents", T("tTalents") }, { "legacy", T("tLegacy") } },
+    function(k) tab = k; refresh() end)
+
+  local ft = U.footer(pw, 36)
   pw.scroll = CreateFrame("ScrollFrame", "RebirthTrackPlanScroll", pw, "UIPanelScrollFrameTemplate")
-  pw.scroll:SetPoint("TOPLEFT", 16, -66); pw.scroll:SetPoint("BOTTOMRIGHT", -34, 44)
-  pw.child = CreateFrame("Frame", nil, pw.scroll); pw.child:SetSize(440, 1)
+  pw.scroll:SetPoint("TOPLEFT", 12, pw.top - HERO_H - 30 - 10); pw.scroll:SetPoint("BOTTOMRIGHT", -30, 36 + 8)
+  pw.child = CreateFrame("Frame", nil, pw.scroll); pw.child:SetSize(CW, 1)
   pw.scroll:SetScrollChild(pw.child)
-  pw.body = pw.child:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  pw.body:SetPoint("TOPLEFT", 2, -2); pw.body:SetWidth(436); pw.body:SetJustifyH("LEFT"); pw.body:SetJustifyV("TOP")
+  pw.body = U.font(pw.child, "GameFontHighlightSmall", C.text, "LEFT")
+  pw.body:SetPoint("TOPLEFT", 2, 0); pw.body:SetWidth(CW - 4)
+  if pw.body.SetJustifyV then pw.body:SetJustifyV("TOP") end
   if pw.body.SetSpacing then pw.body:SetSpacing(2) end
-  pw.grid = CreateFrame("Frame", nil, pw.child); pw.grid:SetPoint("TOPLEFT", pw.body, "BOTTOMLEFT", 0, -10); pw.grid:Hide()
-  -- Pegar: un cuadro de varias líneas (el plan trae una línea por dato).
-  pw.paste = CreateFrame("Frame", nil, pw, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  pw.paste:SetPoint("TOPLEFT", 12, -62); pw.paste:SetPoint("BOTTOMRIGHT", -12, 40); pw.paste:SetFrameLevel((pw:GetFrameLevel() or 1) + 10); pw.paste:Hide()
-  if pw.paste.SetBackdrop then pw.paste:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", tile = true, tileSize = 32 }) end
-  pw.hint = pw.paste:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); pw.hint:SetPoint("TOPLEFT", 6, -6); pw.hint:SetPoint("TOPRIGHT", -6, -6); pw.hint:SetJustifyH("LEFT")
-  local ps = CreateFrame("ScrollFrame", "RebirthTrackPlanPasteScroll", pw.paste, "UIPanelScrollFrameTemplate")
-  ps:SetPoint("TOPLEFT", 6, -26); ps:SetPoint("BOTTOMRIGHT", -28, 6)
-  pw.edit = CreateFrame("EditBox", nil, ps); pw.edit:SetMultiLine(true); pw.edit:SetAutoFocus(false); pw.edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall); pw.edit:SetWidth(420)
+
+  -- Resumen: tarjetas.
+  local s = CreateFrame("Frame", nil, pw.child); s:SetPoint("TOPLEFT", 0, 0); s:SetSize(CW, 1); s:Hide()
+  local w3 = math.floor((CW - 20) / 3)
+  s.lvl, s.tal, s.leg = statCard(s, w3), statCard(s, w3), statCard(s, w3)
+  s.prof = newCard(s); s.prof.rows, s.prof.now = {}, {}
+  s.prof.sep = U.tex(s.prof, "ARTWORK", { 0.122, 0.137, 0.173 }); s.prof.sep:SetHeight(1)
+  s.mats = newCard(s); s.mats.items = {}
+  s.mats.right = U.font(s.mats, "GameFontHighlightSmall", C.muted, "RIGHT"); s.mats.right:SetPoint("TOPRIGHT", -10, -9)
+  s.trees = newCard(s); s.trees.rows = {}
+  s.trees.see = U.button(s.trees, T("seeTree"), nil, function() tab = "talents"; refresh() end, { h = 20 })
+  s.trees.see:SetPoint("TOPRIGHT", -6, -5)
+  s.notes = newCard(s)
+  s.notes.text = U.font(s.notes, "GameFontHighlightSmall", C.text, "LEFT"); s.notes.text:SetPoint("TOPLEFT", 10, -28); s.notes.text:SetWidth(CW - 20)
+  pw.sum = s
+
+  -- Talentos y Legado.
+  pw.tstrip = strip(pw.child); pw.tstrip:SetPoint("TOPLEFT", 0, 0); pw.tstrip:Hide()
+  pw.lstrip = strip(pw.child); pw.lstrip:SetPoint("TOPLEFT", 0, 0); pw.lstrip:Hide()
+  pw.grid = CreateFrame("Frame", nil, pw.child); pw.grid:Hide()
+  pw.lgrid = CreateFrame("Frame", nil, pw.child); pw.lgrid.trees = {}; pw.lgrid:Hide()
+  pw.tlegend = legend(pw.child, false); pw.tlegend:Hide()
+  pw.llegend = legend(pw.child, true); pw.llegend:Hide()
+
+  -- Pegar: un cuadro de varias líneas (el plan trae una línea por dato), encima del contenido.
+  pw.paste = CreateFrame("Frame", nil, pw)
+  pw.paste:SetPoint("TOPLEFT", 1, pw.top); pw.paste:SetPoint("BOTTOMRIGHT", -1, 37)
+  pw.paste:SetFrameLevel((pw:GetFrameLevel() or 1) + 20); pw.paste:EnableMouse(true); pw.paste:Hide()
+  U.fill(pw.paste, C.bg, 1)
+  pw.hint = U.font(pw.paste, "GameFontHighlightSmall", C.text, "LEFT"); pw.hint:SetPoint("TOPLEFT", 12, -12); pw.hint:SetPoint("TOPRIGHT", -12, -12)
+  local box = CreateFrame("Frame", nil, pw.paste)
+  box:SetPoint("TOPLEFT", 12, -32); box:SetPoint("BOTTOMRIGHT", -12, 10)
+  U.fill(box, C.input, 1); U.edge(box, C.btnLine, 1)
+  local ps = CreateFrame("ScrollFrame", "RebirthTrackPlanPasteScroll", box, "UIPanelScrollFrameTemplate")
+  ps:SetPoint("TOPLEFT", 8, -8); ps:SetPoint("BOTTOMRIGHT", -28, 8)
+  pw.edit = CreateFrame("EditBox", nil, ps); pw.edit:SetMultiLine(true); pw.edit:SetAutoFocus(false); pw.edit:SetFontObject(ChatFontNormal or GameFontHighlightSmall); pw.edit:SetWidth(W - 24 - 44)
   if pw.edit.SetMaxLetters then pw.edit:SetMaxLetters(0) end
   pw.edit:SetScript("OnEscapePressed", function(e) e:ClearFocus() end)
   ps:SetScrollChild(pw.edit)
-  pw.pasteBtn = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); pw.pasteBtn:SetSize(130, 22); pw.pasteBtn:SetPoint("BOTTOMLEFT", 16, 14)
-  pw.pasteBtn:SetScript("OnClick", function()
+
+  pw.pasteBtn = U.button(ft, T("paste"), nil, function()
     if pw.paste:IsShown() then pw.paste:Hide() else pw.edit:SetText(""); pw.paste:Show(); pw.edit:SetFocus() end
+    pw.read:SetShown(pw.paste:IsShown() and true or false)
   end)
-  pw.read = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); pw.read:SetSize(90, 22); pw.read:SetPoint("LEFT", pw.pasteBtn, "RIGHT", 6, 0)
-  pw.read:SetScript("OnClick", function()
+  pw.pasteBtn:SetPoint("LEFT", 10, 0)
+  pw.read = U.button(ft, T("read"), "pri", function()
     if load(pw.edit:GetText() or "") > 0 then pw.paste:Hide(); sel = nil end
     refresh()
   end)
-  pw.clear = CreateFrame("Button", nil, pw, "UIPanelButtonTemplate"); pw.clear:SetSize(120, 22); pw.clear:SetPoint("BOTTOMRIGHT", -16, 14)
-  pw.clear:SetScript("OnClick", function() ns.db().plans = {}; sel = nil; say(T("cleared")); refresh() end)
+  pw.read:SetPoint("LEFT", pw.pasteBtn, "RIGHT", 6, 0); pw.read:Hide()
+  pw.clear = U.button(ft, T("clear"), "dng", function() ns.db().plans = {}; sel = nil; say(T("cleared")); refresh() end)
+  pw.clear:SetPoint("RIGHT", -10, 0)
   pw:RegisterEvent("SKILL_LINES_CHANGED"); pw:RegisterEvent("CHARACTER_POINTS_CHANGED"); pw:RegisterEvent("BAG_UPDATE_DELAYED"); pw:RegisterEvent("PLAYER_LEVEL_UP")
   pw:SetScript("OnEvent", function() if pw:IsShown() then refresh() end end)
-  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackPlanFrame") end
 end
 
 -- /rt plan: abre la ventana (con texto pegado después del comando, lo lee primero).

@@ -20,7 +20,9 @@ local TEXTS = {
     title = "Posiciones de la guild", you = "vos", channel = "por el canal", off = "no comparte", instance = "en una instancia",
     intro = "Lo que llegó por el canal de la guild (y lo tuyo). Cada addon avisa cada 10 s mientras se mueve y cada minuto si está quieto; nada desde mazmorras ni bandas.",
     summary = "%d anotadas · %d en el mapa ahora (avisaron hace menos de %d s)",
-    sharing = "Tu posición: %s", on = "|cff3fbf3fcompartida|r", offShort = "|cffff4040apagada|r (/rt posicion)",
+    sharing = "Tu posición: %s", on = "compartida", offShort = "apagada (/rt posicion)",
+    recorded = "anotadas", liveNow = "en vivo",
+    colPlayer = "Jugador", colZone = "Zona", colCoord = "Coord.", colSeen = "Visto",
     none = "Todavía no llegó ninguna posición. Se necesita que otros miembros tengan el addon (0.6.0 o más nuevo) y estén conectados.",
     map = "Mapa", pins = "Puntos en el mapa", ago = { s = "hace %d s", m = "hace %d min", h = "hace %d h", d = "hace %d días" },
     tipMap = "Abre el mapa del mundo en esa zona.", tipPins = "Mostrar u ocultar los puntos de la guild en el mapa del juego.",
@@ -30,7 +32,9 @@ local TEXTS = {
     title = "Guild positions", you = "you", channel = "over the channel", off = "not sharing", instance = "in an instance",
     intro = "What arrived over the guild channel (and yours). Each addon reports every 10 s while moving and every minute while still; nothing from dungeons or raids.",
     summary = "%d recorded · %d on the map now (reported less than %d s ago)",
-    sharing = "Your position: %s", on = "|cff3fbf3fshared|r", offShort = "|cffff4040off|r (/rt position)",
+    sharing = "Your position: %s", on = "shared", offShort = "off (/rt position)",
+    recorded = "recorded", liveNow = "live",
+    colPlayer = "Player", colZone = "Zone", colCoord = "Coords", colSeen = "Seen",
     none = "No position has arrived yet. Other members need the addon (0.6.0 or newer) and to be online.",
     map = "Map", pins = "Dots on the map", ago = { s = "%d s ago", m = "%d min ago", h = "%d h ago", d = "%d days ago" },
     tipMap = "Opens the world map on that zone.", tipPins = "Show or hide the guild's dots on the game's map.",
@@ -192,7 +196,14 @@ end
 
 -- ── Ventana: la lista ────────────────────────────────────────────────────────────────────
 local win, rows = nil, {}
-local ROW_H = 22
+local ROW_H = 26
+local W, H = 640, 460
+local INNER = W - 2
+-- Columnas de la tabla: Jugador (lo que sobra), Zona, Coord. (a la derecha), Visto y el botón «Mapa».
+local function cols()
+  return { { "name", 0, T("colPlayer") }, { "zone", 170, T("colZone") }, { "xy", 84, T("colCoord"), "RIGHT" },
+    { "age", 104, T("colSeen") }, { "map", 66, "" } }
+end
 
 -- Abre el mapa del mundo en la zona de alguien. Al abrirse, el mapa vuelve solo a la zona de uno
 -- (y algunos addons de mapa lo mueven después): se elige la zona una vez abierto y otra vez un
@@ -219,78 +230,123 @@ end
 local function row(i)
   local r = rows[i]
   if r then return r end
-  r = CreateFrame("Frame", nil, win.child)
-  r:SetSize(560, ROW_H)
+  local U = ns.ui
+  local pos = U.columns(cols(), INNER)
+  r = U.row(win.child, ROW_H, i)
+  r:SetWidth(INNER)
   r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
-  r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.name:SetPoint("LEFT", 2, 0); r.name:SetWidth(150); r.name:SetJustifyH("LEFT")
-  r.zone = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.zone:SetPoint("LEFT", 156, 0); r.zone:SetWidth(150); r.zone:SetJustifyH("LEFT")
-  r.xy = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.xy:SetPoint("LEFT", 310, 0); r.xy:SetWidth(80); r.xy:SetJustifyH("LEFT")
-  r.age = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); r.age:SetPoint("LEFT", 394, 0); r.age:SetWidth(90); r.age:SetJustifyH("LEFT")
-  r.map = CreateFrame("Button", nil, r, "UIPanelButtonTemplate"); r.map:SetSize(56, 18); r.map:SetPoint("RIGHT", -2, 0)
-  r.map:SetScript("OnClick", function(self) if self.p then openMap(self.p) end end)
-  r.map:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(T("tipMap"), 1, 1, 1, true); GameTooltip:Show() end)
-  r.map:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  local function cell(key, template, c, justify, pad)
+    local q = pos[key]
+    local fs = U.font(r, template or "GameFontHighlightSmall", c or U.C.text, justify or "LEFT")
+    fs:SetPoint("LEFT", 8 + q.x + (pad or 0), 0); fs:SetWidth(q.w - 16 - (pad or 0))
+    if fs.SetWordWrap then fs:SetWordWrap(false) end
+    return fs
+  end
+  r.cls = U.dot(r, 10, U.C.text); r.cls:SetPoint("LEFT", 8 + pos.name.x, 0)
+  r.name = cell("name", "GameFontNormalSmall", nil, "LEFT", 16)
+  r.zone = cell("zone")
+  r.xy = cell("xy", nil, nil, "RIGHT")
+  r.live = U.dot(r, 7, U.C.green); r.live:SetPoint("LEFT", 8 + pos.age.x, 0)
+  r.age = cell("age", nil, U.C.muted, "LEFT", 12)
+  r.map = U.button(r, T("map"), nil, function(self) if self.p then openMap(self.p) end end, { h = 18 })
+  r.map:SetPoint("RIGHT", -8, 0)
+  r.map.tip = T("tipMap")
   rows[i] = r
   return r
 end
 
+local function hex(c) return string.format("%02x%02x%02x", math.floor(c[1] * 255 + 0.5), math.floor(c[2] * 255 + 0.5), math.floor(c[3] * 255 + 0.5)) end
+
 function ns.refreshPositions()
   drawPins()
   if not win or not win:IsShown() then return end
+  local U = ns.ui
   win.title:SetText(T("title"))
   win.intro:SetText(T("intro"))
-  win.pins:SetText(T("pins") .. ": " .. (pinsOn() and "|cff3fbf3fON|r" or "|cffff4040OFF|r"))
+  win.pins:SetKind(pinsOn() and "on" or "off")
+  win.pins:SetLabel(T("pins"))
+  win.pins.tip = T("tipPins")
+  for key, fs in pairs(win.thead.cells or {}) do
+    for _, c in ipairs(cols()) do if c[1] == key then fs:SetText((c[3] or ""):upper()) end end
+  end
   local list = positions()
   local live = 0
   for _, p in ipairs(list) do if p.live and not p.self then live = live + 1 end end
-  win.summary:SetText(T("summary"):format(#list, live, GONE_AFTER) .. "\n" .. T("sharing"):format((ns.sharePos and ns.sharePos()) and T("on") or T("offShort")))
+  local X = U.HEX
+  win.counts:SetText(("|cff%s%d|r |cff%s%s|r    |cff%s%d|r |cff%s%s|r"):format(X.text, #list, X.muted, T("recorded"), X.green, live, X.muted, T("liveNow")))
+  win.strip.tipText = T("summary"):format(#list, live, GONE_AFTER)
+  local sharing = ns.sharePos and ns.sharePos()
+  win.sharing:SetText(T("sharing"):format(sharing and T("on") or T("offShort")))
+  local sc = sharing and U.C.green or U.C.red
+  if win.sharing.SetTextColor then win.sharing:SetTextColor(sc[1], sc[2], sc[3]) end
   for _, r in ipairs(rows) do r:Hide() end
   win.none:SetShown(#list == 0)
   win.none:SetText(T("none"))
+  local dash = "|cff" .. X.muted .. "—|r"
   for i, p in ipairs(list) do
     local r = row(i)
     r:Show()
-    r.name:SetText(fullName(p) .. (p.self and (" (" .. T("you") .. ")") or ""))
-    r.name:SetTextColor(classColor(p.who.class))
-    if p.off then r.zone:SetText("|cff999999" .. T("off") .. "|r"); r.xy:SetText("")
-    elseif p.instance then r.zone:SetText(p.zone .. " |cff999999(" .. T("instance") .. ")|r"); r.xy:SetText("")
-    else r.zone:SetText(p.zone); r.xy:SetText(p.x and string.format("%.1f, %.1f", p.x * 100, p.y * 100) or "") end
-    r.age:SetText((p.live and "|cff3fbf3f● |r" or "") .. ago(p.age))
+    local cc = U.classColor(p.who.class)
+    r.cls:SetColor(cc)
+    r.name:SetText("|cff" .. hex(cc) .. fullName(p) .. "|r" .. (p.self and (" |cff" .. X.muted .. "(" .. T("you") .. ")|r") or ""))
+    if p.off then r.zone:SetText("|cff" .. X.muted .. T("off") .. "|r"); r.xy:SetText(dash)
+    elseif p.instance then r.zone:SetText("|cff" .. X.muted .. p.zone .. " (" .. T("instance") .. ")|r"); r.xy:SetText(dash)
+    else r.zone:SetText(p.zone); r.xy:SetText(p.x and string.format("%.1f, %.1f", p.x * 100, p.y * 100) or dash) end
+    r.live:SetShown(p.live and true or false)
+    r.age:SetText(ago(p.age))
+    local ac = p.live and U.C.text or U.C.muted
+    if r.age.SetTextColor then r.age:SetTextColor(ac[1], ac[2], ac[3]) end
     r.map.p = p
-    r.map:SetText(T("map"))
+    r.map:SetLabel(T("map"))
+    r.map.tip = T("tipMap")
     r.map:SetShown(not p.off and not p.instance and p.map and p.map > 0)
   end
   win.child:SetHeight(math.max(1, #list * ROW_H))
 end
 
 local function create()
-  win = CreateFrame("Frame", "RebirthTrackPositionsFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  win:SetSize(620, 460); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG"); win:SetClampedToScreen(true)
-  win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  if win.SetBackdrop then
-    win:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
-  win.title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal"); win.title:SetPoint("TOP", 0, -14)
-  local close = CreateFrame("Button", nil, win, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -4, -4)
-  win.intro = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  win.intro:SetPoint("TOPLEFT", 18, -36); win.intro:SetPoint("RIGHT", -18, 0); win.intro:SetJustifyH("LEFT")
-  win.summary = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  win.summary:SetPoint("TOPLEFT", win.intro, "BOTTOMLEFT", 0, -8); win.summary:SetPoint("RIGHT", -150, 0); win.summary:SetJustifyH("LEFT")
-  win.pins = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.pins:SetSize(140, 22); win.pins:SetPoint("TOPRIGHT", -18, -76)
-  win.pins:SetScript("OnClick", function() settings().mapPins = not pinsOn(); ns.refreshPositions() end)
-  win.pins:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(T("tipPins"), 1, 1, 1, true); GameTooltip:Show() end)
-  win.pins:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  local scroll = CreateFrame("ScrollFrame", "RebirthTrackPositionsScroll", win, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 16, -112); scroll:SetPoint("BOTTOMRIGHT", -34, 16)
-  win.child = CreateFrame("Frame", nil, scroll); win.child:SetSize(560, 1)
+  local U = ns.ui
+  win = U.window("RebirthTrackPositionsFrame", W, H, T("title"), { point = { "CENTER", 0, 0 } })
+  -- Interruptor de los puntos del mapa, en la franja del título (chip verde prendido, gris apagado).
+  win.pins = U.button(win.header, T("pins"), pinsOn() and "on" or "off", function() settings().mapPins = not pinsOn(); ns.refreshPositions() end)
+  win.pins.tip = T("tipPins")
+  if win.close then win.pins:SetPoint("RIGHT", win.close, "LEFT", -6, 0) else win.pins:SetPoint("RIGHT", -6, 0) end
+  -- Franja de resumen: cuántas anotadas, cuántas en vivo y si la tuya se comparte.
+  local y = win.top
+  win.strip = CreateFrame("Frame", nil, win)
+  win.strip:SetPoint("TOPLEFT", 1, y); win.strip:SetPoint("TOPRIGHT", -1, y); win.strip:SetHeight(30)
+  U.fill(win.strip, U.C.sub, 1)
+  U.hline(win.strip, -29)
+  win.strip:EnableMouse(true)
+  win.strip:SetScript("OnEnter", function(self)
+    if not self.tipText then return end
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:AddLine(self.tipText, 1, 1, 1, true); GameTooltip:Show()
+  end)
+  win.strip:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  win.counts = U.font(win.strip, "GameFontHighlightSmall", U.C.text, "LEFT"); win.counts:SetPoint("LEFT", 12, 0)
+  win.sharing = U.font(win.strip, "GameFontHighlightSmall", U.C.green, "RIGHT"); win.sharing:SetPoint("RIGHT", -12, 0)
+  y = y - 30
+  -- Qué es esto (chiquito, gris).
+  win.intro = U.font(win, "GameFontHighlightSmall", U.C.muted, "LEFT")
+  win.intro:SetPoint("TOPLEFT", 12, y - 8); win.intro:SetPoint("RIGHT", -12, 0)
+  y = y - 48
+  -- La tabla.
+  win.thead = U.tableHeader(win, cols(), INNER, y)
+  y = y - 22
+  local scroll = CreateFrame("ScrollFrame", "RebirthTrackPositionsScroll", win)
+  scroll:SetPoint("TOPLEFT", 1, y); scroll:SetPoint("BOTTOMRIGHT", -1, 1)
+  win.child = CreateFrame("Frame", nil, scroll); win.child:SetSize(INNER, 1)
   scroll:SetScrollChild(win.child)
-  win.none = win.child:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  win.none:SetPoint("TOPLEFT", 4, -4); win.none:SetWidth(540); win.none:SetJustifyH("LEFT")
+  if scroll.EnableMouseWheel then scroll:EnableMouseWheel(true) end
+  scroll:SetScript("OnMouseWheel", function(self, delta)
+    local max = (self.GetVerticalScrollRange and self:GetVerticalScrollRange()) or 0
+    local cur = (self.GetVerticalScroll and self:GetVerticalScroll()) or 0
+    self:SetVerticalScroll(math.max(0, math.min(max, cur - (delta or 0) * ROW_H * 2)))
+  end)
+  win.none = U.font(win.child, "GameFontHighlightSmall", U.C.muted, "LEFT")
+  win.none:SetPoint("TOPLEFT", 12, -10); win.none:SetWidth(INNER - 24)
   win:Hide() -- (en WoW un marco nuevo arranca visible)
   win:SetScript("OnShow", ns.refreshPositions)
-  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackPositionsFrame") end
 end
 
 -- /rt posiciones y el botón de la ventana del addon: abre o cierra la lista.

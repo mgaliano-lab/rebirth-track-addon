@@ -1,6 +1,7 @@
 dofile(arg[1] or "tests/wowstub.lua") -- stubs de la API de WoW
 local chunk = assert(loadfile(arg[2] or "RebirthTrack/RebirthTrack.lua"))
 local ns = {} -- como en WoW: los archivos del addon comparten esta tabla
+assert(loadfile("RebirthTrack/UI.lua"))("RebirthTrack", ns)
 chunk("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Collect.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Bank.lua"))("RebirthTrack", ns)
@@ -26,7 +27,7 @@ local rt = SlashCmdList.REBIRTHTRACK
 for _, c in ipairs({ "", "help", "ayuda", "mostrar", "status", "estado", "vincular", "link", "registrar", "detener", "mazmorras", "dungeons", "ocultar", "show", "borrar", "minimapa", "minimap", "cualquiera" }) do
   print("== /rt " .. c); rt(c)
 end
-for _, b in ipairs({ "Vincular personaje", "Estado", "Detener registro", "Registrar ahora", "Mazmorras", "Ayuda", "Volver" }) do print("== click " .. b); click(b) end
+for _, b in ipairs({ "Vincular", "Estado", "Detener", "Registrar", "Mazmorras", "Ayuda", "Volver" }) do print("== click " .. b); click(b) end
 print("links:", #RebirthTrackDB.links, RebirthTrackDB.links[1])
 print("ui:", RebirthTrackDB.ui.shown)
 assert(SLASH_REBIRTHTRACK1 == "/rt", "falta registrar /rt (SLASH_REBIRTHTRACK1)")
@@ -540,7 +541,7 @@ CP.collectPosition()
 assert(not sharedPos(), "apagada no manda nada más")
 rt("posicion on")
 assert(RebirthTrackDB.settings.sharePos == true and pos1():match("Bosque de Elwynn;0;Reinos del Este$"))
-click("Posición: ")
+click("Posición")
 assert(RebirthTrackDB.settings.sharePos == false, "el botón de la ventana la apaga")
 rt("posicion on")
 rt("opciones") -- sin panel de opciones en este cliente: no falla
@@ -693,7 +694,7 @@ assert(mapSet[#mapSet] == 1454, "termina en Orgrimmar (1454), no en la zona prop
 assert(not w.shown, "cierra la lista para no tapar el mapa")
 WorldMapFrame, ShowUIPanel = nil, nil
 rt("posiciones")
-click("Posiciones de la guild")
+click("Posiciones")
 assert(not w.shown, "el botón la cierra")
 -- Quieto: se vuelve a avisar cada minuto (con la hora nueva), para no desaparecer del mapa de los demás.
 sentAddon = {}

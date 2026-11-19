@@ -436,26 +436,16 @@ local function showCopy(id)
   local list = forItem(id)
   if #list == 0 then return false end
   if not copy then
-    copy = CreateFrame("Frame", "RebirthTrackRequestCopy", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    copy:SetSize(260, 150)
-    copy:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
-    copy:SetFrameStrata("DIALOG")
-    copy:EnableMouse(true); copy:SetMovable(true); copy:RegisterForDrag("LeftButton")
-    copy:SetScript("OnDragStart", copy.StartMoving); copy:SetScript("OnDragStop", copy.StopMovingOrSizing)
-    if copy.SetBackdrop then
-      copy:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-    end
-    copy.title = copy:CreateFontString(nil, "OVERLAY", "GameFontNormal"); copy.title:SetPoint("TOP", 0, -12)
-    local x = CreateFrame("Button", nil, copy, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
-    x:SetScript("OnClick", function() copy:Hide() end)
-    copy.edit = CreateFrame("EditBox", nil, copy, "InputBoxTemplate")
+    local U = ns.ui
+    copy = U.window("RebirthTrackRequestCopy", 280, 170, "", { point = { "CENTER", 0, 120 } })
+    copy.title:SetText(T("copyTitle"))
+    copy.edit = ns.ui.input(copy, 240, 90)
     copy.edit:SetMultiLine(true)
     copy.edit:SetAutoFocus(true)
-    copy.edit:SetPoint("TOPLEFT", 18, -34); copy.edit:SetPoint("BOTTOMRIGHT", -16, 30)
+    copy.edit:ClearAllPoints(); copy.edit:SetPoint("TOPLEFT", 12, copy.top - 10); copy.edit:SetPoint("BOTTOMRIGHT", -12, 30)
     copy.edit:SetScript("OnEscapePressed", function() copy:Hide() end)
     copy.edit:SetScript("OnTextChanged", function(self, user) if user then self:SetText(copy.value or ""); self:HighlightText() end end)
-    copy.hint = copy:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); copy.hint:SetPoint("BOTTOM", 0, 12)
+    copy.hint = ns.ui.font(copy, "GameFontHighlightSmall", ns.ui.C.muted, "CENTER"); copy.hint:SetPoint("BOTTOM", 0, 10)
   end
   local names = {}
   for _, x in ipairs(list) do names[#names + 1] = full(x.r.who) end
@@ -670,19 +660,11 @@ ticker:SetScript("OnUpdate", function(_, e)
 end)
 
 -- ── Ventana de pedidos ───────────────────────────────────────────────────────────────────
+-- Estilo «Obsidiana» (UI.lua): pestañas con contador y una tabla con columnas Quién · Receta ·
+-- Materiales (íconos con la cantidad y el tooltip del ítem) · Estado · Vence · acciones.
 local win
-local ROWS = 9
-local function backdrop(frame)
-  if frame.SetBackdrop then
-    frame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
-end
-local function btn(parent, w, text, onClick)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  b:SetSize(w, 22); b:SetText(text); b:SetScript("OnClick", onClick)
-  return b
-end
+local ROWS, ROW_H, WIN_W, WIN_H = 9, 36, 660, 470
+local COLS = { { "who", 130 }, { "recipe", 0 }, { "items", 136 }, { "state", 86 }, { "exp", 62 }, { "act", 170, "", "RIGHT" } }
 
 local function expiryText(r)
   if (r.expires or 0) == 0 then return T("never") end
@@ -702,59 +684,59 @@ local function tabRows(tab)
   return out
 end
 
+-- Para el mosaico «Pedidos» de la ventana principal: lo que espera revisión (solo a los revisores).
+function ns.requestsBadge()
+  if not enabled() or not isReviewer(me()) then return 0 end
+  return #tabRows("pending")
+end
+
 local refreshWin
 local function createWindow()
   if win then return win end
-  win = CreateFrame("Frame", "RebirthTrackRequestsFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  win:SetSize(520, 420)
-  win:SetFrameStrata("HIGH")
-  win:SetClampedToScreen(true)
-  win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  win:SetPoint("CENTER", UIParent, "CENTER", 0, 40)
-  backdrop(win)
-  win.title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal"); win.title:SetPoint("TOP", 0, -14)
-  local x = CreateFrame("Button", nil, win, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
-  x:SetScript("OnClick", function() win:Hide() end)
-  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackRequestsFrame") end
-
+  local U, C = ns.ui, ns.ui.C
+  win = U.window("RebirthTrackRequestsFrame", WIN_W, WIN_H, "", { strata = "HIGH", point = { "CENTER", 0, 40 } })
   win.tab, win.page = "mine", 1
-  win.tabs = {}
-  for i, t in ipairs({ { "mine", "tabMine" }, { "pending", "tabPending" }, { "guild", "tabGuild" }, { "reviewers", "tabReviewers" } }) do
-    local b = btn(win, 118, "", function() win.tab, win.page = t[1], 1; refreshWin() end)
-    b:SetPoint("TOPLEFT", 16 + (i - 1) * 122, -36)
-    b.tab, b.key = t[1], t[2]
-    win.tabs[#win.tabs + 1] = b
-  end
-  win.msg = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  win.msg:SetPoint("TOPLEFT", 18, -70); win.msg:SetPoint("RIGHT", -18, 0); win.msg:SetJustifyH("LEFT")
+  win.tabs = U.tabs(win, win.top, { { "mine", "" }, { "pending", "" }, { "guild", "" }, { "reviewers", "" } }, function(k)
+    win.tab, win.page = k, 1; refreshWin()
+  end)
+  local y = win.top - 30
+  win.msg = U.font(win, "GameFontHighlightSmall", C.muted, "LEFT")
+  win.msg:SetPoint("TOPLEFT", 12, y - 8); win.msg:SetPoint("RIGHT", -12, 0)
+  win.head = U.tableHeader(win, COLS, WIN_W - 2, y)
+  local pos = win.head.pos
 
   win.rows = {}
   for i = 1, ROWS do
-    local row = CreateFrame("Frame", nil, win)
-    row:SetSize(484, 32)
-    row:SetPoint("TOPLEFT", 18, -66 - (i - 1) * 34)
-    row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    row.text:SetPoint("TOPLEFT", 0, -2); row.text:SetPoint("RIGHT", -190, 0)
-    row.text:SetJustifyH("LEFT"); row.text:SetHeight(30)
-    if row.text.SetWordWrap then row.text:SetWordWrap(true) end
-    row.a = btn(row, 76, "", function() if row.onA then row.onA() end end); row.a:SetPoint("RIGHT", -110, 0)
-    row.b = btn(row, 54, "", function() if row.onB then row.onB() end end); row.b:SetPoint("RIGHT", -54, 0)
-    row.c = btn(row, 52, "", function() if row.onC then row.onC() end end); row.c:SetPoint("RIGHT", 0, 0)
+    local row = U.row(win, ROW_H, i)
+    row:SetPoint("TOPLEFT", 1, y - 22 - (i - 1) * ROW_H); row:SetPoint("RIGHT", win, "RIGHT", -1, 0)
+    row.dot = U.dot(row, 10, C.text); row.dot:SetPoint("LEFT", 8 + pos.who.x, 0)
+    row.who = U.font(row, "GameFontHighlightSmall", C.text, "LEFT"); row.who:SetPoint("LEFT", row.dot, "RIGHT", 6, 0); row.who:SetWidth(pos.who.w - 24)
+    if row.who.SetWordWrap then row.who:SetWordWrap(false) end
+    row.recipe = U.font(row, "GameFontHighlightSmall", C.text, "LEFT"); row.recipe:SetPoint("LEFT", 8 + pos.recipe.x, 0); row.recipe:SetWidth(pos.recipe.w - 10)
+    if row.recipe.SetWordWrap then row.recipe:SetWordWrap(false) end
+    row.icons = {}
+    for k = 1, 4 do
+      local ic = U.icon(row, 26); ic:SetPoint("LEFT", 8 + pos.items.x + (k - 1) * 30, 0)
+      row.icons[k] = ic
+    end
+    row.more = U.font(row, "GameFontHighlightSmall", C.muted, "LEFT"); row.more:SetPoint("LEFT", 8 + pos.items.x + 4 * 30, 0)
+    row.pill = U.pill(row); row.pill:SetPoint("LEFT", 8 + pos.state.x, 0)
+    row.exp = U.font(row, "GameFontHighlightSmall", C.muted, "LEFT"); row.exp:SetPoint("LEFT", 8 + pos.exp.x, 0); row.exp:SetWidth(pos.exp.w - 8)
+    row.c = U.button(row, "", "dng", function() if row.onC then row.onC() end end); row.c:SetPoint("RIGHT", -8, 0)
+    row.b = U.button(row, "", nil, function() if row.onB then row.onB() end end); row.b:SetPoint("RIGHT", row.c, "LEFT", -4, 0)
+    row.a = U.button(row, "", "pri", function() if row.onA then row.onA() end end); row.a:SetPoint("RIGHT", row.b, "LEFT", -4, 0)
     win.rows[i] = row
   end
 
-  win.prev = btn(win, 26, "<", function() win.page = math.max(1, win.page - 1); refreshWin() end)
-  win.prev:SetPoint("BOTTOMLEFT", 18, 14)
-  win.next = btn(win, 26, ">", function() win.page = win.page + 1; refreshWin() end)
-  win.next:SetPoint("LEFT", win.prev, "RIGHT", 4, 0)
-  win.pageText = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); win.pageText:SetPoint("LEFT", win.next, "RIGHT", 8, 0)
+  local ft = U.footer(win, 36)
+  win.prev = U.iconButton(ft, 22, "‹", function() win.page = math.max(1, win.page - 1); refreshWin() end)
+  win.prev:SetPoint("LEFT", 10, 0)
+  win.pageText = U.font(ft, "GameFontHighlightSmall", C.muted, "LEFT"); win.pageText:SetPoint("LEFT", win.prev, "RIGHT", 8, 0)
+  win.next = U.iconButton(ft, 22, "›", function() win.page = win.page + 1; refreshWin() end)
+  win.next:SetPoint("LEFT", win.pageText, "RIGHT", 8, 0)
 
   -- Revisores: agregar por nombre (solo el GM).
-  win.name = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
-  win.name:SetSize(200, 20); win.name:SetAutoFocus(false)
-  win.name:SetPoint("BOTTOMRIGHT", -100, 16)
-  win.add = btn(win, 80, "", function()
+  win.add = U.button(ft, "", "pri", function()
     local n = win.name:GetText() or ""
     if n:match("%S") then
       local list = reviewerList(); list[#list + 1] = n
@@ -762,22 +744,29 @@ local function createWindow()
     end
     refreshWin()
   end)
-  win.add:SetPoint("LEFT", win.name, "RIGHT", 6, 0)
+  win.add:SetPoint("RIGHT", -10, 0)
+  win.name = U.input(ft, 200, 22, T("namePh"))
+  win.name:SetPoint("RIGHT", win.add, "LEFT", -6, 0)
   win.name:SetScript("OnEnterPressed", function() win.add:Click() end)
-  win.name:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   return win
+end
+
+local function rowClass(row, name)
+  local U = ns.ui
+  local c = U.classColor(U.classOf(name))
+  row.dot:SetColor(c)
+  if row.who.SetTextColor then row.who:SetTextColor(c[1], c[2], c[3]) end
 end
 
 function refreshWin()
   if not win or not win:IsShown() then return end
   local reviewer, gm = isReviewer(me()), isGM(me())
-  win.title:SetText(T("title"))
-  for _, b in ipairs(win.tabs) do
-    b:SetText(T(b.key))
-    local onlyRev = b.tab == "pending" or b.tab == "reviewers"
-    b:SetEnabled((not onlyRev or reviewer) and b.tab ~= win.tab)
-  end
   if (win.tab == "pending" or win.tab == "reviewers") and not reviewer then win.tab = "mine" end
+  win.title:SetText(T("title"))
+  local counts = { mine = #tabRows("mine"), guild = #tabRows("guild"), hot = "pending" }
+  if reviewer then counts.pending = #tabRows("pending"); counts.reviewers = #reviewerList() end
+  win.tabs:Update(win.tab, counts, { pending = reviewer, reviewers = reviewer },
+    { mine = T("tabMine"), pending = T("tabPending"), guild = T("tabGuild"), reviewers = T("tabReviewers") })
   local rowsData, msg = {}, nil
   if win.tab == "reviewers" then
     local _, ranks = councilRanks()
@@ -790,17 +779,21 @@ function refreshWin()
   local pages = math.max(1, math.ceil(#rowsData / ROWS))
   win.page = math.min(win.page, pages)
   win.msg:SetText(msg or ""); win.msg:SetShown(msg and true or false)
-  local top = msg and -86 or -66
+  local table_ = win.tab ~= "reviewers" and #rowsData > 0
+  win.head:SetShown(table_)
+  local top = win.top - 30 - (table_ and 22 or (msg and 30 or 0))
   for i, row in ipairs(win.rows) do
-    row:ClearAllPoints(); row:SetPoint("TOPLEFT", 18, top - (i - 1) * 34)
+    row:ClearAllPoints(); row:SetPoint("TOPLEFT", 1, top - (i - 1) * ROW_H); row:SetPoint("RIGHT", win, "RIGHT", -1, 0)
     local d = rowsData[(win.page - 1) * ROWS + i]
-    row.onA, row.onB, row.onC = nil, nil, nil
+    row.onA, row.onB, row.onC, row.onEnter = nil, nil, nil, nil
     row.a:Hide(); row.b:Hide(); row.c:Hide()
+    for _, ic in ipairs(row.icons) do ic:Hide() end
+    row.more:SetText(""); row.pill:Hide(); row.exp:SetText(""); row.recipe:SetText("")
     if not d then row:Hide()
     elseif d.reviewer then
-      row.text:SetText(d.reviewer)
+      row.who:SetText(short(d.reviewer)); rowClass(row, d.reviewer)
       if gm then
-        row.c:SetText(T("remove")); row.c:Show()
+        row.c:SetLabel(T("remove")); row.c:Show()
         row.onC = function()
           local list = {}
           for _, n in ipairs(reviewerList()) do if key(n) ~= key(d.reviewer) then list[#list + 1] = n end end
@@ -810,16 +803,29 @@ function refreshWin()
       row:Show()
     else
       local r = d
-      local state = r.status == "g" and T("inGuild") or T("pending")
-      row.text:SetText("|cffffffff" .. short(r.who) .. "|r · " .. r.recipe .. " · |cff9d9d9d" .. state .. " · " .. T("expires"):format(expiryText(r)) .. "|r\n" .. itemsText(r.items, 4))
-      if reviewer and r.status == "p" then
-        row.a:SetText(T("promote")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
+      row.who:SetText(short(r.who)); rowClass(row, r.who)
+      row.recipe:SetText(r.recipe)
+      for k, it in ipairs(r.items) do
+        if k > 4 then row.more:SetText("+" .. (#r.items - 4)); break end
+        row.icons[k]:SetItem(it.id, it.n); row.icons[k]:Show()
       end
-      if reviewer then
-        row.b:SetText(T("expiryBtn")); row.b:Show(); row.onB = function() cycleExpiry(r); refreshWin() end
+      row.pill:Set(r.status == "g" and T("inGuild") or T("pending"), r.status == "g" and "guild" or "pend"); row.pill:Show()
+      row.exp:SetText(expiryText(r))
+      row.onEnter = function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:AddLine(r.recipe, 1, 0.82, 0)
+        GameTooltip:AddLine(full(r.who), 1, 1, 1)
+        GameTooltip:AddLine(itemsText(r.items), 0.85, 0.85, 0.85, true)
+        GameTooltip:Show()
       end
       if reviewer or key(r.who) == key(me()) then
-        row.c:SetText(T("close")); row.c:Show(); row.onC = function() setStatus(r, "c"); refreshWin() end
+        row.c:SetLabel(T("close")); row.c:Show(); row.onC = function() setStatus(r, "c"); refreshWin() end
+      end
+      if reviewer then
+        row.b:SetLabel(T("expiryBtn")); row.b:Show(); row.onB = function() cycleExpiry(r); refreshWin() end
+      end
+      if reviewer and r.status == "p" then
+        row.a:SetLabel(T("promote")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
       end
       row:Show()
     end
@@ -827,9 +833,10 @@ function refreshWin()
   win.pageText:SetText(T("page"):format(win.page, pages))
   win.prev:SetEnabled(win.page > 1); win.next:SetEnabled(win.page < pages)
   local editing = win.tab == "reviewers" and gm
-  win.name:SetShown(editing); win.add:SetShown(editing); win.add:SetText(T("add"))
+  win.name:SetShown(editing); win.add:SetShown(editing); win.add:SetLabel(T("add"))
+  if ns.refreshMain then ns.refreshMain() end
 end
-listeners[#listeners + 1] = function() if win then refreshWin() end end
+listeners[#listeners + 1] = function() if win then refreshWin() end; if ns.refreshMain then ns.refreshMain() end end
 
 function ns.openRequests(tab)
   if not enabled() then say(T("off")); return end

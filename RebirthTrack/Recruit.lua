@@ -21,8 +21,8 @@ local TEXTS = {
     title = "Invitador",
     intro = "El mensaje para sumar gente a la guild. Editalo si querés: cada renglón sale como un mensaje. Se manda con un clic; los links salen como texto (en el chat no son clickeables).",
     default = "<%s> Guild de la Horda PvP y PvE en WoW Forever busca jugadores. Leveleamos juntos, armamos grupos para mazmorras y campos de batalla y nos preparamos para las raids. Todas las clases y roles, tanques y sanadores muy bienvenidos.\nBuena onda, sin toxicidad y reglas claras de loot. Web: %s - Discord: %s - Susurrame y te invito!",
-    count = "%d caracteres · sale en %d mensaje(s)", tooMany = "|cffff4040%d mensajes: es demasiado, acortalo (máximo %d)|r",
-    empty = "|cffff4040El mensaje está vacío.|r",
+    count = "%d caracteres · sale en %d mensaje(s)", tooMany = "|cffff7a7e%d mensajes: es demasiado, acortalo (máximo %d)|r",
+    empty = "|cffff7a7eEl mensaje está vacío.|r",
     reset = "Texto original", tipReset = "Vuelve al mensaje de la web (con el nombre de tu guild, la web y el Discord).",
     yell = "Gritar", tipYell = "Lo grita (/gritar): lo ven los que están cerca tuyo.",
     send = "Mandar a %s", sendNone = "Mandar al canal",
@@ -35,13 +35,14 @@ local TEXTS = {
     inviteLabel = "Invitar a:", invite = "Invitar a la guild", tipInvite = "Le manda la invitación a la guild al nombre escrito (si está vacío, a tu objetivo).",
     noTarget = "Escribí un nombre o seleccioná al personaje.", noRight = "Tu rango de la guild no puede invitar.", noGuild = "No estás en una guild.",
     invited = "Invitación a la guild mandada a %s.",
+    msgLabel = "Mensaje · cada renglón sale como un mensaje", namePh = "Nombre",
   },
   en = {
     title = "Recruiter",
     intro = "The message to bring people into the guild. Edit it if you want: each line goes out as one message. It's sent with a click; links go out as text (they aren't clickable in chat).",
     default = "<%s> Horde PvP and PvE guild on WoW Forever looking for players. We level together, form groups for dungeons and battlegrounds and get ready for raids. All classes and roles, tanks and healers very welcome.\nGood vibes, no toxicity and clear loot rules. Web: %s - Discord: %s - Whisper me for an invite!",
-    count = "%d characters · goes out in %d message(s)", tooMany = "|cffff4040%d messages: too many, shorten it (max %d)|r",
-    empty = "|cffff4040The message is empty.|r",
+    count = "%d characters · goes out in %d message(s)", tooMany = "|cffff7a7e%d messages: too many, shorten it (max %d)|r",
+    empty = "|cffff7a7eThe message is empty.|r",
     reset = "Original text", tipReset = "Back to the website's message (with your guild's name, the website and the Discord).",
     yell = "Yell", tipYell = "Yells it (/yell): people near you see it.",
     send = "Send to %s", sendNone = "Send to channel",
@@ -54,6 +55,7 @@ local TEXTS = {
     inviteLabel = "Invite:", invite = "Invite to guild", tipInvite = "Sends the guild invite to the typed name (if empty, to your target).",
     noTarget = "Type a name or target the character.", noRight = "Your guild rank can't invite.", noGuild = "You're not in a guild.",
     invited = "Guild invite sent to %s.",
+    msgLabel = "Message · each line goes out as one message", namePh = "Name",
   },
 }
 local function T(key) local l = ns.lang and ns.lang() or "es"; return (TEXTS[l] or TEXTS.es)[key] or TEXTS.es[key] end
@@ -171,53 +173,93 @@ end
 
 -- Ventana
 local win
-local function tipOn(b, fn)
-  b:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(fn(), 1, 1, 1, true); GameTooltip:Show() end)
-  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+local W, H = 520, 460
+local EDIT_H = 96 -- alto del cuadro editable
+local LINE_H = 20 -- cada mensaje numerado, debajo del cuadro
+
+-- Los mensajes tal como van a salir, numerados (uno por renglón del chat), dentro del mismo panel
+-- que el cuadro editable.
+local function showLines(list)
+  local U = ns.ui
+  win.lines = win.lines or {}
+  local n = math.min(#list, MAX_PARTS)
+  for i = 1, math.max(n, #win.lines) do
+    local l = win.lines[i]
+    if not l and i <= n then
+      l = CreateFrame("Frame", nil, win.box)
+      l:SetHeight(LINE_H)
+      l:SetPoint("TOPLEFT", 1, -(EDIT_H + 1 + (i - 1) * LINE_H)); l:SetPoint("TOPRIGHT", -1, -(EDIT_H + 1 + (i - 1) * LINE_H))
+      U.fill(l, U.C.rowAlt, (i % 2 == 1) and 1 or 0)
+      l.no = U.font(l, "GameFontNormalSmall", U.C.gold, "LEFT"); l.no:SetPoint("LEFT", 8, 0); l.no:SetWidth(16)
+      l.fs = U.font(l, "GameFontHighlightSmall", U.C.text, "LEFT")
+      l.fs:SetPoint("LEFT", 28, 0); l.fs:SetPoint("RIGHT", -8, 0)
+      if l.fs.SetWordWrap then l.fs:SetWordWrap(false) end
+      win.lines[i] = l
+    end
+    if l then
+      l:SetShown(i <= n)
+      if i <= n then l.no:SetText(tostring(i)); l.fs:SetText((list[i]:gsub("|", "/"))) end
+    end
+  end
+  win.sep:SetShown(n > 0)
+  win.box:SetHeight(EDIT_H + (n > 0 and (1 + n * LINE_H) or 0) + 2)
 end
 
 function ns.refreshRecruit()
   if not win then return end
+  local U = ns.ui
   win.title:SetText(T("title")); win.intro:SetText(T("intro"))
+  win.msgLabel:SetText(T("msgLabel"))
   -- Sin texto propio, el cuadro sigue al idioma (y al nombre de la guild).
   if settings().recruitText == nil and win.edit:GetText() ~= defaultText() then win.edit:SetText(defaultText()) end
   local list = parts(text())
+  local ok = #list > 0 and #list <= MAX_PARTS
   win.count:SetText(#list == 0 and T("empty") or #list > MAX_PARTS and T("tooMany"):format(#list, MAX_PARTS)
     or T("count"):format(select(2, text():gsub("[^\128-\191\n]", "")), #list))
+  local cc = ok and U.C.green or U.C.red
+  if win.count.SetTextColor then win.count:SetTextColor(cc[1], cc[2], cc[3]) end
+  showLines(list)
   win.reset:SetText(T("reset")); win.yell:SetText(T("yell"))
   local c = channel()
   win.send:SetText(c and T("send"):format(c.name) or T("sendNone"))
   win.chan:SetText(T("channel"))
   win.inviteLabel:SetText(T("inviteLabel")); win.invite:SetText(T("invite"))
+  if win.name.ph then win.name.ph:SetText(T("namePh")) end
+  win.reset.tip, win.yell.tip, win.send.tip, win.invite.tip = T("tipReset"), T("tipYell"), T("tipSend"), T("tipInvite")
+  local names = {}
+  for _, ch in ipairs(channels()) do names[#names + 1] = ch.id .. ". " .. ch.name end
+  win.chan.tip = T("tipChannel"):format(#names > 0 and table.concat(names, ", ") or T("noChannels"))
 end
 
 local function create()
-  win = CreateFrame("Frame", "RebirthTrackRecruitFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  win:SetSize(500, 380); win:SetPoint("CENTER"); win:SetFrameStrata("DIALOG"); win:SetClampedToScreen(true)
-  win:SetMovable(true); win:EnableMouse(true); win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving); win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  if win.SetBackdrop then
-    win:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
-  win.title = win:CreateFontString(nil, "OVERLAY", "GameFontNormal"); win.title:SetPoint("TOP", 0, -14)
-  local close = CreateFrame("Button", nil, win, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -4, -4)
-  win.intro = win:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  win.intro:SetPoint("TOPLEFT", 18, -36); win.intro:SetPoint("RIGHT", -18, 0); win.intro:SetJustifyH("LEFT")
+  local U = ns.ui
+  win = U.window("RebirthTrackRecruitFrame", W, H, T("title"), { point = { "CENTER", 0, 0 } })
+  local y = win.top
+  win.intro = U.font(win, "GameFontHighlightSmall", U.C.muted, "LEFT")
+  win.intro:SetPoint("TOPLEFT", 12, y - 10); win.intro:SetPoint("RIGHT", -12, 0)
+  y = y - 48
 
-  -- El texto: un cuadro de varias líneas con scroll, sobre un fondo oscuro.
-  local box = CreateFrame("Frame", nil, win, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  box:SetPoint("TOPLEFT", 16, -72); box:SetPoint("TOPRIGHT", -16, -72); box:SetHeight(160)
-  if box.SetBackdrop then
-    box:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-      tile = true, tileSize = 16, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-    box:SetBackdropColor(0, 0, 0, 0.6)
-  end
-  local scroll = CreateFrame("ScrollFrame", "RebirthTrackRecruitScroll", box, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", 8, -8); scroll:SetPoint("BOTTOMRIGHT", -28, 8)
+  -- Encabezado del mensaje: qué es y «Texto original».
+  win.reset = U.button(win, T("reset"), nil, function() settings().recruitText = nil; win.edit:SetText(defaultText()); ns.refreshRecruit() end)
+  win.reset:SetPoint("TOPRIGHT", -12, y)
+  win.msgLabel = U.font(win, "GameFontNormalSmall", U.C.muted, "LEFT")
+  win.msgLabel:SetPoint("LEFT", win, "TOPLEFT", 12, y - 11); win.msgLabel:SetPoint("RIGHT", win.reset, "LEFT", -8, 0)
+  if win.msgLabel.SetWordWrap then win.msgLabel:SetWordWrap(false) end
+  y = y - 28
+
+  -- El panel del mensaje (estilo campo de texto): arriba el cuadro editable con scroll, abajo los
+  -- mensajes numerados tal como van a salir.
+  local box = CreateFrame("Frame", nil, win)
+  box:SetPoint("TOPLEFT", 12, y); box:SetPoint("TOPRIGHT", -12, y); box:SetHeight(EDIT_H + 2)
+  U.fill(box, U.C.input, 1)
+  box.edgeT = U.edge(box, U.C.btnLine, 1)
+  win.box = box
+  win.sep = U.hline(box, -EDIT_H, 0)
+  local scroll = CreateFrame("ScrollFrame", "RebirthTrackRecruitScroll", box)
+  scroll:SetPoint("TOPLEFT", 8, -6); scroll:SetPoint("TOPRIGHT", -8, -6); scroll:SetHeight(EDIT_H - 12)
   win.edit = CreateFrame("EditBox", nil, scroll)
   win.edit:SetMultiLine(true); win.edit:SetAutoFocus(false); win.edit:SetFontObject(ChatFontNormal or "ChatFontNormal")
-  win.edit:SetWidth(420); win.edit:SetMaxLetters(MAX_LEN * MAX_PARTS * 2)
+  win.edit:SetWidth(W - 24 - 16); win.edit:SetMaxLetters(MAX_LEN * MAX_PARTS * 2)
   win.edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   win.edit:SetScript("OnTextChanged", function(self, user)
     if not user then return end
@@ -225,49 +267,49 @@ local function create()
     settings().recruitText = (v ~= defaultText()) and v or nil
     ns.refreshRecruit()
   end)
+  win.edit:SetScript("OnEditFocusGained", function() box.edgeT:SetColor(U.C.gold[1], U.C.gold[2], U.C.gold[3], 1) end)
+  win.edit:SetScript("OnEditFocusLost", function() box.edgeT:SetColor(U.C.btnLine[1], U.C.btnLine[2], U.C.btnLine[3], 1) end)
+  -- Sin la barra de Blizzard: la rueda del mouse mueve el texto y el cursor siempre queda a la vista.
+  win.edit:SetScript("OnCursorChanged", function(_, _, cy, _, ch)
+    local top = (scroll.GetVerticalScroll and scroll:GetVerticalScroll()) or 0
+    local vis = (scroll.GetHeight and scroll:GetHeight()) or 0
+    cy, ch = -(cy or 0), ch or 0
+    if cy < top then scroll:SetVerticalScroll(cy)
+    elseif vis > 0 and cy + ch > top + vis then scroll:SetVerticalScroll(cy + ch - vis) end
+  end)
   scroll:SetScrollChild(win.edit)
+  if scroll.EnableMouseWheel then scroll:EnableMouseWheel(true) end
+  scroll:SetScript("OnMouseWheel", function(self, delta)
+    local max = (self.GetVerticalScrollRange and self:GetVerticalScrollRange()) or 0
+    local cur = (self.GetVerticalScroll and self:GetVerticalScroll()) or 0
+    self:SetVerticalScroll(math.max(0, math.min(max, cur - (delta or 0) * 28)))
+  end)
   box:EnableMouse(true); box:SetScript("OnMouseDown", function() win.edit:SetFocus() end)
 
-  win.count = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  win.count:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 2, -8); win.count:SetJustifyH("LEFT")
-  win.reset = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.reset:SetSize(130, 22)
-  win.reset:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", 0, -4)
-  win.reset:SetScript("OnClick", function() settings().recruitText = nil; win.edit:SetText(defaultText()); ns.refreshRecruit() end)
-  tipOn(win.reset, function() return T("tipReset") end)
+  -- Cuántos caracteres y mensajes (verde si sale, rojo si no).
+  win.count = U.font(win, "GameFontHighlightSmall", U.C.green, "LEFT")
+  win.count:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 2, -8); win.count:SetPoint("RIGHT", win, "RIGHT", -12, 0)
 
-  -- Envíos
-  win.yell = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.yell:SetSize(110, 26)
-  win.yell:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 0, -36)
-  win.yell:SetScript("OnClick", function() yell() end)
-  tipOn(win.yell, function() return T("tipYell") end)
-  win.send = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.send:SetSize(230, 26)
-  win.send:SetPoint("LEFT", win.yell, "RIGHT", 8, 0)
-  win.send:SetScript("OnClick", function() sendChannel(); ns.refreshRecruit() end)
-  tipOn(win.send, function() return T("tipSend") end)
-  win.chan = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.chan:SetSize(100, 26)
-  win.chan:SetPoint("LEFT", win.send, "RIGHT", 8, 0)
-  win.chan:SetScript("OnClick", function() nextChannel(); ns.refreshRecruit() end)
-  tipOn(win.chan, function()
-    local names = {}
-    for _, c in ipairs(channels()) do names[#names + 1] = c.id .. ". " .. c.name end
-    return T("tipChannel"):format(#names > 0 and table.concat(names, ", ") or T("noChannels"))
-  end)
+  -- Envíos: Gritar · Mandar a … (la acción principal, ocupa lo que sobra) · Canal ▸
+  win.yell = U.button(win, T("yell"), nil, function() yell() end, { h = 24 })
+  win.yell:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 0, -28)
+  win.chan = U.button(win, T("channel"), nil, function() nextChannel(); ns.refreshRecruit() end, { h = 24 })
+  win.chan:SetPoint("TOPRIGHT", box, "BOTTOMRIGHT", 0, -28)
+  win.send = U.button(win, T("sendNone"), "pri", function() sendChannel(); ns.refreshRecruit() end, { h = 24 })
+  win.send:SetPoint("LEFT", win.yell, "RIGHT", 6, 0); win.send:SetPoint("RIGHT", win.chan, "LEFT", -6, 0)
 
-  -- Invitar a la guild
-  win.inviteLabel = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  win.inviteLabel:SetPoint("TOPLEFT", win.yell, "BOTTOMLEFT", 2, -22)
-  win.name = CreateFrame("EditBox", nil, win, "InputBoxTemplate"); win.name:SetSize(180, 22); win.name:SetAutoFocus(false)
-  win.name:SetPoint("LEFT", win.inviteLabel, "RIGHT", 12, 0)
-  win.name:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  -- Invitar a la guild, en la barra de abajo.
+  local ft = U.footer(win, 44)
+  win.inviteLabel = U.font(ft, "GameFontNormalSmall", U.C.text, "LEFT")
+  win.inviteLabel:SetPoint("LEFT", 12, 0)
+  win.invite = U.button(ft, T("invite"), "pri", function() if invite(win.name:GetText()) then win.name:SetText("") end end, { h = 24 })
+  win.invite:SetPoint("RIGHT", -12, 0)
+  win.name = U.input(ft, 180, 24, T("namePh"))
+  win.name:SetPoint("LEFT", win.inviteLabel, "RIGHT", 8, 0); win.name:SetPoint("RIGHT", win.invite, "LEFT", -8, 0)
   win.name:SetScript("OnEnterPressed", function(self) if invite(self:GetText()) then self:SetText("") end; self:ClearFocus() end)
-  win.invite = CreateFrame("Button", nil, win, "UIPanelButtonTemplate"); win.invite:SetSize(150, 24)
-  win.invite:SetPoint("LEFT", win.name, "RIGHT", 8, 0)
-  win.invite:SetScript("OnClick", function() if invite(win.name:GetText()) then win.name:SetText("") end end)
-  tipOn(win.invite, function() return T("tipInvite") end)
 
   win:Hide() -- (en WoW un marco nuevo arranca visible)
   win:SetScript("OnShow", function() win.edit:SetText(text()); ns.refreshRecruit() end)
-  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackRecruitFrame") end
 end
 
 -- /rt invitar y el botón de la ventana del addon: abre o cierra el invitador.
