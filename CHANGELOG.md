@@ -13,6 +13,17 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.10.1] - 2026-11-19
+
+### Para todos
+
+- **«Solicitar a la Guild» va por componente**: ahora el checkbox y la cantidad están al lado de cada material de la receta, no de la receta entera. Tildá solo lo que te falta; la cantidad propone lo que necesitás para hacerla una vez (descontando bolsas y banco) y la podés cambiar (Enter para guardar). Los materiales de una misma receta van juntos en un pedido; si destildás todos, se cierra.
+
+### Técnico
+
+- `Requests.lua`: el checkbox único de la receta (`RebirthTrackRequestBox`, «× N») se reemplaza por uno por componente (`RebirthTrackRequestPick1..n`, checkbox + EditBox numérico). Clásica: dentro de `TradeSkillReagentN` / `CraftReagentN` (arriba a la derecha). Nueva (Forever): al lado de `Name` de cada hueco de `SchematicForm.reagentSlots`, emparejado por `GetReagentSlotSchematic().reagents[1].itemID`.
+- `setItem(receta, ítem, n|nil)` reemplaza a `request`/`missing`: suma, cambia o saca un ítem del pedido abierto de esa receta (crea uno `p` si no hay; lo cierra si queda vacío). El formato `rq1` y la web no cambian.
+
 ## [0.10.0] - 2026-11-19
 
 ### Para todos

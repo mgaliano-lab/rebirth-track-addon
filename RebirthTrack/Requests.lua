@@ -1,6 +1,8 @@
 -- Rebirth Track · Pedidos de materiales a la guild
--- En la ventana de profesión, debajo de lo que pide la receta, «Solicitar a la Guild» × N pide lo que
--- te falta (descontando bolsas y banco anotado) para hacerla N veces. El pedido viaja por el canal de
+-- En la ventana de profesión, al lado de cada componente de la receta, un checkbox y la cantidad
+-- («Solicitar a la Guild»): se pide solo el material que tildes, con la cantidad que propone (lo que te
+-- falta para hacerla una vez, descontando bolsas y banco anotado) o la que escribas. Los componentes de
+-- una receta van juntos en el mismo pedido. El pedido viaja por el canal de
 -- addons de la guild (RTK1) y lo revisan el GM, los oficiales (los rangos del consejo que manda el
 -- sitio; si no, 0 y 1) y los revisores que agregue el GM. Cuando lo trasladan a la guild, todos los
 -- que tengan el addon ven «Requerido por» en el tooltip del ítem (bolsas, banco, subasta, enlaces) y
@@ -27,8 +29,7 @@ local EXPIRY_DAYS = { 0, 7, 14, 30 }
 
 local TEXTS = {
   es = {
-    ask = "Solicitar a la Guild", askTip = "Pide a la guild lo que te falta para hacer esta receta las veces que digas (descuenta lo que tenés en las bolsas y en el banco). Lo ven el GM, los oficiales y los revisores; cuando lo trasladan, lo ve toda la guild en el tooltip de esos materiales. Destildalo cuando ya no lo necesites.",
-    times = "× %d", haveAll = "ya tenés todo lo que pide la receta: no hace falta pedir nada.",
+    ask = "Solicitar a la Guild", askTip = "Tildalo para pedirle a la guild este componente, en la cantidad del cuadrito (propone lo que te falta para hacer la receta una vez, descontando bolsas y banco; cambiala y apretá Enter). Lo ven el GM, los oficiales y los revisores; cuando lo trasladan, lo ve toda la guild en el tooltip del material. Destildalo cuando ya no lo necesites.",
     asked = "pedido a la guild: %s (%s).", cancelled = "pedido cerrado: %s.",
     title = "Pedidos de la guild", tabMine = "Mis pedidos", tabPending = "Pendientes", tabGuild = "En la guild", tabReviewers = "Revisores",
     none = "No hay pedidos.", promote = "Trasladar", close = "Cerrar", expires = "Vence: %s", never = "nunca",
@@ -45,8 +46,7 @@ local TEXTS = {
     off = "los pedidos a la guild están apagados (Esc › Opciones › AddOns › Rebirth Track).",
   },
   en = {
-    ask = "Request from the Guild", askTip = "Asks the guild for what you're missing to craft this recipe as many times as you say (counting your bags and bank). The GM, officers and reviewers see it; once they promote it, the whole guild sees it on those materials' tooltip. Untick it when you no longer need it.",
-    times = "× %d", haveAll = "you already have everything the recipe needs: nothing to request.",
+    ask = "Request from the Guild", askTip = "Tick it to ask the guild for this reagent, in the amount in the box (it suggests what you're missing to craft the recipe once, counting bags and bank; change it and press Enter). The GM, officers and reviewers see it; once they promote it, the whole guild sees it on the material's tooltip. Untick it when you no longer need it.",
     asked = "requested from the guild: %s (%s).", cancelled = "request closed: %s.",
     title = "Guild requests", tabMine = "My requests", tabPending = "Pending", tabGuild = "In the guild", tabReviewers = "Reviewers",
     none = "No requests.", promote = "Promote", close = "Close", expires = "Expires: %s", never = "never",
@@ -320,24 +320,31 @@ local function mineFor(recipe)
   return nil
 end
 
--- reagents = { { id, need, have, bank } }: lo que falta para hacerla n veces.
-local function missing(reagents, n)
-  local out = {}
-  for _, g in ipairs(reagents or {}) do
-    local short = (g.need or 0) * n - (g.have or 0) - (g.bank or 0)
-    if g.id and short > 0 then out[#out + 1] = { id = g.id, n = short } end
-  end
-  return out
+-- Lo que falta de un componente para hacer la receta una vez (si ya lo tenés, lo que pide la receta):
+-- la cantidad que propone el campo al lado del checkbox.
+local function suggested(g)
+  local short = (g.need or 0) - (g.have or 0) - (g.bank or 0)
+  return math.max(1, short > 0 and short or (g.need or 1))
 end
 
-local function request(recipe, reagents, n)
+-- Pide (n > 0) o deja de pedir (n nil) un componente de la receta. Todos los componentes de una
+-- receta van en el mismo pedido; si no queda ninguno, se cierra.
+local function setItem(recipe, id, n)
   if not enabled() then say(T("off")); return nil end
-  local items = missing(reagents, math.max(1, n or 1))
   local cur = mineFor(recipe)
-  if #items == 0 then
-    if cur then cur.status = "c"; commit(cur) end
-    say(T("haveAll")); return nil
+  local items = {}
+  for _, it in ipairs(cur and cur.items or {}) do
+    if it.id ~= id then items[#items + 1] = { id = it.id, n = it.n } end
   end
+  if n and n > 0 then items[#items + 1] = { id = id, n = math.min(math.floor(n), 9999) } end
+  if #items == 0 then
+    if not cur then return nil end
+    cur.status = "c"
+    local saved = commit(cur)
+    if saved then say(T("cancelled"):format(saved.recipe)) end
+    return saved
+  end
+  if #items > MAX_ITEMS then return cur end
   local r = cur or { id = newId(), who = me(), created = time(), status = "p", expires = 0, recipe = recipe }
   r.items = items
   local saved = commit(r)
@@ -517,17 +524,17 @@ local function onDeletePopup(which)
   say(msg)
 end
 
--- ── Checkbox en la receta ────────────────────────────────────────────────────────────────
--- Clásica: TradeSkillFrame (y CraftFrame en Vanilla), al lado de «Componentes:». Nueva
--- (ProfessionsFrame, la de Forever): arriba de los componentes de la receta elegida.
+-- ── Checkbox en cada componente ──────────────────────────────────────────────────────────
+-- Al lado de cada componente de la receta elegida, un checkbox y la cantidad: se pide a la guild
+-- solo el material que tildes. Clásica: TradeSkillReagent1..8 (y CraftReagent1..8 en Vanilla).
+-- Nueva (ProfessionsFrame, la de Forever): los huecos de SchematicForm.reagentSlots.
 local function current()
   local pf = _G.ProfessionsFrame
   if pf and pf.IsShown and pf:IsShown() then
     local form = pf.CraftingPage and pf.CraftingPage.SchematicForm
     local info = form and ((form.GetRecipeInfo and form:GetRecipeInfo()) or form.currentRecipeInfo)
     if info and info.recipeID then
-      return { recipe = info.name or ("#" .. info.recipeID), kind = "modern", index = info.recipeID,
-        anchor = form.Reagents and (form.Reagents.Label or form.Reagents) or form, modern = true, parent = form }
+      return { recipe = info.name or ("#" .. info.recipeID), kind = "modern", index = info.recipeID, form = form }
     end
   end
   local tf = _G.TradeSkillFrame
@@ -535,7 +542,7 @@ local function current()
     local i = GetTradeSkillSelectionIndex()
     local name, kind = GetTradeSkillInfo(i)
     if name and kind ~= "header" and kind ~= "subheader" then
-      return { recipe = name, kind = "trade", index = i, anchor = _G.TradeSkillReagentLabel, parent = tf }
+      return { recipe = name, kind = "trade", index = i, prefix = "TradeSkillReagent" }
     end
   end
   local cf = _G.CraftFrame
@@ -543,7 +550,7 @@ local function current()
     local i = GetCraftSelectionIndex()
     local name, _, kind = GetCraftInfo(i)
     if name and kind ~= "header" then
-      return { recipe = name, kind = "craft", index = i, anchor = _G.CraftReagentLabel, parent = cf }
+      return { recipe = name, kind = "craft", index = i, prefix = "CraftReagent" }
     end
   end
   return nil
@@ -551,64 +558,106 @@ end
 
 local function reagentsOf(c) return ns.recipeReagents and ns.recipeReagents(c.kind, c.index) or {} end
 
-local box
-local function createBox()
-  if box then return box end
-  box = CreateFrame("Frame", "RebirthTrackRequestBox", UIParent)
-  box:SetSize(230, 24)
-  box:SetFrameStrata("HIGH")
-  box.check = CreateFrame("CheckButton", nil, box, "UICheckButtonTemplate")
-  box.check:SetSize(22, 22)
-  box.check:SetPoint("LEFT", 0, 0)
-  box.label = box:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-  box.label:SetPoint("LEFT", box.check, "RIGHT", 2, 1)
-  box.times = box:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  box.times:SetPoint("LEFT", box.label, "RIGHT", 8, 0)
-  box.n = CreateFrame("EditBox", nil, box, "InputBoxTemplate")
-  box.n:SetSize(28, 18)
-  box.n:SetAutoFocus(false)
-  box.n:SetNumeric(true)
-  box.n:SetMaxLetters(2)
-  box.n:SetPoint("LEFT", box.times, "RIGHT", 6, 0)
-  box.n:SetText("1")
-  local function count() return math.max(1, tonumber(box.n:GetText()) or 1) end
-  box.check:SetScript("OnClick", function(self)
+-- El ítem de un hueco de la ventana nueva.
+local function slotItem(slot)
+  local sch = (slot.GetReagentSlotSchematic and slot:GetReagentSlotSchematic()) or slot.reagentSlotSchematic
+  local r = sch and sch.reagents and sch.reagents[1]
+  return r and r.itemID
+end
+
+-- { { frame, anchor, g } } con g = { id, need, have, bank } de reagentsOf: dónde va cada checkbox.
+local function reagentFrames(c)
+  local out, rs = {}, reagentsOf(c)
+  if c.prefix then
+    for i, g in ipairs(rs) do
+      local f = _G[c.prefix .. i]
+      if f and (not f.IsShown or f:IsShown()) then out[#out + 1] = { frame = f, anchor = f, g = g, classic = true } end
+    end
+    return out
+  end
+  local byId = {}
+  for _, g in ipairs(rs) do byId[g.id] = g end
+  local slots = c.form and c.form.reagentSlots
+  if type(slots) ~= "table" then return out end
+  for _, list in pairs(slots) do
+    for _, slot in ipairs(type(list) == "table" and list or {}) do
+      local ok, id = pcall(slotItem, slot)
+      local g = ok and id and byId[id]
+      if g and (not slot.IsShown or slot:IsShown()) then
+        out[#out + 1] = { frame = slot, anchor = slot.Name or slot.Button or slot, g = g }
+        byId[id] = nil
+      end
+    end
+  end
+  return out
+end
+
+local pickers, lastRecipe = {}, nil
+local function newPicker(i)
+  local p = CreateFrame("Frame", "RebirthTrackRequestPick" .. i, UIParent)
+  p:SetSize(52, 20)
+  p.check = CreateFrame("CheckButton", nil, p, "UICheckButtonTemplate")
+  p.check:SetSize(20, 20)
+  p.check:SetPoint("LEFT", 0, 0)
+  p.n = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
+  p.n:SetSize(30, 16)
+  p.n:SetAutoFocus(false)
+  p.n:SetNumeric(true)
+  p.n:SetMaxLetters(4)
+  p.n:SetPoint("LEFT", p.check, "RIGHT", 4, 0)
+  local function count() return math.max(1, tonumber(p.n:GetText()) or 1) end
+  p.check:SetScript("OnClick", function(self)
     local c = current()
-    if not c then return end
-    if self:GetChecked() then request(c.recipe, reagentsOf(c), count()) else cancel(c.recipe) end
-    box.update()
+    if not c or not p.id then return end
+    setItem(c.recipe, p.id, self:GetChecked() and count() or nil)
+    pcall(p.refresh)
   end)
-  box.n:SetScript("OnEnterPressed", function(self)
+  p.n:SetScript("OnEnterPressed", function(self)
     self:ClearFocus()
     local c = current()
-    if c and mineFor(c.recipe) then request(c.recipe, reagentsOf(c), count()) end
-    box.update()
+    if c and p.id and p.check:GetChecked() then setItem(c.recipe, p.id, count()) end
+    pcall(p.refresh)
   end)
-  box.n:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-  box.check:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(T("askTip"), 1, 1, 1, true); GameTooltip:Show() end)
-  box.check:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  box.lastRecipe = nil
-  function box.update()
-    local c = enabled() and current() or nil
-    if not c or not c.anchor then box:Hide(); return end
-    if box.lastParent ~= c.parent or box.lastAnchor ~= c.anchor then
-      box:SetParent(c.parent)
-      box:ClearAllPoints()
-      if c.modern and c.anchor == c.parent then box:SetPoint("TOPRIGHT", c.parent, "TOPRIGHT", -8, -36)
-      elseif c.modern then box:SetPoint("BOTTOMLEFT", c.anchor, "TOPLEFT", 0, 4)
-      else box:SetPoint("LEFT", c.anchor, "RIGHT", 6, 0) end
-      box:SetFrameLevel((c.parent.GetFrameLevel and c.parent:GetFrameLevel() or 1) + 10)
-      box.lastParent, box.lastAnchor = c.parent, c.anchor
+  p.n:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  local function tip(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(T("ask"), 1, 0.82, 0); GameTooltip:AddLine(T("askTip"), 1, 1, 1, true); GameTooltip:Show() end
+  p.check:SetScript("OnEnter", tip)
+  p.check:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  pickers[i] = p
+  return p
+end
+
+local function hidePickers(from) for i = from, #pickers do pickers[i]:Hide() end end
+
+local function updatePickers()
+  local c = enabled() and current() or nil
+  if not c then hidePickers(1); return end
+  local list = reagentFrames(c)
+  local mine = mineFor(c.recipe)
+  local asked = {}
+  for _, it in ipairs(mine and mine.items or {}) do asked[it.id] = it.n end
+  local fresh = lastRecipe ~= c.recipe
+  lastRecipe = c.recipe
+  for i, e in ipairs(list) do
+    local p = pickers[i] or newPicker(i)
+    p.refresh = updatePickers
+    if p.lastFrame ~= e.frame then
+      p:SetParent(e.frame)
+      p:ClearAllPoints()
+      if e.classic then p:SetPoint("TOPRIGHT", e.frame, "TOPRIGHT", 2, 4)
+      else p:SetPoint("LEFT", e.anchor, "RIGHT", 6, 0) end
+      p:SetFrameLevel((e.frame.GetFrameLevel and e.frame:GetFrameLevel() or 1) + 10)
+      p.lastFrame = e.frame
     end
-    local mine = mineFor(c.recipe)
-    box.label:SetText(T("ask"))
-    box.times:SetText("×")
-    if box.lastRecipe ~= c.recipe and not box.n:HasFocus() then box.n:SetText("1") end
-    box.lastRecipe = c.recipe
-    box.check:SetChecked(mine and true or false)
-    box:Show()
+    local changed = fresh or p.id ~= e.g.id
+    p.id = e.g.id
+    p.check:SetChecked(asked[e.g.id] and true or false)
+    if not p.n:HasFocus() then
+      if asked[e.g.id] then p.n:SetText(tostring(asked[e.g.id]))
+      elseif changed then p.n:SetText(tostring(suggested(e.g))) end
+    end
+    p:Show()
   end
-  return box
+  hidePickers(#list + 1)
 end
 
 local ticker = CreateFrame("Frame")
@@ -617,7 +666,7 @@ ticker:SetScript("OnUpdate", function(_, e)
   acc = acc + (e or 0)
   if acc < 0.4 then return end
   acc = 0
-  if box then pcall(box.update) end
+  pcall(updatePickers)
 end)
 
 -- ── Ventana de pedidos ───────────────────────────────────────────────────────────────────
@@ -796,7 +845,6 @@ for _, e in ipairs({ "PLAYER_LOGIN", "MERCHANT_SHOW", "AUCTION_HOUSE_SHOW", "TRA
 f:SetScript("OnEvent", function(_, event)
   if event == "PLAYER_LOGIN" then
     hookTooltips()
-    createBox()
     if hooksecurefunc then
       if type(HandleModifiedItemClick) == "function" then
         hooksecurefunc("HandleModifiedItemClick", function(link)
@@ -813,14 +861,14 @@ f:SetScript("OnEvent", function(_, event)
     end)
   elseif event == "MERCHANT_SHOW" or event == "AUCTION_HOUSE_SHOW" then
     pcall(warnBags)
-  elseif box then
-    pcall(box.update)
+  else
+    pcall(updatePickers)
   end
 end)
 
 -- Para las pruebas.
-ns._requests = { parse = parse, build = build, accept = accept, allowed = allowed, request = request, cancel = cancel,
+ns._requests = { parse = parse, build = build, accept = accept, allowed = allowed, cancel = cancel,
   setStatus = setStatus, cycleExpiry = cycleExpiry, setReviewers = setReviewers, isReviewer = isReviewer, forItem = forItem,
-  missing = missing, mineFor = mineFor, tabRows = tabRows, loadWeb = loadWeb, warnBags = warnBags, addLines = addLines,
+  setItem = setItem, suggested = suggested, mineFor = mineFor, tabRows = tabRows, loadWeb = loadWeb, warnBags = warnBags, addLines = addLines,
   showCopy = showCopy, onDeletePopup = onDeletePopup, prune = prune, all = all, store = store, full = full,
-  refreshWin = function() return refreshWin() end, box = function() return box end, current = current }
+  refreshWin = function() return refreshWin() end, pickers = pickers, updatePickers = updatePickers, reagentFrames = reagentFrames, current = current }

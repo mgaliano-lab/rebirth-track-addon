@@ -927,20 +927,24 @@ do
     recipe = string.rep("Receta larguísima ", 20), items = { { id = 111111, n = 20 }, { id = 222222, n = 20 }, { id = 333333, n = 20 }, { id = 444444, n = 20 }, { id = 555555, n = 20 }, { id = 666666, n = 20 }, { id = 777777, n = 20 }, { id = 888888, n = 20 } } })
   assert(#("Q;" .. long) <= 255 and R.parse(long), "entra en un mensaje: " .. #long)
 
-  -- Lo que falta × N (con bolsas y banco).
-  local miss = R.missing({ { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 1, bank = 1 }, { id = 1003, need = 1, have = 9, bank = 0 } }, 2)
-  assert(#miss == 2 and miss[1].n == 2 and miss[2].n == 2, "1×2 y 2×2−1−1")
+  -- La cantidad que propone: lo que falta para hacerla una vez (o lo que pide, si ya lo tenés).
+  assert(R.suggested({ need = 2, have = 1, bank = 0 }) == 1 and R.suggested({ need = 3, have = 9, bank = 0 }) == 3, "propuesta")
 
-  -- Pedir desde la receta: queda guardado y sale por el canal como «Q;».
-  local mine = R.request("Sage's Tea", { { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 0, bank = 0 } }, 1)
-  assert(mine and mine.status == "p" and mine.who == "Roguebash-Nightslayer" and #mine.items == 2, "pedido propio")
+  -- Pedir un componente: queda guardado y sale por el canal como «Q;».
+  local mine = R.setItem("Sage's Tea", 1001, 1)
+  assert(mine and mine.status == "p" and mine.who == "Roguebash-Nightslayer" and #mine.items == 1, "pedido propio")
   assert(lastSent("^Q;rq1;" .. mine.id .. ";Roguebash%-Nightslayer;"), "sale por el canal")
   assert(R.mineFor("Sage's Tea"), "el checkbox lo ve tildado")
-  -- Cambiar N actualiza el mismo pedido.
-  local again = R.request("Sage's Tea", { { id = 1001, need = 1, have = 0, bank = 0 }, { id = 1002, need = 2, have = 0, bank = 0 } }, 3)
-  assert(again.id == mine.id and again.items[2].n == 6, "× 3")
-  assert(R.request("Sage's Tea", { { id = 1001, need = 1, have = 5, bank = 0 } }, 1) == nil, "ya tiene todo: nada que pedir")
-  assert(not R.mineFor("Sage's Tea"), "y se cierra el que había")
+  -- Otro componente de la misma receta va en el mismo pedido; cambiar la cantidad lo actualiza.
+  local again = R.setItem("Sage's Tea", 1002, 2)
+  assert(again.id == mine.id and #again.items == 2 and again.items[2].n == 2, "dos componentes")
+  again = R.setItem("Sage's Tea", 1002, 6)
+  assert(again.id == mine.id and #again.items == 2 and again.items[2].n == 6, "cantidad nueva")
+  -- Destildar uno deja el otro; destildar el último cierra el pedido.
+  again = R.setItem("Sage's Tea", 1001, nil)
+  assert(again.status == "p" and #again.items == 1 and again.items[1].id == 1002, "queda el otro")
+  R.setItem("Sage's Tea", 1002, nil)
+  assert(not R.mineFor("Sage's Tea"), "y se cierra")
 
   -- De otro miembro, por el canal: lo manda su autor (Q) o un reenvío (W) si el autor podía.
   local hz = R.build({ id = "hz1", who = "Healz", created = 200, at = 200, status = "p", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1001, n = 1 }, { id = 1002, n = 2 } } })
@@ -1088,25 +1092,37 @@ do
   -- Lo que pide la receta elegida, para «Solicitar a la Guild».
   local rs = ns.recipeReagents("trade", 3)
   assert(#rs == 1 and rs[1].id == 2592 and rs[1].need == 2 and rs[1].bank == 6, "componentes con el banco")
-  -- El checkbox «Solicitar a la Guild» al lado de «Componentes:» de la receta elegida.
+  -- El checkbox «Solicitar a la Guild» al lado de cada componente de la receta elegida.
   local R = ns._requests
   ProfessionsFrame = nil
-  TradeSkillReagentLabel = CreateFrame("Frame")
+  TradeSkillReagent1 = CreateFrame("Button")
   function GetTradeSkillSelectionIndex() return 3 end
   function GetTradeSkillReagentInfo() return "Paño de lana", "tex", 2, 0 end
-  local box = R.box()
-  box.update()
-  assert(box:IsShown() and box.label:GetText() == "Solicitar a la Guild", "se ve en la receta")
-  box.n:SetText("5")
-  box.check.GetChecked = function() return true end
-  box.check.scripts.OnClick(box.check)
+  R.updatePickers()
+  local p = R.pickers[1]
+  assert(p and p:IsShown() and p.id == 2592 and p.n:GetText() == "2", "se ve al lado del componente (con el banco alcanza: propone lo que pide la receta)")
+  assert(not R.pickers[2], "uno por componente")
+  p.n:SetText("5")
+  p.check.GetChecked = function() return true end
+  p.check.scripts.OnClick(p.check)
   local mine = R.mineFor("Venda de lana gruesa")
-  assert(mine and mine.items[1].id == 2592 and mine.items[1].n == 2 * 5 - 6, "pide lo que falta × 5 (descuenta el banco)")
-  box.check.GetChecked = function() return false end
-  box.check.scripts.OnClick(box.check)
+  assert(mine and mine.items[1].id == 2592 and mine.items[1].n == 5, "pide ese componente con la cantidad del cuadrito")
+  p.check.GetChecked = function() return false end
+  p.check.scripts.OnClick(p.check)
   assert(not R.mineFor("Venda de lana gruesa"), "destildar lo cierra")
+  -- Ventana nueva (Forever): los huecos de SchematicForm.reagentSlots.
+  TradeSkillFrame:Hide()
+  local slot = CreateFrame("Frame"); slot.Name = slot:CreateFontString()
+  slot.GetReagentSlotSchematic = function() return { reagents = { { itemID = 10938 } } } end
+  ProfessionsFrame = CreateFrame("Frame")
+  ProfessionsFrame.CraftingPage = { SchematicForm = { reagentSlots = { [1] = { slot } }, GetRecipeInfo = function() return { recipeID = 77, name = "Esencia" } end } }
+  C_TradeSkillUI = { GetRecipeSchematic = function() return { reagentSlotSchematics = { { reagentType = 1, quantityRequired = 2, reagents = { { itemID = 10938 } } } } } end }
+  R.updatePickers()
+  assert(R.pickers[1]:IsShown() and R.pickers[1].id == 10938 and R.pickers[1].lastFrame == slot and not R.pickers[2], "hueco de la ventana nueva")
+  ProfessionsFrame, C_TradeSkillUI = nil, nil
+  TradeSkillFrame:Show()
   RebirthTrackDB.settings.requests = false
-  box.update(); assert(not box:IsShown(), "apagado: sin checkbox")
+  R.updatePickers(); assert(not R.pickers[1]:IsShown(), "apagado: sin checkbox")
   RebirthTrackDB.settings.requests = nil
   RebirthTrackBank = nil
   print("opción banco en recetas OK")
