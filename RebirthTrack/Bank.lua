@@ -23,6 +23,8 @@ local TEXTS = {
     stale = "Anotado con una versión anterior del addon: abrí el banco una vez para verlo bien.",
     emptySlot = "Hueco de bolsa sin bolsa", locked = "Hueco de bolsa sin comprar", tab = "Pestaña %d", reagents = "Componentes",
     ago = { now = "recién", min = "hace %d min", h = "hace %d h", d = "hace %d días" },
+    matches = "%d coinciden", clear = "Borrar la búsqueda",
+    fAll = "Todo", fReagent = "Componentes", fGear = "Equipo", fConsumable = "Consumibles", fRequests = "Pedidos",
   },
   en = {
     page = "Personal bank", bank = "Bank", bags = "Bank bags",
@@ -33,6 +35,8 @@ local TEXTS = {
     stale = "Recorded with an older addon version: open the bank once to see it right.",
     emptySlot = "Bag slot without a bag", locked = "Bag slot not purchased", tab = "Tab %d", reagents = "Reagents",
     ago = { now = "just now", min = "%d min ago", h = "%d h ago", d = "%d days ago" },
+    matches = "%d match", clear = "Clear the search",
+    fAll = "All", fReagent = "Reagents", fGear = "Gear", fConsumable = "Consumables", fRequests = "Requests",
   },
 }
 local function T(key) local l = ns.lang and ns.lang() or "es"; return (TEXTS[l] or TEXTS.es)[key] or TEXTS.es[key] end
@@ -144,10 +148,14 @@ local function scanSoon()
   C_Timer.After(0.5, function() pending = false; pcall(scan) end)
 end
 
--- ── Vista: como el banco del juego ────────────────────────────────────────────────────────
-local SLOT, GAP = 37, 4
-local page, content, scroll, header, search
+-- ── Vista: como el banco del juego, con el kit «Obsidiana» (UI.lua) ────────────────────────
+-- Arriba la búsqueda (resalta lo que coincide y apaga el resto), los filtros por tipo y el resumen;
+-- abajo un bloque plano por contenedor con sus casilleros.
+local SLOT, GAP, PAD, TOP = 34, 3, 8, 24
+local page, content, scroll, header, search, chips
 local buttons, blocks = {}, {}
+local filter = "all"
+local FILTERS = { { "all", "fAll" }, { "reagent", "fReagent" }, { "gear", "fGear" }, { "consumable", "fConsumable" }, { "requests", "fRequests" } }
 
 local function ago(at)
   local m = math.floor((time() - at) / 60)
@@ -156,27 +164,22 @@ local function ago(at)
   return a.d:format(math.floor(m / 1440))
 end
 
-local function qualityColor(q)
-  local c = q and q > 1 and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[q]
-  if c then return c.r, c.g, c.b end
-end
-
 local function slotButton(parent)
+  local U, C = ns.ui, ns.ui.C
   local b = CreateFrame("Button", nil, parent)
   b:SetSize(SLOT, SLOT)
-  b.bg = b:CreateTexture(nil, "BACKGROUND")
-  b.bg:SetAllPoints()
-  b.bg:SetTexture("Interface\\Buttons\\UI-Slot-Background")
-  b.bg:SetTexCoord(0, 0.640625, 0, 0.640625)
+  -- El brillo dorado de lo que coincide con la búsqueda: un marco apenas más grande, por detrás.
+  b.glow = U.tex(b, "BACKGROUND", C.gold, 0.35)
+  b.glow:SetPoint("TOPLEFT", -2, 2); b.glow:SetPoint("BOTTOMRIGHT", 2, -2)
+  b.glow:Hide()
+  b.bg = U.fill(b, C.input, 1, "BORDER")
   b.icon = b:CreateTexture(nil, "ARTWORK")
   b.icon:SetPoint("TOPLEFT", 1, -1)
   b.icon:SetPoint("BOTTOMRIGHT", -1, 1)
-  b.border = b:CreateTexture(nil, "OVERLAY")
-  b.border:SetAllPoints()
-  b.border:SetTexture("Interface\\Common\\WhiteIconFrame")
-  b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-  b.count:SetPoint("BOTTOMRIGHT", -3, 3)
-  b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+  if b.icon.SetTexCoord then b.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+  b.edgeT = U.edge(b, C.line, 1, "OVERLAY")
+  b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+  b.count:SetPoint("BOTTOMRIGHT", -2, 2)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if self.item and self.item.link then
@@ -210,61 +213,138 @@ local function nextButton(parent)
   return b
 end
 
+local function setBg(b, c, a) if b.bg.SetVertexColor then b.bg:SetVertexColor(c[1], c[2], c[3], a or 1) end end
+
+-- Calidad del ítem: la anotada, o la que sabe el cliente.
+local function qualityOf(item)
+  if not item then return nil end
+  if item.q and item.q >= 0 then return item.q end
+  return item.id and ns.ui.itemQuality(item.id) or nil
+end
+
 local function fill(b, item, totals, emptyText)
+  local U, C = ns.ui, ns.ui.C
   b.item, b.total, b.empty = item, item and totals[item.id], emptyText
+  b.glow:Hide()
   if item then
-    b.icon:SetTexture(item.icon or (GetItemIcon and GetItemIcon(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
+    b.icon:SetTexture(item.icon or (item.id and U.itemIcon(item.id)) or "Interface\\Icons\\INV_Misc_QuestionMark")
     b.icon:Show()
-    b.count:SetText((item.n or 1) > 1 and item.n or "")
-    local r, g, bl = qualityColor(item.q)
-    if r then b.border:SetVertexColor(r, g, bl); b.border:Show() else b.border:Hide() end
+    b.count:SetText((item.n or 1) > 1 and tostring(item.n) or "")
+    setBg(b, { 0.102, 0.114, 0.141 })
+    local q = U.QUALITY[qualityOf(item) or 1] or U.QUALITY[1]
+    b.edgeT:SetColor(q[1], q[2], q[3], 1)
   else
-    b.icon:Hide(); b.count:SetText(""); b.border:Hide()
+    b.icon:Hide(); b.count:SetText("")
+    setBg(b, C.input)
+    b.edgeT:SetColor(C.line[1], C.line[2], C.line[3], 1)
   end
 end
 
-local function matches(item, term)
-  if term == "" then return true end
-  if not item then return false end
-  local name = item.link and item.link:match("%[(.-)%]") or (GetItemInfo and GetItemInfo(item.id)) or ""
-  return name:lower():find(term, 1, true) ~= nil
+-- Lo que el cliente sabe del ítem sin pedirlo al servidor: tipo, subtipo, hueco y clase.
+local function itemInfo(id)
+  if not id then return nil end
+  local GI = (C_Item and C_Item.GetItemInfoInstant) or GetItemInfoInstant
+  if GI then
+    local _, typ, sub, loc, _, cls = GI(id)
+    if typ or cls then return typ, sub, loc, cls end
+  end
+  if GetItemInfo then
+    local _, _, _, _, _, typ, sub, _, loc, _, _, cls = GetItemInfo(id)
+    return typ, sub, loc, cls
+  end
 end
 
+-- Palabras de calidad (es y en) que también encuentra la búsqueda.
+local QWORDS = {
+  [0] = { "gris", "gray", "grey", "pobre", "poor" }, [1] = { "blanco", "white", "común", "comun", "common" },
+  [2] = { "verde", "green", "poco común", "uncommon" }, [3] = { "azul", "blue", "raro", "rare" },
+  [4] = { "épico", "epico", "epic", "morado", "purple" }, [5] = { "legendario", "legendary", "naranja", "orange" },
+}
+
+local function nameOf(item)
+  return item.link and item.link:match("%[(.-)%]") or (GetItemInfo and item.id and GetItemInfo(item.id)) or ""
+end
+
+local function matchesTerm(item, term)
+  if term == "" then return true end
+  if not item then return false end
+  if nameOf(item):lower():find(term, 1, true) then return true end
+  local q = qualityOf(item)
+  if #term >= 3 and q and QWORDS[q] then
+    for _, w in ipairs(QWORDS[q]) do if w:sub(1, #term) == term then return true end end
+  end
+  local typ, sub = itemInfo(item.id)
+  if typ and tostring(typ):lower():find(term, 1, true) then return true end
+  if sub and tostring(sub):lower():find(term, 1, true) then return true end
+  return false
+end
+
+local function requested(id)
+  local R = ns._requests
+  if not (R and R.forItem and id) then return false end
+  local ok, list = pcall(R.forItem, id)
+  return ok and type(list) == "table" and #list > 0
+end
+
+local function matchesFilter(item)
+  if filter == "all" then return true end
+  if not item or not item.id then return false end
+  if filter == "requests" then return requested(item.id) end
+  local _, _, loc, cls = itemInfo(item.id)
+  if filter == "reagent" then return cls == 5 or cls == 7 end
+  if filter == "gear" then return cls == 2 or cls == 4 or (cls == nil and loc ~= nil and loc ~= "") end
+  if filter == "consumable" then return cls == 0 end
+  return true
+end
+
+-- Bloque plano (fondo + borde de 1 px) con su etiqueta en mayúsculas.
 local function block(i)
+  local U, C = ns.ui, ns.ui.C
   local f = blocks[i]
   if not f then
-    f = CreateFrame("Frame", nil, content, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    if f.SetBackdrop then
-      f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-        tile = true, tileSize = 16, edgeSize = 14, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
-      f:SetBackdropBorderColor(0.6, 0.5, 0.35)
-    end
-    f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    f.title:SetPoint("TOPLEFT", 30, -9)
-    f.title:SetPoint("RIGHT", -8, 0)
-    f.title:SetJustifyH("LEFT")
-    f.icon = f:CreateTexture(nil, "OVERLAY")
-    f.icon:SetSize(18, 18)
-    f.icon:SetPoint("TOPLEFT", 8, -6)
+    f = CreateFrame("Frame", nil, content)
+    U.fill(f, C.sub, 1)
+    U.edge(f, C.line, 1)
+    f.title = U.label(f, "")
+    f.title:SetPoint("TOPLEFT", PAD, -PAD)
+    f.title:SetPoint("RIGHT", -PAD, 0)
     blocks[i] = f
   end
   f:ClearAllPoints()
   f:Show()
   return f
 end
+local function setTitle(f, text) f.title:SetText((text or ""):upper()) end
 
--- Arma un bloque con `slots` casilleros en `cols` columnas; devuelve su alto.
-local function grid(f, c, cols, totals, term)
+-- Arma un bloque con `slots` casilleros en `cols` columnas. `st` lleva el término, si hay un
+-- criterio activo y cuántos casilleros coinciden.
+local function grid(f, c, cols, totals, st)
   local rows = math.ceil(c.slots / cols)
   for s = 1, c.slots do
     local b = nextButton(f)
     local col, row = (s - 1) % cols, math.floor((s - 1) / cols)
-    b:SetPoint("TOPLEFT", f, "TOPLEFT", 10 + col * (SLOT + GAP), -30 - row * (SLOT + GAP))
-    fill(b, c.items[s], totals)
-    b:SetAlpha(matches(c.items[s], term) and 1 or 0.25)
+    b:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + col * (SLOT + GAP), -TOP - row * (SLOT + GAP))
+    local it = c.items[s]
+    fill(b, it, totals)
+    local ok = matchesTerm(it, st.term) and matchesFilter(it)
+    b:SetAlpha(ok and 1 or 0.25)
+    if st.active and ok and it then
+      st.hits = st.hits + 1
+      b.glow:Show()
+      local g = ns.ui.C.gold
+      b.edgeT:SetColor(g[1], g[2], g[3], 1)
+    end
   end
-  f.w, f.h = 20 + cols * (SLOT + GAP) - GAP, 40 + rows * (SLOT + GAP) - GAP
+  f.w, f.h = PAD * 2 + cols * (SLOT + GAP) - GAP, TOP + PAD + rows * (SLOT + GAP) - GAP
   f:SetSize(f.w, f.h)
+end
+
+local function updateChips()
+  if not chips then return end
+  for _, b in ipairs(chips) do
+    b:SetLabel(T(b.labelKey))
+    b:SetKind(b.key == filter and "on" or "off")
+  end
 end
 
 function ns.refreshBank()
@@ -272,10 +352,16 @@ function ns.refreshBank()
   for _, b in ipairs(buttons) do b:Hide() end
   for _, f in ipairs(blocks) do f:Hide() end
   used = 0
-  search.hint:SetText(T("search"))
+  search.ph:SetText(T("search"))
+  search.clear.tip = T("clear")
   page.intro:SetText(T("intro"))
+  updateChips()
+  local term = (search:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+  search.clear:SetShown(term ~= "")
   local data = RebirthTrackBank
-  if not data or not data.containers then header:SetText("|cff999999" .. T("never") .. "|r"); content:SetHeight(10); return end
+  if not data or not data.containers then
+    header:SetText(T("never")); search.counter:SetText(""); content:SetHeight(10); return
+  end
 
   local totals, distinct, full, total = {}, 0, 0, 0
   for _, c in ipairs(data.containers) do
@@ -289,11 +375,12 @@ function ns.refreshBank()
       end
     end
   end
+  local C = ns.ui.HEX
   header:SetText(T("when"):format(ago(data.at), full, total, distinct)
-    .. ((data.v or 1) < 2 and ("\n|cffff8040" .. T("stale") .. "|r") or ""))
-  local term = (search:GetText() or ""):lower():gsub("^%s+", ""):gsub("%s+$", "")
+    .. ((data.v or 1) < 2 and ("\n|cff" .. C.amber .. T("stale") .. "|r") or ""))
+  local st = { term = term, active = term ~= "" or filter ~= "all", hits = 0 }
 
-  local width = math.max(300, (page:GetWidth() or 660) - 60)
+  local width = math.max(300, (scroll:GetWidth() or 640) - 4)
   local x, y, rowH, n = 0, 0, 0, 0
   local function place(f)
     if x > 0 and x + f.w > width then x, y, rowH = 0, y + rowH + 10, 0 end
@@ -307,8 +394,8 @@ function ns.refreshBank()
     if c.main or (c.id == BANK and not data.tabbed) then
       n = n + 1
       local f = block(n)
-      f.title:SetText(T("bank")); f.icon:SetTexture("Interface\\Icons\\INV_Misc_Bag_10_Blue")
-      grid(f, c, c.slots > 28 and 8 or (c.slots % 7 == 0 and 7 or 6), totals, term)
+      setTitle(f, T("bank"))
+      grid(f, c, c.slots > 28 and 8 or (c.slots % 7 == 0 and 7 or 6), totals, st)
       place(f)
     elseif not c.reagents then
       bags[#bags + 1] = c
@@ -317,16 +404,19 @@ function ns.refreshBank()
   if not data.tabbed and #bags > 0 then
     n = n + 1
     local f = block(n)
-    f.title:SetText(T("bags")); f.icon:SetTexture("Interface\\Buttons\\Button-Backpack-Up")
+    setTitle(f, T("bags"))
     for i, c in ipairs(bags) do
       local b = nextButton(f)
-      b:SetPoint("TOPLEFT", f, "TOPLEFT", 10 + (i - 1) * (SLOT + GAP), -30)
+      b:SetPoint("TOPLEFT", f, "TOPLEFT", PAD + (i - 1) * (SLOT + GAP), -TOP)
       local locked = data.bagSlots and i > data.bagSlots
       fill(b, c.link and { link = c.link, icon = c.icon, n = 1 } or nil, {}, locked and T("locked") or T("emptySlot"))
-      if locked then b.bg:SetVertexColor(1, 0.2, 0.2) else b.bg:SetVertexColor(1, 1, 1) end
+      if locked then
+        setBg(b, { 0.898, 0.282, 0.302 }, 0.18)
+        b.edgeT:SetColor(0.353, 0.165, 0.176, 1)
+      end
       b:SetAlpha(1)
     end
-    f.w, f.h = 20 + #bags * (SLOT + GAP) - GAP, 40 + SLOT
+    f.w, f.h = PAD * 2 + #bags * (SLOT + GAP) - GAP, TOP + PAD + SLOT
     f:SetSize(f.w, f.h)
     place(f)
   end
@@ -337,67 +427,97 @@ function ns.refreshBank()
     if not (c.main or (c.id == BANK and not data.tabbed)) and c.slots > 0 then
       n = n + 1
       local f = block(n)
-      f.title:SetText(c.reagents and T("reagents") or c.tab and T("tab"):format(c.tab) or c.name or "?")
-      f.icon:SetTexture(c.icon or "Interface\\Icons\\INV_Misc_Bag_08")
-      grid(f, c, (c.tab or c.reagents) and 7 or 4, totals, term)
+      local name = c.reagents and T("reagents") or c.tab and T("tab"):format(c.tab) or c.name or "?"
+      setTitle(f, name .. " · " .. c.slots)
+      grid(f, c, (c.tab or c.reagents) and 7 or 4, totals, st)
       place(f)
     end
   end
   content:SetSize(width, y + rowH + 10)
+  search.counter:SetText(st.active and T("matches"):format(st.hits) or "")
 end
 
 -- Ventana propia del addon (como Plan del personaje y Reparto de botín): se mueve arrastrando, Esc
 -- la cierra y recuerda dónde quedó.
 local function createPage()
   if page then return end
-  page = CreateFrame("Frame", "RebirthTrackBankFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  page:SetSize(660, 560); page:SetFrameStrata("DIALOG"); page:SetClampedToScreen(true)
-  page:SetMovable(true); page:EnableMouse(true); page:RegisterForDrag("LeftButton")
-  page:SetScript("OnDragStart", page.StartMoving)
-  page:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    local point, _, rel, x, y = self:GetPoint()
-    local u = ns.db().ui or {}
-    u.bank = { point = point, rel = rel, x = x, y = y }
-    ns.db().ui = u
-  end)
+  local U, C = ns.ui, ns.ui.C
+  page = U.window("RebirthTrackBankFrame", 700, 580, T("page"), {
+    onMoved = function(self)
+      local point, _, rel, x, y = self:GetPoint()
+      local u = ns.db().ui or {}
+      u.bank = { point = point, rel = rel, x = x, y = y }
+      ns.db().ui = u
+    end,
+  })
   local pos = (ns.db().ui or {}).bank
+  page:ClearAllPoints()
   page:SetPoint(pos and pos.point or "CENTER", UIParent, pos and pos.rel or "CENTER", pos and pos.x or 0, pos and pos.y or 0)
-  if page.SetBackdrop then
-    page:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
   page:Hide()
-  local title = page:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("TOP", 0, -14)
-  page.title = title
-  local close = CreateFrame("Button", nil, page, "UIPanelCloseButton")
-  close:SetPoint("TOPRIGHT", -4, -4)
-  page.intro = page:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  page.intro:SetPoint("TOPLEFT", 18, -38)
-  page.intro:SetPoint("RIGHT", -210, 0)
-  page.intro:SetJustifyH("LEFT")
-  header = page:CreateFontString(nil, "ARTWORK", "GameFontNormalSmall")
-  header:SetPoint("TOPLEFT", page.intro, "BOTTOMLEFT", 0, -8)
-  search = CreateFrame("EditBox", nil, page, "InputBoxTemplate")
-  search:SetSize(170, 20)
-  search:SetAutoFocus(false)
-  search:SetPoint("TOPRIGHT", -26, -38)
-  search.hint = search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  search.hint:SetPoint("LEFT", 4, 0)
+  local y = page.top
+
+  -- Búsqueda: una fila entera, con la lupa, el contador de coincidencias y la × para borrarla.
+  local sbar = CreateFrame("Frame", nil, page)
+  sbar:SetPoint("TOPLEFT", 1, y); sbar:SetPoint("TOPRIGHT", -1, y); sbar:SetHeight(44)
+  local sl = U.tex(sbar, "ARTWORK", C.line); sl:SetHeight(1); sl:SetPoint("BOTTOMLEFT"); sl:SetPoint("BOTTOMRIGHT")
+  search = U.input(sbar, 600, 28, T("search"))
+  search:SetPoint("LEFT", 12, 0); search:SetPoint("RIGHT", -12, 0)
+  if search.SetTextInsets then search:SetTextInsets(28, 120, 0, 0) end
+  search.ph:ClearAllPoints(); search.ph:SetPoint("LEFT", 28, 0)
+  local mag = search:CreateTexture(nil, "OVERLAY")
+  mag:SetSize(14, 14); mag:SetPoint("LEFT", 8, 0)
+  mag:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
+  if mag.SetVertexColor then mag:SetVertexColor(C.gold[1], C.gold[2], C.gold[3]) end
+  search.clear = U.iconButton(search, 18, "×", function()
+    search:SetText(""); search:ClearFocus(); ns.refreshBank()
+  end)
+  search.clear:SetPoint("RIGHT", -5, 0)
+  search.counter = U.font(search, "GameFontHighlightSmall", C.muted, "RIGHT")
+  search.counter:SetPoint("RIGHT", search.clear, "LEFT", -8, 0)
   search:SetScript("OnTextChanged", function(self)
-    search.hint:SetShown((self:GetText() or "") == "")
+    if self.updatePlaceholder then self.updatePlaceholder(self) end
     ns.refreshBank()
   end)
-  search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+  y = y - 44
+
+  -- Filtros por tipo (chips) y el resumen de lo anotado.
+  local fbar = CreateFrame("Frame", nil, page)
+  fbar:SetPoint("TOPLEFT", 1, y); fbar:SetPoint("TOPRIGHT", -1, y); fbar:SetHeight(62)
+  U.fill(fbar, C.sub, 1)
+  local fl = U.tex(fbar, "ARTWORK", C.line); fl:SetHeight(1); fl:SetPoint("BOTTOMLEFT"); fl:SetPoint("BOTTOMRIGHT")
+  chips = {}
+  for i, def in ipairs(FILTERS) do
+    local b = U.button(fbar, T(def[2]), "off", function(self) filter = self.key; ns.refreshBank() end)
+    b.key, b.labelKey = def[1], def[2]
+    if i == 1 then b:SetPoint("TOPLEFT", 12, -8) else b:SetPoint("LEFT", chips[i - 1], "RIGHT", 6, 0) end
+    chips[i] = b
+  end
+  header = U.font(fbar, "GameFontHighlightSmall", C.muted, "LEFT")
+  header:SetPoint("TOPLEFT", 12, -36); header:SetPoint("RIGHT", -12, 0)
+  y = y - 62
+
+  -- Pie: de dónde sale lo que se ve (solo en esta PC).
+  local ft = U.footer(page, 40)
+  page.intro = U.font(ft, "GameFontHighlightSmall", C.muted, "LEFT")
+  page.intro:SetPoint("LEFT", 12, 0); page.intro:SetPoint("RIGHT", -12, 0)
+
   scroll = CreateFrame("ScrollFrame", "RebirthTrackBankScroll", page, "UIPanelScrollFrameTemplate")
-  scroll:SetPoint("TOPLEFT", header, "BOTTOMLEFT", 0, -10)
-  scroll:SetPoint("BOTTOMRIGHT", -34, 16)
+  scroll:SetPoint("TOPLEFT", 12, y - 10)
+  scroll:SetPoint("BOTTOMRIGHT", ft, "TOPRIGHT", -30, 8)
   content = CreateFrame("Frame", nil, scroll)
-  content:SetSize(600, 10)
+  content:SetSize(640, 10)
   scroll:SetScrollChild(content)
-  page:SetScript("OnShow", function() title:SetText(T("page")); ns.refreshBank() end)
-  if UISpecialFrames then table.insert(UISpecialFrames, "RebirthTrackBankFrame") end
+  page:SetScript("OnShow", function()
+    page.title:SetText(T("page"))
+    -- Sin el módulo de pedidos (Requests.lua carga después de este archivo) no hay chip de pedidos.
+    local req = chips[#chips]
+    if req.key == "requests" then
+      local has = ns._requests and ns._requests.forItem and true or false
+      req:SetShown(has)
+      if not has and filter == "requests" then filter = "all" end
+    end
+    ns.refreshBank()
+  end)
 end
 
 -- /rt banco y el botón de la ventana del addon: abre o cierra la ventana.

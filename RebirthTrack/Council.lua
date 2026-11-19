@@ -57,6 +57,7 @@ local TX = {
     notYours = "No es tu tipo de armadura (%s): solo podés pasar, salvo que el master looter lo abra a todos.",
     openAll = "Abrir a todos", opened2 = "Abierto a todos", offArmor = "otra armadura",
     cloth = "tela", leather = "cuero", mail = "malla", plate = "placa",
+    colPlayer = "Jugador", colResp = "Respuesta", colIlvl = "ilvl", colHas = "Tiene", colRecv = "Recib.", colVotes = "Votos",
   },
   en = {
     title = "Loot council", respond = "Loot: do you want it?", item = "Item %d of %d", noItem = "No items.",
@@ -76,6 +77,7 @@ local TX = {
     notYours = "Not your armor type (%s): you can only pass, unless the master looter opens it to everyone.",
     openAll = "Open to all", opened2 = "Open to everyone", offArmor = "other armor",
     cloth = "cloth", leather = "leather", mail = "mail", plate = "plate",
+    colPlayer = "Player", colResp = "Response", colIlvl = "ilvl", colHas = "Has", colRecv = "Recv.", colVotes = "Votes",
   },
 }
 local function T(k) local l = ns.lang and ns.lang() or "es"; return (TX[l] or TX.es)[k] or TX.es[k] or k end
@@ -619,32 +621,21 @@ end
 local win, sel = nil, 1
 local function viewSession() return current() end
 
-local function backdrop(frame)
-  if frame.SetBackdrop then
-    frame:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
-end
-local function btn(parent, w, text, onClick)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  b:SetSize(w, 22)
-  b:SetText(text)
-  b:SetScript("OnClick", onClick)
-  return b
-end
-local function label(parent, font)
-  local fs = parent:CreateFontString(nil, "OVERLAY", font or "GameFontHighlightSmall")
-  fs:SetJustifyH("LEFT")
-  return fs
-end
+-- Las piezas visuales salen del kit compartido (UI.lua, ns.ui): ventana, botones que se miden con su
+-- texto, íconos con el borde de su calidad, tabla, barra y punto de color de clase.
 local function itemTip(frame, getItem)
   frame:SetScript("OnEnter", function(self)
-    local is = getItem()
+    local is = getItem(self)
     if not is or not GameTooltip.SetHyperlink then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:SetHyperlink(is); GameTooltip:Show()
   end)
   frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
 end
+
+local KIND_COLOR = { bis = "ff8000", upgrade = "1eff00", offspec = "0070dd", transmog = "a335ee", pass = "9d9d9d" }
+local function rgb(hex) return { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255 } end
+local STRIP_MAX, ROW_H = 10, 20
+
 
 -- Candidatos de un ítem con lo que sabe la web, en orden.
 local function candidates(s, it)
@@ -670,25 +661,60 @@ local function candidates(s, it)
   return out
 end
 
+-- Botón de respuesta: el color de la respuesta en el texto y el borde; el elegido, con fondo.
+local function respStyle(self)
+  local c, on = self.col, self.active
+  if self.bgT.SetVertexColor then
+    if on then self.bgT:SetVertexColor(c[1], c[2], c[3], 0.18) else self.bgT:SetVertexColor(0.078, 0.090, 0.118, 1) end
+  end
+  local k = on and 1 or 0.5
+  self.edgeT:SetColor(c[1] * k, c[2] * k, c[3] * k, 1)
+  if self.fs.SetTextColor then self.fs:SetTextColor(c[1], c[2], c[3]) end
+end
+
+local WIN_W = 560
+local TOP, STRIP_H, ITEM_H, RESP_H, NOTE_H = 33, 42, 76, 30, 22
+local Y_STRIP = -TOP
+local Y_ITEM = Y_STRIP - STRIP_H - 12
+local Y_RESP = Y_STRIP - STRIP_H - ITEM_H
+local Y_NOTE = Y_RESP - RESP_H - 8
+local Y_COUNCIL = Y_NOTE - NOTE_H - 10
+local Y_THEAD = Y_COUNCIL - 24
+local Y_ROWS = Y_THEAD - 22
+local WIN_H = -Y_ROWS + MAX_ROWS * ROW_H + 4 + 36 + 1
+
 local function createWindow()
   if win then return win end
-  win = CreateFrame("Frame", "RebirthTrackCouncilFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-  win:SetSize(460, 560)
-  win:SetFrameStrata("HIGH")
-  win:SetClampedToScreen(true)
-  win:SetMovable(true)
-  win:EnableMouse(true)
-  win:RegisterForDrag("LeftButton")
-  win:SetScript("OnDragStart", win.StartMoving)
-  win:SetScript("OnDragStop", win.StopMovingOrSizing)
-  win:SetPoint("CENTER", UIParent, "CENTER", -250, 60)
-  backdrop(win)
-  win.title = label(win, "GameFontNormal"); win.title:SetPoint("TOP", 0, -14)
-  local x = CreateFrame("Button", nil, win, "UIPanelCloseButton"); x:SetPoint("TOPRIGHT", -2, -2)
-  x:SetScript("OnClick", function() win:Hide() end)
+  local U, C = ns.ui, ns.ui.C
+  win = U.window("RebirthTrackCouncilFrame", WIN_W, WIN_H, T("title"), { strata = "HIGH", point = { "CENTER", -250, 60 } })
+  win.count = U.font(win.header, "GameFontHighlightSmall", C.muted, "RIGHT")
+  if win.close then win.count:SetPoint("RIGHT", win.close, "LEFT", -10, 0) else win.count:SetPoint("RIGHT", -10, 0) end
+
+  -- Tira con los ítems del reparto (el elegido con borde dorado) y, a la derecha, repartir lo suelto.
+  local strip = CreateFrame("Frame", nil, win)
+  strip:SetPoint("TOPLEFT", 1, Y_STRIP); strip:SetPoint("TOPRIGHT", -1, Y_STRIP); strip:SetHeight(STRIP_H)
+  U.fill(strip, C.sub, 1)
+  local sl = U.tex(strip, "ARTWORK", C.line); sl:SetHeight(1); sl:SetPoint("BOTTOMLEFT"); sl:SetPoint("BOTTOMRIGHT")
+  win.strip = strip
+  win.prev = U.iconButton(strip, 22, T("prev"), function() sel = math.max(1, sel - 1); refresh() end)
+  win.prev:SetPoint("LEFT", 10, 0)
+  win.icons = {}
+  for i = 1, STRIP_MAX do
+    local ic = U.icon(strip, 26)
+    ic.ring = CreateFrame("Frame", nil, ic)
+    ic.ring:SetPoint("TOPLEFT", -2, 2); ic.ring:SetPoint("BOTTOMRIGHT", 2, -2)
+    U.edge(ic.ring, C.gold, 1, "OVERLAY")
+    local inner = CreateFrame("Frame", nil, ic.ring)
+    inner:SetPoint("TOPLEFT", 1, -1); inner:SetPoint("BOTTOMRIGHT", -1, 1)
+    U.edge(inner, C.gold, 1, "OVERLAY")
+    ic:SetScript("OnClick", function(self) if self.pos then sel = self.pos; refresh() end end)
+    itemTip(ic, function(self) return self.item end)
+    win.icons[i] = ic
+  end
+  win.nxt = U.iconButton(strip, 22, T("next"), function() sel = sel + 1; refresh() end)
 
   -- Ítems sueltos del cadáver, todavía sin reparto (solo el master looter).
-  win.start = btn(win, 180, "", function()
+  win.start = U.button(strip, "", "pri", function()
     local items = pendingLoot
     pendingLoot = {}
     local s = current()
@@ -708,44 +734,78 @@ local function createWindow()
     sel = 1
     refresh(true)
   end)
-  win.start:SetPoint("TOP", 0, -34)
+  win.start:SetPoint("RIGHT", -10, 0)
 
-  win.prev = btn(win, 26, T("prev"), function() sel = math.max(1, sel - 1); refresh() end); win.prev:SetPoint("TOPLEFT", 14, -62)
-  win.nxt = btn(win, 26, T("next"), function() sel = sel + 1; refresh() end); win.nxt:SetPoint("TOPRIGHT", -14, -62)
-  win.count = label(win); win.count:SetPoint("TOP", 0, -66)
-  win.item = CreateFrame("Button", nil, win); win.item:SetSize(400, 18); win.item:SetPoint("TOP", 0, -88)
-  win.itemText = label(win.item, "GameFontNormal"); win.itemText:SetPoint("CENTER")
-  itemTip(win.item, function() local s = viewSession(); local it = s and s.items[sel]; return it and it.item end)
-  win.mine = label(win); win.mine:SetPoint("TOPLEFT", 18, -110); win.mine:SetPoint("TOPRIGHT", -18, -110)
+  -- El ítem elegido: ícono grande, nombre (con el color de su calidad) y lo que tengo puesto.
+  local function selItem() return win.curItem end
+  win.bigIcon = U.icon(win, 52); win.bigIcon:SetPoint("TOPLEFT", 12, Y_ITEM)
+  itemTip(win.bigIcon, selItem)
+  win.item = CreateFrame("Button", nil, win); win.item:SetHeight(18)
+  win.item:SetPoint("TOPLEFT", win.bigIcon, "TOPRIGHT", 12, 0); win.item:SetPoint("RIGHT", win, "RIGHT", -12, 0)
+  win.itemText = U.font(win.item, "GameFontNormalLarge", C.text, "LEFT")
+  win.itemText:SetPoint("LEFT"); win.itemText:SetPoint("RIGHT")
+  itemTip(win.item, selItem)
+  win.armor = U.font(win, "GameFontHighlightSmall", C.amber, "LEFT")
+  win.armor:SetPoint("LEFT", win.bigIcon, "RIGHT", 12, 0); win.armor:SetPoint("RIGHT", win, "TOPRIGHT", -12, Y_ITEM - 26)
+  win.minePre = U.font(win, "GameFontHighlightSmall", C.muted, "LEFT")
+  win.minePre:SetPoint("LEFT", win.bigIcon, "RIGHT", 12, -16)
+  win.mineIcons = {}
+  for i = 1, 2 do
+    local ic = U.icon(win, 20)
+    if i == 1 then ic:SetPoint("LEFT", win.minePre, "RIGHT", 6, 0) else ic:SetPoint("LEFT", win.mineIcons[1], "RIGHT", 4, 0) end
+    win.mineIcons[i] = ic
+  end
+  win.mine = U.font(win, "GameFontHighlightSmall", C.text, "LEFT")
 
-  -- Responder (todos).
+  -- Responder (todos): cinco botones grandes con el color de cada respuesta.
   win.kinds = {}
   for i, k in ipairs(KINDS) do
-    local b = btn(win, 82, T(k), function()
+    local b = U.button(win, T(k), nil, function()
       local s = viewSession()
       if s then respond(s, sel, k, win.note:GetText()); refresh() end
-    end)
-    b:SetPoint("TOPLEFT", 14 + (i - 1) * 86, -128)
-    b.kind = k
+    end, { h = RESP_H, min = 102, font = "GameFontNormal" })
+    b.resp, b.col = k, rgb(KIND_COLOR[k])
+    b.SetKind = function(self, kk) self.kind = kk; respStyle(self) end
+    b:SetKind(nil)
+    if i == 1 then b:SetPoint("TOPLEFT", 12, Y_RESP) else b:SetPoint("LEFT", win.kinds[i - 1], "RIGHT", 6, 0) end
     win.kinds[i] = b
   end
-  win.noteLabel = label(win); win.noteLabel:SetPoint("TOPLEFT", 18, -156)
-  win.note = CreateFrame("EditBox", nil, win, "InputBoxTemplate")
-  win.note:SetSize(300, 20); win.note:SetPoint("TOPLEFT", 130, -152); win.note:SetAutoFocus(false); win.note:SetMaxLetters(80)
-  win.answered = label(win); win.answered:SetPoint("TOPLEFT", 18, -178)
-  win.armor = label(win); win.armor:SetPoint("TOPLEFT", 18, -190); win.armor:SetPoint("TOPRIGHT", -18, -190)
-  win.openAll = btn(win, 110, T("openAll"), function() local s = viewSession(); if s then openToAll(s, sel); refresh() end end)
-  win.openAll:SetPoint("BOTTOM", 0, 40)
+  local noteY = Y_NOTE - NOTE_H / 2
+  win.noteLabel = U.font(win, "GameFontHighlightSmall", C.muted, "LEFT"); win.noteLabel:SetPoint("LEFT", win, "TOPLEFT", 12, noteY)
+  win.note = U.input(win, 240, NOTE_H, "")
+  win.note:SetPoint("LEFT", win.noteLabel, "RIGHT", 8, 0)
+  if win.note.SetMaxLetters then win.note:SetMaxLetters(80) end
+  win.answered = U.font(win, "GameFontNormalSmall", C.green, "LEFT")
 
-  -- Consejo: candidatos en orden, votar y dar.
-  win.councilTitle = label(win, "GameFontNormal"); win.councilTitle:SetPoint("TOPLEFT", 18, -208)
+  -- Consejo: candidatos en orden, en tabla; votar y dar a la derecha.
+  win.councilLine = U.hline(win, Y_COUNCIL, 0)
+  win.councilTitle = U.font(win, "GameFontNormalSmall", C.muted, "LEFT")
+  win.councilTitle:SetPoint("LEFT", win, "TOPLEFT", 12, Y_COUNCIL - 12)
+  local cols = { { "player", 0, T("colPlayer") }, { "resp", 82, T("colResp") }, { "ilvl", 40, T("colIlvl"), "RIGHT" },
+    { "has", 44, T("colHas") }, { "recv", 50, T("colRecv"), "RIGHT" }, { "votes", 66, T("colVotes") }, { "act", 118, "" } }
+  win.thead = U.tableHeader(win, cols, WIN_W - 2, Y_THEAD)
+  local pos = win.thead.pos
   win.rows = {}
   for i = 1, MAX_ROWS do
-    local r = CreateFrame("Frame", nil, win)
-    r:SetSize(420, 13); r:SetPoint("TOPLEFT", 18, -224 - (i - 1) * 13)
-    r.text = label(r); r.text:SetPoint("LEFT"); r.text:SetWidth(300)
-    r:EnableMouse(true)
-    r:SetScript("OnEnter", function(self)
+    local r = U.row(win, ROW_H, i)
+    local ry = Y_ROWS - (i - 1) * ROW_H
+    r:SetPoint("TOPLEFT", 1, ry); r:SetPoint("TOPRIGHT", -1, ry)
+    local function cell(key, c)
+      local fs = U.font(r, "GameFontHighlightSmall", c or C.text, pos[key].justify)
+      fs:SetPoint("LEFT", r, "LEFT", 8 + pos[key].x, 0); fs:SetWidth(pos[key].w - 8)
+      if fs.SetWordWrap then fs:SetWordWrap(false) end
+      return fs
+    end
+    r.dot = U.dot(r, 10, C.text); r.dot:SetPoint("LEFT", 8, 0)
+    r.name = U.font(r, "GameFontNormalSmall", C.text, "LEFT"); r.name:SetPoint("LEFT", r.dot, "RIGHT", 6, 0)
+    r.info = U.font(r, "GameFontHighlightSmall", C.muted, "LEFT")
+    r.info:SetPoint("LEFT", r.name, "RIGHT", 6, 0); r.info:SetPoint("RIGHT", r, "LEFT", pos.resp.x, 0)
+    if r.info.SetWordWrap then r.info:SetWordWrap(false) end
+    r.respT = cell("resp"); r.ilvl = cell("ilvl"); r.recv = cell("recv")
+    r.has = U.icon(r, 16); r.has:SetPoint("LEFT", 8 + pos.has.x, 0)
+    r.bar = U.bar(r, 34, 4); r.bar:SetPoint("LEFT", 8 + pos.votes.x, 0)
+    r.votesT = U.font(r, "GameFontHighlightSmall", C.text, "LEFT"); r.votesT:SetPoint("LEFT", r.bar, "RIGHT", 6, 0)
+    r.onEnter = function(self)
       if not self.c or not GameTooltip.AddLine then return end
       GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
       GameTooltip:AddLine(short(self.c.name), 1, 1, 1)
@@ -755,35 +815,36 @@ local function createWindow()
         if id then GameTooltip:AddLine(linkOf("item:" .. id) .. " (" .. lvl .. ")") end
       end
       GameTooltip:Show()
-    end)
-    r:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    r.vote = btn(r, 50, T("vote"), function()
+    end
+    r.vote = U.button(r, T("vote"), nil, function()
       local s = viewSession()
       if s and r.c then vote(s, sel, r.c.name, not r.voted); refresh() end
-    end)
-    r.vote:SetHeight(13); r.vote:SetPoint("RIGHT", -48, 0)
-    r.give = btn(r, 44, T("give"), function()
+    end, { h = 18 })
+    r.give = U.button(r, T("give"), "pri", function()
       local s = viewSession()
       if s and r.c then award(s, sel, r.c.name, r.c.kind); refresh() end
-    end)
-    r.give:SetHeight(13); r.give:SetPoint("RIGHT", 0, 0)
+    end, { h = 18 })
+    r.give:SetPoint("RIGHT", -8, 0)
     win.rows[i] = r
   end
-  win.de = btn(win, 110, T("de"), function() local s = viewSession(); if s then award(s, sel, "", "", "de"); refresh() end end)
-  win.de:SetPoint("BOTTOMLEFT", 14, 14)
-  win.bank = btn(win, 110, T("bank"), function() local s = viewSession(); if s then award(s, sel, "", "", "bank"); refresh() end end)
-  win.bank:SetPoint("BOTTOM", -20, 14)
-  win.close = btn(win, 120, T("close"), function() closeSession(viewSession()); refresh() end)
-  win.close:SetPoint("BOTTOMRIGHT", -14, 14)
+
+  -- Barra de abajo: lo que decide el master looter.
+  win.footer = U.footer(win, 36)
+  win.openAll = U.button(win.footer, T("openAll"), nil, function() local s = viewSession(); if s then openToAll(s, sel); refresh() end end)
+  win.de = U.button(win.footer, T("de"), nil, function() local s = viewSession(); if s then award(s, sel, "", "", "de"); refresh() end end)
+  win.bank = U.button(win.footer, T("bank"), nil, function() local s = viewSession(); if s then award(s, sel, "", "", "bank"); refresh() end end)
+  win.closeAll = U.button(win.footer, T("close"), "dng", function() closeSession(viewSession()); refresh() end)
+  win.closeAll:SetPoint("RIGHT", -12, 0)
   return win
 end
 
-local KIND_COLOR = { bis = "ff8000", upgrade = "1eff00", offspec = "0070dd", transmog = "a335ee", pass = "9d9d9d" }
+local function hexText(hex, s) return "|cff" .. hex .. s .. "|r" end
 function refresh(open)
   if not win and not open then return end
   createWindow()
   if open then win:Show() end
   if not win:IsShown() then return end
+  local U, C = ns.ui, ns.ui.C
   local s = viewSession()
   win.title:SetText(T("title"))
   win.start:SetText(T("start"):format(#pendingLoot))
@@ -796,32 +857,94 @@ function refresh(open)
   local it = s and s.items[items[sel]]
   local n = items[sel]
   local has = it and it.item
+  win.curItem = has and it.item or nil
   win.count:SetText(has and T("item"):format(sel, total) or (s and T("noItem") or T("none")))
+
+  -- Tira de ítems.
+  local arrows = total > 1
+  win.prev:SetShown(arrows); win.nxt:SetShown(arrows)
+  local first = 1
+  if total > STRIP_MAX then first = math.max(1, math.min(sel - math.floor(STRIP_MAX / 2), total - STRIP_MAX + 1)) end
+  local base, last = arrows and 38 or 12, nil
+  for i, ic in ipairs(win.icons) do
+    local p = first + i - 1
+    local other = s and items[p] and s.items[items[p]]
+    ic:ClearAllPoints(); ic:SetPoint("LEFT", win.strip, "LEFT", base + (i - 1) * 32, 0)
+    if other then
+      ic.pos, ic.item = p, other.item
+      local info = other.item and itemInfo(other.item)
+      ic:SetItem(other.item and itemId(other.item), nil, info and info.icon)
+      ic.ring:SetShown(p == sel)
+      ic:SetAlpha(other.award and 0.45 or 1)
+      ic:Show(); last = ic
+    else
+      ic.pos, ic.item = nil, nil
+      ic:Hide()
+    end
+  end
+  win.nxt:ClearAllPoints()
+  if last then win.nxt:SetPoint("LEFT", last, "RIGHT", 6, 0) else win.nxt:SetPoint("LEFT", win.strip, "LEFT", base, 0) end
+
+  -- El ítem elegido.
+  win.bigIcon:SetShown(has and true or false)
+  if has then local info = itemInfo(it.item); win.bigIcon:SetItem(itemId(it.item), nil, info and info.icon) end
   win.itemText:SetText(has and (linkOf(it.item) .. (it.ilvl and it.ilvl > 0 and (" (" .. it.ilvl .. ")") or "")) or "")
   local eq, delta = "", nil
   if has then eq, delta = equippedFor(it.equipLoc, it.ilvl) end
-  local mineTxt = {}
-  for part in eq:gmatch("[^,]+") do local id, lvl = part:match("^(%d+)@(%d+)$"); if id then mineTxt[#mineTxt + 1] = linkOf("item:" .. id) .. " " .. lvl end end
-  win.mine:SetText(has and T("youHave"):format(#mineTxt > 0 and table.concat(mineTxt, ", ") or T("nothing"))
-    .. (delta and delta ~= 0 and ((delta > 0 and "  |cff3fbf3f+" or "  |cffff4040") .. delta .. "|r") or "") or "")
+  local mineTxt, mineIds = {}, {}
+  for part in eq:gmatch("[^,]+") do
+    local id, lvl = part:match("^(%d+)@(%d+)$")
+    if id then mineTxt[#mineTxt + 1] = linkOf("item:" .. id) .. " " .. lvl; mineIds[#mineIds + 1] = tonumber(id) end
+  end
+  local pre, post = T("youHave"):match("^(.-)%%s(.*)$")
+  pre, post = pre or "", post or ""
+  win.minePre:SetText(has and pre:gsub("%s+$", "") or "")
+  local anchor = win.minePre
+  for i, ic in ipairs(win.mineIcons) do
+    local id = has and mineIds[i]
+    ic:SetShown(id and true or false)
+    if id then ic:SetItem(id); anchor = ic end
+  end
+  win.mine:ClearAllPoints()
+  win.mine:SetPoint("LEFT", anchor, "RIGHT", 6, 0)
+  win.mine:SetPoint("RIGHT", win, "TOPRIGHT", -12, Y_ITEM - 42)
+  win.mine:SetText(has and ((#mineTxt > 0 and table.concat(mineTxt, ", ") or T("nothing")) .. post
+    .. (delta and delta ~= 0 and ((delta > 0 and "  |cff5fd49b+" or "  |cffff7a7e") .. delta .. "|r") or "")) or "")
+
+  -- Responder.
   local mine = has and it.responses[meFull()]
   local canAnswer = has and not it.award and not s.closed
   local mayAsk = has and allowed(it, meFull(), "bis")
   for _, b in ipairs(win.kinds) do
-    b:SetText(T(b.kind)); b:SetShown(canAnswer and true or false)
-    if b.SetEnabled then b:SetEnabled(b.kind == "pass" or mayAsk and true or false) end
+    b:SetText(T(b.resp)); b:SetShown(canAnswer and true or false)
+    b.active = mine and mine.kind == b.resp or false
+    respStyle(b)
+    if b.SetEnabled then b:SetEnabled(b.resp == "pass" or mayAsk and true or false) end
   end
   local need = has and armorOf(itemInfo(it.item))
-  win.armor:SetText((canAnswer and not mayAsk and need) and T("notYours"):format(T(ARMOR_NAMES[need])) or (has and it.open and T("opened2") or ""))
+  local notYours = canAnswer and not mayAsk and need
+  win.armor:SetText(notYours and T("notYours"):format(T(ARMOR_NAMES[need])) or (has and it.open and T("opened2") or ""))
+  local ac = notYours and C.amber or C.green
+  if win.armor.SetTextColor then win.armor:SetTextColor(ac[1], ac[2], ac[3]) end
   win.noteLabel:SetText(T("note")); win.noteLabel:SetShown(canAnswer and true or false); win.note:SetShown(canAnswer and true or false)
   win.answered:SetText(has and (it.award and (it.award.to ~= "" and T("awarded"):format(short(it.award.to), T(it.award.kind ~= "" and it.award.kind or "pass"))
     or (it.award.how == "bank" and T("toBank") or T("toDE"))) or (mine and T("answered"):format(T(mine.kind)) or "")) or "")
+  local anc = it and it.award and C.gold or (mine and rgb(KIND_COLOR[mine.kind] or "5fd49b")) or C.green
+  if win.answered.SetTextColor then win.answered:SetTextColor(anc[1], anc[2], anc[3]) end
+  win.answered:ClearAllPoints()
+  if canAnswer then win.answered:SetPoint("LEFT", win.note, "RIGHT", 10, 0)
+  else win.answered:SetPoint("LEFT", win, "TOPLEFT", 12, Y_NOTE - NOTE_H / 2) end
+  win.answered:SetPoint("RIGHT", win, "TOPRIGHT", -12, Y_NOTE - NOTE_H / 2)
 
+  -- Consejo.
   local council = s and isCouncil(s, meFull())
   local ml = s and isML(s)
-  win.councilTitle:SetText(council and T("council") or ""); win.councilTitle:SetShown(council and true or false)
+  win.councilTitle:SetText(council and T("council"):upper() or ""); win.councilTitle:SetShown(council and true or false)
+  win.councilLine:SetShown(council and true or false); win.thead:SetShown(council and has and true or false)
   local list = (council and has) and candidates(s, it) or {}
-  if council and has and #list == 0 then win.councilTitle:SetText(T("council") .. " · " .. T("noAnswers")) end
+  if council and has and #list == 0 then win.councilTitle:SetText(T("council"):upper() .. " · " .. T("noAnswers")) end
+  local maxVotes = 1
+  for _, c in ipairs(list) do maxVotes = math.max(maxVotes, c.votes) end
   for i, r in ipairs(win.rows) do
     local c = list[i]
     r.c = c
@@ -829,27 +952,53 @@ function refresh(open)
     if c then
       local myVotes = it.votes[meFull()] or {}
       r.voted = myVotes[c.name] and true or false
-      local web = {}
-      if c.rank then web[#web + 1] = T(c.rank) end
-      if c.attended > 0 or c.received > 0 then web[#web + 1] = T("hist"):format(c.received, c.attended) end
-      if c.today > 0 then web[#web + 1] = T("today"):format(c.today) end
-      if c.votes > 0 then web[#web + 1] = T("votes"):format(c.votes) end
-      r.text:SetText(("%d. %s |cff%s%s|r%s · %s%s"):format(i, short(c.name), KIND_COLOR[c.kind] or "ffffff", T(c.kind),
-        c.delta and ((c.delta > 0 and " +" or " ") .. c.delta) or "", table.concat(web, " · "), (c.note and c.note ~= "") and " *" or "") .. (c.offArmor and (" |cffff4040" .. T("offArmor") .. "|r") or ""))
+      local cc = U.classColor(classOf(c.name) or U.classOf(c.name))
+      r.dot:SetColor(cc)
+      r.name:SetText(short(c.name))
+      if r.name.SetTextColor then r.name:SetTextColor(cc[1], cc[2], cc[3]) end
+      local info = {}
+      if c.rank then info[#info + 1] = T(c.rank) end
+      if c.today > 0 then info[#info + 1] = T("today"):format(c.today) end
+      if c.offArmor then info[#info + 1] = hexText(U.HEX.red, T("offArmor")) end
+      r.info:SetText(table.concat(info, " · "))
+      r.respT:SetText(hexText(KIND_COLOR[c.kind] or "ffffff", T(c.kind)) .. ((c.note and c.note ~= "") and hexText(U.HEX.muted, " *") or ""))
+      if c.delta == nil then r.ilvl:SetText(hexText(U.HEX.muted, "·"))
+      elseif c.delta > 0 then r.ilvl:SetText(hexText(U.HEX.green, "+" .. c.delta))
+      elseif c.delta < 0 then r.ilvl:SetText(hexText(U.HEX.red, tostring(c.delta)))
+      else r.ilvl:SetText(hexText(U.HEX.muted, "0")) end
+      local eqId = tonumber(tostring(c.eq or ""):match("^(%d+)@"))
+      r.has:SetShown(eqId and true or false)
+      if eqId then r.has:SetItem(eqId) end
+      r.recv:SetText((c.attended > 0 or c.received > 0) and T("hist"):format(c.received, c.attended) or hexText(U.HEX.muted, "·"))
+      r.bar:SetValue(c.votes / maxVotes, C.gold)
+      r.votesT:SetText(tostring(c.votes))
       r.vote:SetText(r.voted and T("unvote") or T("vote"))
+      r.vote:SetKind(r.voted and "on" or nil)
       r.vote:SetShown(not it.award and not s.closed)
       r.give:SetText(T("give"))
-      r.give:SetShown(ml and not it.award and not s.closed and true or false)
+      local giveShown = ml and not it.award and not s.closed and true or false
+      r.give:SetShown(giveShown)
+      r.vote:ClearAllPoints()
+      if giveShown then r.vote:SetPoint("RIGHT", r.give, "LEFT", -4, 0) else r.vote:SetPoint("RIGHT", r, "RIGHT", -8, 0) end
     end
   end
+
+  -- Barra de abajo (master looter).
   local mlOpen = ml and has and not it.award and not s.closed and true or false
   win.de:SetText(T("de")); win.de:SetShown(mlOpen)
   win.openAll:SetText(T("openAll")); win.openAll:SetShown(mlOpen and need and not it.open and true or false)
   win.bank:SetText(T("bank")); win.bank:SetShown(mlOpen)
-  win.close:SetText(T("close")); win.close:SetShown(ml and not s.closed and true or false)
-  win.prev:SetShown(total > 1); win.nxt:SetShown(total > 1)
+  win.closeAll:SetText(T("close")); win.closeAll:SetShown(ml and not s.closed and true or false)
+  local x = 12
+  for _, b in ipairs({ win.openAll, win.de, win.bank }) do
+    if b:IsShown() then
+      b:ClearAllPoints(); b:SetPoint("LEFT", win.footer, "LEFT", x, 0)
+      x = x + (b:GetWidth() or 0) + 6
+    end
+  end
   return n
 end
+
 
 function ns.openCouncil(rest)
   if rest and rest ~= "" then ns.councilCommand(rest) else refresh(true) end

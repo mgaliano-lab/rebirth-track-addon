@@ -55,6 +55,8 @@ local TEXTS = {
     optMinimap = "Mostrar el botón del minimapa", optMinimapTip = "El botón redondo del minimapa que abre la ventana.",
     optOpen = "Abrir la ventana", optLangTip = "Idioma del addon",
     bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).", bOptions = "Opciones",
+    optGroupLog = "Registro y guild", optGroupUI = "Interfaz", optAlpha = "Opacidad del fondo",
+    optAlphaTip = "Qué tan opaco es el fondo de las ventanas del addon (80–100 %, por defecto 96 %).",
     sPerson = "Personaje", sGuild = "Guild", chipDun = "Mazmorras", chipPos = "Posición", recStart = "Registrar", recStop = "Detener",
     stOn = "Registrando", stOff = "Registro apagado",
     tlPlan = "Plan", tlBank = "Banco", tlStatus = "Estado", tlLoot = "Reparto", tlRequests = "Pedidos", tlPositions = "Posiciones",
@@ -150,6 +152,8 @@ local TEXTS = {
     optMinimap = "Show the minimap button", optMinimapTip = "The round minimap button that opens the window.",
     optOpen = "Open the window", optLangTip = "Addon language",
     bHelp = "Help", tHelp = "How to use it (/rt help).", bOptions = "Options",
+    optGroupLog = "Logging and guild", optGroupUI = "Interface", optAlpha = "Background opacity",
+    optAlphaTip = "How opaque the addon windows' background is (80–100 %, 96 % by default).",
     sPerson = "Character", sGuild = "Guild", chipDun = "Dungeons", chipPos = "Position", recStart = "Record", recStop = "Stop",
     stOn = "Recording", stOff = "Logging off",
     tlPlan = "Plan", tlBank = "Bank", tlStatus = "Status", tlLoot = "Loot", tlRequests = "Requests", tlPositions = "Positions",
@@ -943,40 +947,87 @@ end
 -- Retail y los clientes nuevos usan Settings.RegisterCanvasLayoutCategory; los viejos,
 -- InterfaceOptions_AddCategory. /rt opciones lo abre.
 local options, optionsCategory
+-- Dos columnas de paneles planos (sin marco de ventana: vive dentro del lienzo de Blizzard).
+local OPT_PW, OPT_GAP, OPT_ROW, OPT_ALPHA_H = 290, 12, 30, 46
+
+local function setAlphaText(pct)
+  if not options or not options.alphaPct then return end
+  options.alphaPct:SetText(pct .. " %")
+  local frac = (pct - 80) / 20
+  if options.alphaFill then
+    options.alphaFill:SetWidth(math.max(0.001, (OPT_PW - 24) * math.max(0, math.min(1, frac))))
+  end
+end
+
 local function refreshOptions()
   if not options then return end
   options.intro:SetText(L("optIntro"))
+  local v = addonVersion()
+  options.version:SetText(v ~= "" and ("v" .. v) or "")
+  options.groupLog:SetText(L("optGroupLog"):upper())
+  options.groupUI:SetText(L("optGroupUI"):upper())
   for _, c in ipairs(options.checks) do c:SetChecked(c.get() and true or false); c.label:SetText(L(c.key)) end
-  options.open:SetText(L("optOpen"))
-  options.link:SetText(L("bLink"))
-  options.bank:SetText(L("bBank"))
-  options.lang:SetText(lang() == "es" and "English" or "Español")
+  options.alphaLabel:SetText(L("optAlpha"))
+  local pct = math.floor(ns.ui.alpha() * 100 + 0.5)
+  options.syncing = true
+  if options.alpha and options.alpha.SetValue then options.alpha:SetValue(pct) end
+  options.syncing = false
+  setAlphaText(pct)
+  options.open:SetLabel(L("optOpen"))
+  options.link:SetLabel(L("bLink"))
+  options.bank:SetLabel(L("bBank"))
+  options.lang:SetLabel(lang() == "es" and "English" or "Español")
 end
 ns.refreshOptions = refreshOptions
 
 local function createOptions()
   if options then return end
+  local U, C = ns.ui, ns.ui.C
   options = CreateFrame("Frame", "RebirthTrackOptions", UIParent)
   options.name = "Rebirth Track"
   options:Hide()
-  local title = options:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-  title:SetPoint("TOPLEFT", 16, -16)
-  title:SetText("Rebirth Track")
   local logo = options:CreateTexture(nil, "ARTWORK")
-  logo:SetSize(24, 24)
-  logo:SetPoint("LEFT", title, "RIGHT", 6, 0)
+  logo:SetSize(28, 28)
+  logo:SetPoint("TOPLEFT", 16, -14)
   logo:SetTexture(ICON)
-  options.intro = options:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
-  options.intro:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8)
-  options.intro:SetPoint("RIGHT", -24, 0)
-  options.intro:SetJustifyH("LEFT")
+  local title = U.font(options, "GameFontNormalLarge", C.gold, "LEFT")
+  title:SetPoint("LEFT", logo, "RIGHT", 10, 0)
+  title:SetText("Rebirth Track")
+  options.version = U.font(options, "GameFontHighlightSmall", C.muted, "LEFT")
+  options.version:SetPoint("LEFT", title, "RIGHT", 8, 0)
+  options.intro = U.font(options, "GameFontHighlightSmall", C.text, "LEFT")
+  options.intro:SetPoint("TOPLEFT", logo, "BOTTOMLEFT", 0, -12)
+  options.intro:SetWidth(OPT_PW * 2 + OPT_GAP)
+
+  -- Etiqueta de sección + panel plano debajo, en la columna `col` (0 o 1).
+  local function group(col, h)
+    local lbl = U.label(options, "")
+    lbl:SetPoint("TOPLEFT", options.intro, "BOTTOMLEFT", col * (OPT_PW + OPT_GAP), -16)
+    local p = CreateFrame("Frame", nil, options)
+    p:SetSize(OPT_PW, h)
+    p:SetPoint("TOPLEFT", lbl, "BOTTOMLEFT", 0, -6)
+    U.fill(p, C.sub, 1)
+    U.edge(p, C.line, 1)
+    p.n = 0
+    return lbl, p
+  end
+  local LOG_H, UI_H2 = 4 * OPT_ROW, 2 * OPT_ROW + OPT_ALPHA_H
+  local logLbl, logP = group(0, LOG_H)
+  local uiLbl, uiP = group(1, UI_H2)
+  options.groupLog, options.groupUI = logLbl, uiLbl
 
   options.checks = {}
-  local function check(key, tipKey, get, set)
-    local c = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
-    c:SetPoint("TOPLEFT", options.intro, "BOTTOMLEFT", -2, -14 - #options.checks * 30)
-    c.label = options:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    c.label:SetPoint("LEFT", c, "RIGHT", 4, 1)
+  local function check(panel, key, tipKey, get, set)
+    local y = -panel.n * OPT_ROW
+    if panel.n > 0 then U.hline(panel, y, 1) end
+    panel.n = panel.n + 1
+    local c = CreateFrame("CheckButton", nil, panel, "UICheckButtonTemplate")
+    c:SetSize(24, 24)
+    c:SetPoint("TOPLEFT", 6, y - 3)
+    c.label = U.font(panel, "GameFontHighlight", C.text, "LEFT")
+    c.label:SetPoint("LEFT", c, "RIGHT", 4, 0)
+    c.label:SetWidth(OPT_PW - 44)
+    if c.label.SetWordWrap then c.label:SetWordWrap(false) end
     c.key, c.get = key, get
     c:SetScript("OnClick", function(self) set(self:GetChecked() and true or false); refreshUI(); refreshOptions() end)
     c:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L(tipKey), 1, 1, 1, true); GameTooltip:Show() end)
@@ -984,32 +1035,72 @@ local function createOptions()
     table.insert(options.checks, c)
     return c
   end
-  check("optPos", "optPosTip", sharePos, setSharePos)
-  check("optPins", "optPinsTip", function() return db().settings.mapPins ~= false end,
-    function(on) db().settings.mapPins = on; if ns.refreshPositions then ns.refreshPositions() end end)
-  check("optDungeons", "optDungeonsTip", function() return db().settings.dungeons end,
+  check(logP, "optDungeons", "optDungeonsTip", function() return db().settings.dungeons end,
     function(on) db().settings.dungeons = on; checkZone() end)
-  check("optMinimap", "optMinimapTip", function() return ui_db().minimap ~= false end,
-    function(on) ui_db().minimap = on; if mm then mm:SetShown(on) end end)
-  check("optRequests", "optRequestsTip", function() return db().settings.requests ~= false end,
+  check(logP, "optPos", "optPosTip", sharePos, setSharePos)
+  check(logP, "optPins", "optPinsTip", function() return db().settings.mapPins ~= false end,
+    function(on) db().settings.mapPins = on; if ns.refreshPositions then ns.refreshPositions() end end)
+  check(logP, "optRequests", "optRequestsTip", function() return db().settings.requests ~= false end,
     function(on) db().settings.requests = on end)
-  check("optBankCraft", "optBankCraftTip", function() return db().settings.bankCraft ~= false end,
+  check(uiP, "optMinimap", "optMinimapTip", function() return ui_db().minimap ~= false end,
+    function(on) ui_db().minimap = on; if mm then mm:SetShown(on) end end)
+  check(uiP, "optBankCraft", "optBankCraftTip", function() return db().settings.bankCraft ~= false end,
     function(on) db().settings.bankCraft = on; if ns.refreshBankCraft then pcall(ns.refreshBankCraft) end end)
 
-  local function button(w, onClick)
-    local b = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
-    b:SetSize(w, 24)
-    b:SetScript("OnClick", function() onClick(); refreshUI(); refreshOptions() end)
-    return b
+  -- Opacidad del fondo de las ventanas (80–100 %): se guarda como 0.8–1 y se aplica en el acto.
+  local ay = -uiP.n * OPT_ROW
+  U.hline(uiP, ay, 1)
+  options.alphaLabel = U.font(uiP, "GameFontHighlight", C.text, "LEFT")
+  options.alphaLabel:SetPoint("TOPLEFT", 12, ay - 8)
+  options.alphaLabel:SetWidth(OPT_PW - 80)
+  if options.alphaLabel.SetWordWrap then options.alphaLabel:SetWordWrap(false) end
+  options.alphaPct = U.font(uiP, "GameFontHighlight", C.gold, "RIGHT")
+  options.alphaPct:SetPoint("TOPRIGHT", -12, ay - 8)
+  options.alphaPct:SetWidth(50)
+  local track = U.tex(uiP, "ARTWORK", C.line)
+  track:SetHeight(4)
+  track:SetPoint("TOPLEFT", 12, ay - 32); track:SetPoint("TOPRIGHT", -12, ay - 32)
+  options.alphaFill = U.tex(uiP, "ARTWORK", C.action)
+  options.alphaFill:SetHeight(4)
+  options.alphaFill:SetPoint("TOPLEFT", track, "TOPLEFT", 0, 0)
+  local ok, s = pcall(CreateFrame, "Slider", nil, uiP)
+  if ok and s then
+    s:SetHeight(16)
+    s:SetPoint("LEFT", track, "LEFT", 0, 0); s:SetPoint("RIGHT", track, "RIGHT", 0, 0)
+    if s.SetOrientation then s:SetOrientation("HORIZONTAL") end
+    if s.SetMinMaxValues then s:SetMinMaxValues(80, 100) end
+    if s.SetValueStep then s:SetValueStep(1) end
+    if s.SetObeyStepOnDrag then s:SetObeyStepOnDrag(true) end
+    if s.EnableMouse then s:EnableMouse(true) end
+    if s.SetThumbTexture then
+      local thumb = U.tex(s, "OVERLAY", C.gold)
+      thumb:SetSize(8, 14)
+      s:SetThumbTexture(thumb)
+    end
+    s:SetScript("OnValueChanged", function(_, value)
+      local pct = math.floor((tonumber(value) or 96) + 0.5)
+      pct = math.max(80, math.min(100, pct))
+      setAlphaText(pct)
+      if options.syncing then return end
+      db().settings.uiAlpha = pct / 100
+      if U.refreshAlpha then U.refreshAlpha() end
+    end)
+    s:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L("optAlphaTip"), 1, 1, 1, true); GameTooltip:Show() end)
+    s:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    options.alpha = s
   end
-  options.open = button(160, function() openUI(false) end)
-  options.open:SetPoint("TOPLEFT", options.intro, "BOTTOMLEFT", 0, -24 - #options.checks * 30)
-  options.link = button(160, linkCharacter)
+
+  local function button(kind, onClick)
+    return U.button(options, "", kind, function() onClick(); refreshUI(); refreshOptions() end, { h = 24 })
+  end
+  options.open = button("pri", function() openUI(false) end)
+  options.open:SetPoint("TOPLEFT", logP, "BOTTOMLEFT", 0, -14)
+  options.link = button(nil, linkCharacter)
   options.link:SetPoint("LEFT", options.open, "RIGHT", 8, 0)
-  options.lang = button(100, function() db().settings.lang = lang() == "es" and "en" or "es"; say(L("langSay")) end)
-  options.lang:SetPoint("LEFT", options.link, "RIGHT", 8, 0)
-  options.bank = button(160, function() if ns.openBank then ns.openBank() end end)
-  options.bank:SetPoint("TOPLEFT", options.open, "BOTTOMLEFT", 0, -8)
+  options.bank = button(nil, function() if ns.openBank then ns.openBank() end end)
+  options.bank:SetPoint("LEFT", options.link, "RIGHT", 8, 0)
+  options.lang = button(nil, function() db().settings.lang = lang() == "es" and "en" or "es"; say(L("langSay")) end)
+  options.lang:SetPoint("TOPRIGHT", uiP, "TOPRIGHT", 0, -(LOG_H + 14))
 
   options:SetScript("OnShow", refreshOptions)
   if Settings and Settings.RegisterCanvasLayoutCategory and Settings.RegisterAddOnCategory then
@@ -1058,6 +1149,7 @@ local RT = {
     noPerm = "necesitás ser oficial o Guild Master para cambiar rangos.", bad = "el código no es válido: copialo de nuevo del sitio.",
     pending = "%d por cambiar · un clic por paso", missing = "no está en la guild", ok = "|cff3fbf3f✓|r",
     promote = "Subir a %s", demote = "Bajar a %s", done = "%s: %s → %s.", onlyChanges = "Solo los que cambian",
+    colWho = "Jugador", colNow = "Ahora", colTo = "Le toca", foot = "Primero los que cambian, después los que están bien.",
   },
   en = {
     title = "Guild ranks", paste = "Paste what you copied from the site (Members › In-game guild › Copy for the addon):",
@@ -1065,6 +1157,7 @@ local RT = {
     noPerm = "you need to be an officer or Guild Master to change ranks.", bad = "the code isn't valid: copy it again from the site.",
     pending = "%d to change · one click per step", missing = "not in the guild", ok = "|cff3fbf3f✓|r",
     promote = "Promote to %s", demote = "Demote to %s", done = "%s: %s → %s.", onlyChanges = "Only the ones that change",
+    colWho = "Player", colNow = "Now", colTo = "Should be", foot = "The ones that change first, then the ones that are fine.",
   },
 }
 local function RL(k) return (RT[lang()] or RT.es)[k] or RT.es[k] end
@@ -1101,7 +1194,10 @@ local function rankRows(want)
   return rows
 end
 
-local rk, ROW_H = nil, 22
+local rk, ROW_H = nil, 28
+local RK_W, RK_H, RK_PASTE, RK_FOOT = 440, 520, 92, 28
+local RK_LIST_W = RK_W - 24 -- lo que deja la barra de scroll
+local RK_COLS = { { "who", 0, "" }, { "now", 96, "" }, { "arrow", 18, "" }, { "to", 96, "" }, { "act", 124, "", "RIGHT" } }
 local function rankCode() return db().rankCode end
 
 -- Un paso para ese miembro (ascender = índice más chico). Lo dispara el clic en su botón.
@@ -1113,43 +1209,99 @@ local function stepRank(row)
   rerequestRoster()
 end
 
+-- Botón «Bajar a …» en ámbar: el kit no trae ese color, se pinta encima del secundario.
+local function amberKind(b)
+  local base, C = b.SetKind, ns.ui.C
+  function b.SetKind(self, k)
+    if k ~= "amber" then return base(self, k) end
+    self.kind = k
+    if self.bgT.SetVertexColor then self.bgT:SetVertexColor(0.16, 0.13, 0.07, 1) end
+    self.edgeT:SetColor(0.478, 0.353, 0.118, 1)
+    if self.fs.SetTextColor then self.fs:SetTextColor(C.amber[1], C.amber[2], C.amber[3]) end
+  end
+end
+
+local function rankLine(i)
+  local U, C = ns.ui, ns.ui.C
+  local pos = rk.pos
+  local line = U.row(rk.list, ROW_H, i)
+  line:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H); line:SetPoint("TOPRIGHT", 0, -(i - 1) * ROW_H)
+  line.dot = U.dot(line, 10, C.text); line.dot:SetPoint("LEFT", 8 + pos.who.x, 0)
+  line.name = U.font(line, "GameFontHighlightSmall", C.text, "LEFT"); line.name:SetPoint("LEFT", line.dot, "RIGHT", 6, 0)
+  line.name:SetWidth(pos.who.w - 24)
+  if line.name.SetWordWrap then line.name:SetWordWrap(false) end
+  line.now = U.pill(line); line.now:SetPoint("LEFT", 8 + pos.now.x, 0)
+  line.miss = U.font(line, "GameFontHighlightSmall", C.muted, "LEFT"); line.miss:SetPoint("LEFT", 8 + pos.now.x, 0)
+  line.miss:SetWidth(pos.now.w + pos.arrow.w + pos.to.w - 8)
+  line.arrow = U.font(line, "GameFontHighlightSmall", C.green, "CENTER"); line.arrow:SetPoint("LEFT", 8 + pos.arrow.x - 4, 0); line.arrow:SetWidth(pos.arrow.w)
+  line.to = U.font(line, "GameFontHighlightSmall", C.green, "LEFT"); line.to:SetPoint("LEFT", 8 + pos.to.x, 0); line.to:SetWidth(pos.to.w - 8)
+  if line.to.SetWordWrap then line.to:SetWordWrap(false) end
+  line.btn = U.button(line, "", "on", function(b) if b.row then b:SetEnabled(false); stepRank(b.row) end end)
+  amberKind(line.btn)
+  line.btn:SetPoint("RIGHT", -8, 0)
+  line.state = U.font(line, "GameFontHighlightSmall", C.green, "RIGHT"); line.state:SetPoint("RIGHT", -12, 0)
+  return line
+end
+
 local function refreshRanks()
   if not rk then return end
-  rk.title:SetText(RL("title")); rk.hint:SetText(RL("paste")); rk.read:SetText(RL("read")); rk.onlyLbl:SetText(RL("onlyChanges"))
+  local U, C = ns.ui, ns.ui.C
+  rk.title:SetText(RL("title")); rk.hint:SetText(RL("paste")); rk.read:SetLabel(RL("read")); rk.onlyLbl:SetText(RL("onlyChanges"))
+  rk.foot:SetText(RL("foot"))
+  rk.head.cells.who:SetText(RL("colWho"):upper()); rk.head.cells.now:SetText(RL("colNow"):upper()); rk.head.cells.to:SetText(RL("colTo"):upper())
   local want = rankCode() and parseRanks(rankCode())
   local rows, pending = rankRows(want), 0
   for _, r in ipairs(rows) do if r.to then pending = pending + 1 end end
-  rk.status:SetText(not want and RL("noCode") or pending > 0 and RL("pending"):format(pending) or RL("none"))
+  if not want then
+    rk.status:SetText("|cff" .. U.HEX.muted .. RL("noCode") .. "|r")
+  elseif pending > 0 then
+    local txt = RL("pending"):format(pending)
+    local a, b = txt:match("^(.-)( · .*)$")
+    rk.status:SetText(a and ("|cff" .. U.HEX.amber .. a .. "|r|cff" .. U.HEX.muted .. b .. "|r") or ("|cff" .. U.HEX.amber .. txt .. "|r"))
+  else
+    rk.status:SetText(RL("none"))
+  end
   local shown = {}
   for _, r in ipairs(rows) do if not db().rankOnlyChanges or r.to or r.missing then table.insert(shown, r) end end
   for i, r in ipairs(shown) do
     local line = rk.rows[i]
-    if not line then
-      line = CreateFrame("Frame", nil, rk.list)
-      line:SetHeight(ROW_H)
-      line:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H); line:SetPoint("TOPRIGHT", 0, -(i - 1) * ROW_H)
-      line.name = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.name:SetPoint("LEFT", 4, 0); line.name:SetWidth(110); line.name:SetJustifyH("LEFT")
-      line.rank = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.rank:SetPoint("LEFT", 116, 0); line.rank:SetWidth(90); line.rank:SetJustifyH("LEFT")
-      line.btn = CreateFrame("Button", nil, line, "UIPanelButtonTemplate"); line.btn:SetSize(130, 20); line.btn:SetPoint("RIGHT", -2, 0)
-      line.btn:SetScript("OnClick", function(b) if b.row then b:Disable(); stepRank(b.row) end end)
-      line.state = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); line.state:SetPoint("RIGHT", -6, 0)
-      rk.rows[i] = line
-    end
-    local color = r.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[r.class]
-    line.name:SetText(color and ("|c" .. (color.colorStr or "ffffffff") .. r.name .. "|r") or r.name)
-    line.rank:SetText(r.missing and ("|cff999999" .. RL("missing") .. "|r") or rankName(r.rank))
+    if not line then line = rankLine(i); rk.rows[i] = line end
+    local c = r.missing and C.muted or U.classColor(r.class or U.classOf(r.name))
+    line.dot:SetColor(c)
+    line.name:SetText(r.name)
+    if line.name.SetTextColor then line.name:SetTextColor(c[1], c[2], c[3]) end
     line.btn.row = r.to and r or nil
+    if r.missing then
+      line.now:Hide(); line.miss:SetText(RL("missing")); line.miss:Show()
+      line.arrow:SetText(""); line.to:SetText("")
+    else
+      line.miss:SetText(""); line.miss:Hide()
+      line.now:Set(rankName(r.rank), "closed"); line.now:Show()
+      if r.to then
+        local up = r.to < r.rank
+        local tc = up and C.green or C.amber
+        line.arrow:SetText(up and "▲" or "▼")
+        if line.arrow.SetTextColor then line.arrow:SetTextColor(tc[1], tc[2], tc[3]) end
+        line.to:SetText(rankName(r.to))
+        if line.to.SetTextColor then line.to:SetTextColor(tc[1], tc[2], tc[3]) end
+      else
+        line.arrow:SetText("")
+        line.to:SetText(want and want[r.name] and "—" or "")
+        if line.to.SetTextColor then line.to:SetTextColor(C.muted[1], C.muted[2], C.muted[3]) end
+      end
+    end
     if r.to then
       local up = r.to < r.rank
-      line.btn:SetText((up and RL("promote") or RL("demote")):format(rankName(up and r.rank - 1 or r.rank + 1)))
-      line.btn:Enable(); line.btn:Show(); line.state:SetText("")
+      line.btn:SetKind(up and "on" or "amber")
+      line.btn:SetLabel((up and RL("promote") or RL("demote")):format(rankName(up and r.rank - 1 or r.rank + 1)))
+      line.btn:SetEnabled(true); line.btn:Show(); line.state:SetText("")
     else
-      line.btn:SetText(""); line.btn:Hide()
-      line.state:SetText((want and not r.missing and want[r.name]) and RL("ok") or "")
+      line.btn:SetLabel(""); line.btn:Hide()
+      line.state:SetText((want and not r.missing and want[r.name]) and ("|cff" .. U.HEX.green .. "✓|r") or "")
     end
     line:Show()
   end
-  for i = #shown + 1, #rk.rows do rk.rows[i].btn.row = nil; rk.rows[i].btn:SetText(""); rk.rows[i]:Hide() end
+  for i = #shown + 1, #rk.rows do rk.rows[i].btn.row = nil; rk.rows[i].btn:SetLabel(""); rk.rows[i]:Hide() end
   rk.list:SetHeight(math.max(1, #shown * ROW_H))
 end
 
@@ -1163,35 +1315,45 @@ end
 
 local function openRanks(code)
   if not rk then
-    rk = CreateFrame("Frame", "RebirthTrackRanksFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
-    rk:SetSize(400, 440)
-    rk:SetPoint("CENTER")
-    rk:SetFrameStrata("DIALOG")
-    rk:SetMovable(true); rk:EnableMouse(true); rk:RegisterForDrag("LeftButton")
-    rk:SetScript("OnDragStart", rk.StartMoving); rk:SetScript("OnDragStop", rk.StopMovingOrSizing)
-    if rk.SetBackdrop then rk:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border", tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } }) end
-    rk.title = rk:CreateFontString(nil, "OVERLAY", "GameFontNormal"); rk.title:SetPoint("TOP", 0, -14)
-    local close = CreateFrame("Button", nil, rk, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", -4, -4)
-    rk.hint = rk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); rk.hint:SetPoint("TOPLEFT", 16, -36); rk.hint:SetPoint("TOPRIGHT", -16, -36); rk.hint:SetJustifyH("LEFT")
-    rk.code = CreateFrame("EditBox", nil, rk, "InputBoxTemplate"); rk.code:SetSize(280, 22); rk.code:SetPoint("TOPLEFT", 22, -66); rk.code:SetAutoFocus(false)
+    local U, C = ns.ui, ns.ui.C
+    rk = U.window("RebirthTrackRanksFrame", RK_W, RK_H, "", { point = { "CENTER", 0, 0 } })
+    local y = rk.top
+    -- Zona de pegado: indicación, el código + «Leer» y la línea de estado con el filtro.
+    local paste = CreateFrame("Frame", nil, rk)
+    paste:SetPoint("TOPLEFT", 1, y); paste:SetPoint("TOPRIGHT", -1, y); paste:SetHeight(RK_PASTE)
+    U.fill(paste, C.sub, 1)
+    U.hline(paste, -RK_PASTE + 1)
+    rk.hint = U.font(paste, "GameFontHighlightSmall", C.muted, "LEFT")
+    rk.hint:SetPoint("TOPLEFT", 11, -10); rk.hint:SetPoint("TOPRIGHT", -11, -10)
+    rk.read = U.button(paste, "", "pri", function() loadRanks(rk.code:GetText() or "") end)
+    rk.read:SetPoint("TOPRIGHT", -11, -36)
+    rk.code = U.input(paste, 300, 22, "RTR1:…")
+    rk.code:SetPoint("TOPLEFT", 11, -36); rk.code:SetPoint("RIGHT", rk.read, "LEFT", -6, 0)
     if rk.code.SetMaxLetters then rk.code:SetMaxLetters(0) end
     rk.code:SetScript("OnEnterPressed", function(e) loadRanks(e:GetText() or ""); e:ClearFocus() end)
-    rk.read = CreateFrame("Button", nil, rk, "UIPanelButtonTemplate"); rk.read:SetSize(70, 22); rk.read:SetPoint("LEFT", rk.code, "RIGHT", 8, 0)
-    rk.read:SetScript("OnClick", function() loadRanks(rk.code:GetText() or "") end)
-    rk.status = rk:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); rk.status:SetPoint("TOPLEFT", 16, -96); rk.status:SetJustifyH("LEFT")
-    rk.only = CreateFrame("CheckButton", nil, rk, "UICheckButtonTemplate"); rk.only:SetSize(22, 22); rk.only:SetPoint("TOPRIGHT", -150, -92)
+    rk.status = U.font(paste, "GameFontHighlightSmall", C.text, "LEFT"); rk.status:SetPoint("TOPLEFT", 11, -70)
+    rk.onlyLbl = U.font(paste, "GameFontHighlightSmall", C.text, "RIGHT"); rk.onlyLbl:SetPoint("TOPRIGHT", -11, -70)
+    rk.only = CreateFrame("CheckButton", nil, paste, "UICheckButtonTemplate"); rk.only:SetSize(22, 22)
+    rk.only:SetPoint("RIGHT", rk.onlyLbl, "LEFT", -2, 0)
     rk.only:SetChecked(db().rankOnlyChanges and true or false)
     rk.only:SetScript("OnClick", function(b) db().rankOnlyChanges = b:GetChecked() and true or false; refreshRanks() end)
-    rk.onlyLbl = rk:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); rk.onlyLbl:SetPoint("LEFT", rk.only, "RIGHT", 2, 0)
-    -- La lista con scroll: una fila por miembro (nombre, rango actual y su botón si tiene que cambiar).
+    if rk.status.SetPoint then rk.status:SetPoint("RIGHT", rk.only, "LEFT", -8, 0) end
+    if rk.status.SetWordWrap then rk.status:SetWordWrap(false) end
+    y = y - RK_PASTE
+    -- La tabla: encabezado fijo y las filas con scroll.
+    rk.head = U.tableHeader(rk, RK_COLS, RK_LIST_W, y)
+    rk.pos = rk.head.pos
+    local ft = U.footer(rk, RK_FOOT)
+    rk.foot = U.font(ft, "GameFontHighlightSmall", C.muted, "LEFT"); rk.foot:SetPoint("LEFT", 11, 0); rk.foot:SetPoint("RIGHT", -11, 0)
     rk.scroll = CreateFrame("ScrollFrame", "RebirthTrackRanksScroll", rk, "UIPanelScrollFrameTemplate")
-    rk.scroll:SetPoint("TOPLEFT", 14, -120); rk.scroll:SetPoint("BOTTOMRIGHT", -32, 16)
-    rk.list = CreateFrame("Frame", nil, rk.scroll); rk.list:SetSize(350, 1)
+    rk.scroll:SetPoint("TOPLEFT", 1, y - 22); rk.scroll:SetPoint("BOTTOMRIGHT", -23, RK_FOOT + 1)
+    rk.list = CreateFrame("Frame", nil, rk.scroll); rk.list:SetSize(RK_LIST_W, 1)
     rk.scroll:SetScrollChild(rk.list)
     rk.rows = {}
     rk:RegisterEvent("GUILD_ROSTER_UPDATE"); rk:SetScript("OnEvent", function() if rk:IsShown() then refreshRanks() end end)
   end
   if code and code ~= "" then rk.code:SetText(code); loadRanks(code) else rk.code:SetText(rankCode() or "") end
+  if rk.code.updatePlaceholder then rk.code:updatePlaceholder() end
   rk:Show()
   rerequestRoster()
   refreshRanks()

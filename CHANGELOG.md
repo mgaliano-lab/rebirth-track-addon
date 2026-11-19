@@ -13,6 +13,23 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.11.0] - 2026-11-19
+
+### Para todos
+
+- **Interfaz nueva en todas las ventanas**: fondos casi opacos (se leen bien sobre cualquier escenario), franja de título, pestañas con contador, tablas con columnas y filas alternadas, íconos de los ítems con el borde de su calidad y barras de avance.
+- **Ventana principal en mosaicos**: arriba tu personaje y si se está registrando, los interruptores como botoncitos (Mazmorras, Posición) y cada ventana del addon es un mosaico con ícono. «Pedidos» muestra cuántos esperan revisión.
+- **Pedidos de la guild** en tabla: quién, receta, materiales con su ícono y cantidad (pasá el mouse para ver el ítem), estado, vencimiento y acciones.
+- **Plan del personaje**: los talentos como el árbol del juego y el Legado con sus 3 ramas (Aventura, Ingenio y Oficios).
+- **Banco personal** con buscador a todo el ancho que resalta lo que coincide, y filtros.
+- **Opciones**: nueva «Opacidad del fondo» (80–100 %).
+
+### Técnico
+
+- `UI.lua` (nuevo, primero en los 6 `.toc`): kit visual «Obsidiana» en `ns.ui` (window, button con ancho según el texto, tabs, tableHeader/row, icon con calidad, pill, bar, dot, input, footer). Solo texturas `WHITE8x8`, sin `BackdropTemplate`. Opacidad en `settings.uiAlpha` (0.8–1, por defecto 0.96) y `ns.ui.refreshAlpha()`.
+- Ventana principal reescrita (ancho fijo 340, sin redimensionar); `ns.refreshMain()` y `ns.requestsBadge()` para el contador de pedidos.
+- Todas las ventanas pasan al kit; mismos textos de botones, datos y permisos.
+
 ## [0.10.1] - 2026-11-19
 
 ### Para todos
