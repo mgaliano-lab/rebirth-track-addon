@@ -13,6 +13,23 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.10.0] - 2026-11-19
+
+### Para todos
+
+- **Pedidos de materiales a la guild**: en la ventana de profesión, al lado de los componentes de la receta, tildá «Solicitar a la Guild» y elegí cuántas veces la querés hacer. Se pide solo lo que te falta (descuenta tus bolsas y tu banco). Destildalo cuando ya no lo necesites.
+- **Panel «Pedidos de la guild»** (botón nuevo en la ventana o `/rt pedidos`), con pestañas: tus pedidos, los pendientes, los que ya están en la guild y los revisores. El GM y los oficiales revisan los pedidos y los trasladan a toda la guild, los cierran o les ponen vencimiento (por defecto no vencen). El GM puede sumar a otros personajes como revisores.
+- Lo trasladado se ve en el tooltip del ítem (bolsas, banco, subasta, enlaces del chat): «Requerido por la guild» y quién. Con **Alt+clic** sobre el ítem se abren los nombres listos para copiar. Al abrir el vendedor o la subasta te avisa si llevás algo que pide la guild, y el cartel de destruir un ítem dice quién lo necesita.
+- Los pedidos viajan entre los que tienen el addon y, con la app, llegan a la web (Profesiones › Requeridos de la guild), donde los oficiales también pueden trasladarlos.
+- **Opciones nuevas** (Esc › Opciones › AddOns › Rebirth Track): apagar los pedidos a la guild y apagar lo del banco en las recetas («(+Banco n)» / «(+Parcial Banco)»). Las dos vienen prendidas.
+
+### Técnico
+
+- `Requests.lua` (nuevo, último en los 6 `.toc`): pedidos `rq1;id;quien pidió;creado;cambiado;estado(p|g|c);autor;vence;receta;ítem:cantidad,…` en `RebirthTrackDB.requests.lines[id]` y revisores `rv1;cambiado;GM;Nombre-Reino,…` en `RebirthTrackDB.requests.reviewers` (los sube la app). Por `RTK1`: `Q;` cambio propio (el remitente tiene que ser el autor), `W;` reenvío al que entra (vale si el autor podía), `Y;` revisores (solo del rango 0), `R;desde` al entrar. Gana la línea con `cambiado` más nuevo.
+- Permisos: revisan el rango 0, los rangos del consejo (`RebirthTrackCouncil.ranks`, si no 0 y 1) y los revisores del GM. Quien pidió crea, cambia cantidades sin tocar estado ni vencimiento, y cierra. El autor `@web` solo vale desde `RebirthTrackRequests` (Plans.lua, por versión como `RebirthTrackCouncil`) o reenviado por un revisor; al cargarlo, un revisor lo reenvía con `Q;`.
+- Tooltip con `TooltipDataProcessor.AddTooltipPostCall` (o `OnTooltipSetItem`), Alt+clic por `hooksecurefunc("HandleModifiedItemClick")` (WoW no deja escribir en el portapapeles: ventanita con un EditBox seleccionado), aviso en `MERCHANT_SHOW`/`AUCTION_HOUSE_SHOW` y texto extra en `StaticPopup_Show("DELETE_*")` con `GetCursorInfo`. La venta no se puede frenar sin ensuciar la interfaz protegida, por eso es un aviso.
+- `BankCraft.lua`: `ns.recipeReagents(kind, index)` (componentes de la receta elegida, con el banco) y la opción `settings.bankCraft`. Opción `settings.requests`. Se olvidan los cerrados o vencidos hace más de 30 días (tope 400).
+
 ## [0.9.6] - 2026-11-17
 
 ### Para todos
