@@ -774,7 +774,7 @@ local function createUI()
   local U, C = ns.ui, ns.ui.C
   local u = ui_db()
   ui = U.window("RebirthTrackFrame", UI_W, UI_H, "Rebirth Track", {
-    strata = "MEDIUM", noEsc = true,
+    noEsc = true,
     point = { u.point or "CENTER", u.x or 300, u.y or 120 },
     onMoved = function(self) local point, _, _, x, y = self:GetPoint(); local d = ui_db(); d.point, d.x, d.y = point, x, y end,
     onClose = function() ui_db().shown = false; say(L("closed")) end,

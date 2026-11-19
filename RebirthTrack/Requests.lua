@@ -694,7 +694,7 @@ local refreshWin
 local function createWindow()
   if win then return win end
   local U, C = ns.ui, ns.ui.C
-  win = U.window("RebirthTrackRequestsFrame", WIN_W, WIN_H, "", { strata = "HIGH", point = { "CENTER", 0, 40 } })
+  win = U.window("RebirthTrackRequestsFrame", WIN_W, WIN_H, "", { point = { "CENTER", 0, 40 } })
   win.tab, win.page = "mine", 1
   win.tabs = U.tabs(win, win.top, { { "mine", "" }, { "pending", "" }, { "guild", "" }, { "reviewers", "" } }, function(k)
     win.tab, win.page = k, 1; refreshWin()

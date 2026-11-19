@@ -686,7 +686,7 @@ local WIN_H = -Y_ROWS + MAX_ROWS * ROW_H + 4 + 36 + 1
 local function createWindow()
   if win then return win end
   local U, C = ns.ui, ns.ui.C
-  win = U.window("RebirthTrackCouncilFrame", WIN_W, WIN_H, T("title"), { strata = "HIGH", point = { "CENTER", -250, 60 } })
+  win = U.window("RebirthTrackCouncilFrame", WIN_W, WIN_H, T("title"), { point = { "CENTER", -250, 60 } })
   win.count = U.font(win.header, "GameFontHighlightSmall", C.muted, "RIGHT")
   if win.close then win.count:SetPoint("RIGHT", win.close, "LEFT", -10, 0) else win.count:SetPoint("RIGHT", -10, 0) end
 
