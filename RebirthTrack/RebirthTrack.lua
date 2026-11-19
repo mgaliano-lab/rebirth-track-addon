@@ -79,7 +79,7 @@ local TEXTS = {
     dungeonsSay = "mazmorras %s.", included = "INCLUIDAS", excluded = "excluidas",
     mmSay = "botón del minimapa %s.", visible = "visible", hidden = "oculto (/rt minimapa para mostrarlo)",
     resetSay = "sesiones borradas.", unknown = "no conozco «%s». Probá /rt ayuda (o /rt help).",
-    langSay = "idioma: español.",
+    langSay = "idioma: español.", optCombat = "en combate no se pueden abrir las opciones: se abren solas al terminar el combate.",
     dataSay = "datos anotados: %d personajes tuyos, %d de la guild (recibidos por el canal del addon), %d profesiones y %d eventos. La app los sube cuando el juego guarda (/reload o al salir).",
     help = {
       "|cffe3a42cQué hace|r",
@@ -178,7 +178,7 @@ local TEXTS = {
     dungeonsSay = "dungeons %s.", included = "INCLUDED", excluded = "excluded",
     mmSay = "minimap button %s.", visible = "visible", hidden = "hidden (/rt minimap to show it)",
     resetSay = "sessions cleared.", unknown = "unknown command «%s». Try /rt help (or /rt ayuda).",
-    langSay = "language: English.",
+    langSay = "language: English.", optCombat = "options can't open during combat: they'll open by themselves when combat ends.",
     dataSay = "recorded data: %d of your characters, %d from the guild (received over the addon channel), %d professions and %d events. The app uploads them when the game saves (/reload or logout).",
     help = {
       "|cffe3a42cWhat it does|r",
@@ -774,11 +774,12 @@ local function createUI()
   local U, C = ns.ui, ns.ui.C
   local u = ui_db()
   ui = U.window("RebirthTrackFrame", UI_W, UI_H, "Rebirth Track", {
-    noEsc = true,
     point = { u.point or "CENTER", u.x or 300, u.y or 120 },
     onMoved = function(self) local point, _, _, x, y = self:GetPoint(); local d = ui_db(); d.point, d.x, d.y = point, x, y end,
     onClose = function() ui_db().shown = false; say(L("closed")) end,
   })
+  -- Esc la cierra como a las demás; queda cerrada también la próxima vez que entres.
+  if ui.HookScript then ui:HookScript("OnHide", function() if not UIParent.IsShown or UIParent:IsShown() then ui_db().shown = false end end) end -- (Alt+Z esconde todo: eso no cuenta)
   local logo = ui.header:CreateTexture(nil, "OVERLAY")
   logo:SetSize(18, 18); logo:SetPoint("LEFT", 10, 0); logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
   ui.title:ClearAllPoints(); ui.title:SetPoint("LEFT", logo, "RIGHT", 6, 0)
@@ -1117,8 +1118,23 @@ local function createOptions()
   refreshOptions()
 end
 
+-- El panel de opciones del juego es protegido: en combate no se puede abrir (ADDON_ACTION_BLOCKED).
+-- Se avisa y se abre solo al salir de combate.
+local optionsWaiting
 function ns.openOptions()
   createOptions()
+  if InCombatLockdown and InCombatLockdown() then
+    if not optionsWaiting then
+      optionsWaiting = CreateFrame("Frame")
+      optionsWaiting:SetScript("OnEvent", function(self)
+        self:UnregisterEvent("PLAYER_REGEN_ENABLED")
+        ns.openOptions()
+      end)
+    end
+    optionsWaiting:RegisterEvent("PLAYER_REGEN_ENABLED")
+    say(L("optCombat"))
+    return
+  end
   if optionsCategory and Settings and Settings.OpenToCategory then
     Settings.OpenToCategory(optionsCategory.GetID and optionsCategory:GetID() or optionsCategory.ID)
   elseif InterfaceOptionsFrame_OpenToCategory then
