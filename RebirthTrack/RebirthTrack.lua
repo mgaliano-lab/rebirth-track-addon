@@ -46,6 +46,8 @@ local TEXTS = {
     bLink = "Vincular personaje", tLink = "Asocia este personaje a tu usuario de Discord en rebirthknights.fun (/rt vincular).",
     bStatus = "Estado", tStatus = "Muestra en el chat si el registro está prendido y qué se anotó (/rt estado).",
     tRec = "Prende o apaga el registro a mano (/rt registrar · /rt detener).",
+    tRecStart = "Registrar ahora: prende el registro de combate del juego (el archivo WoWCombatLog.txt, en modo avanzado) y empieza a anotar dónde estás: la banda o mazmorra, quiénes van en el grupo, los jefes que se pelean y cuánto dura. La app lo sube al sitio cuando el juego guarda (al hacer /reload o al salir).\n\nAl entrar a una banda se prende solo; usalo si no arrancó o si querés registrar algo fuera de una banda. (/rt registrar)",
+    tRecStop = "Detener: apaga el registro de combate y cierra lo que se anotó de esta banda o mazmorra. La app lo sube cuando el juego guarda (al hacer /reload o al salir). Si saliste de la instancia, se detiene solo. (/rt detener)",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
     position = "Posición: ", tPos = "Compartir o no dónde está tu personaje con la guild, para el mapa del juego y el del sitio (/rt posicion).",
     posSay = "posición %s.", shared = "|cff3fbf3fCOMPARTIDA|r con la guild", notShared = "sin compartir",
@@ -143,6 +145,8 @@ local TEXTS = {
     bLink = "Link character", tLink = "Links this character to your Discord user on rebirthknights.fun (/rt link).",
     bStatus = "Status", tStatus = "Shows in chat whether logging is on and what was recorded (/rt status).",
     tRec = "Turn logging on or off manually (/rt start · /rt stop).",
+    tRecStart = "Record now: turns on the game's combat log (the WoWCombatLog.txt file, in advanced mode) and starts noting where you are: the raid or dungeon, who's in the group, the bosses you fight and how long it takes. The app uploads it to the site when the game saves (on /reload or when you log out).\n\nIt turns on by itself when you enter a raid; use this if it didn't start or to record something outside a raid. (/rt start)",
+    tRecStop = "Stop: turns off the combat log and closes what was noted for this raid or dungeon. The app uploads it when the game saves (on /reload or when you log out). Leaving the instance stops it by itself. (/rt stop)",
     bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
     position = "Position: ", tPos = "Share where your character is with the guild, for the site's map (/rt position).",
     posSay = "position %s.", shared = "|cff3fbf3fSHARED|r with the guild", notShared = "not shared",
@@ -723,9 +727,11 @@ local function refreshUI()
   local U, C = ns.ui, ns.ui.C
   ui.rec:SetKind(session and nil or "pri")
   ui.rec:SetLabel(session and L("recStop") or L("recStart"))
+  ui.rec.tip = session and L("tRecStop") or L("tRecStart")
+  ui.dun.tip, ui.pos.tip = L("tDungeons"), L("tPos")
   local dun, pos = db().settings.dungeons and true or false, sharePos() and true or false
-  ui.dun:SetKind(dun and "on" or "off"); ui.dun:SetLabel((dun and "✓ " or "") .. L("chipDun"))
-  ui.pos:SetKind(pos and "on" or "off"); ui.pos:SetLabel((pos and "✓ " or "") .. L("chipPos"))
+  ui.dun:SetKind(dun and "on" or "off"); ui.dun:SetLabel((dun and ns.ui.ICON.check or "") .. L("chipDun"))
+  ui.pos:SetKind(pos and "on" or "off"); ui.pos:SetLabel((pos and ns.ui.ICON.check or "") .. L("chipPos"))
   ui.pos:ClearAllPoints(); ui.pos:SetPoint("LEFT", ui.dun, "RIGHT", 6, 0)
   if ns.refreshOptions then ns.refreshOptions() end
   if ns.refreshRecruit then ns.refreshRecruit() end
@@ -804,7 +810,6 @@ local function createUI()
     refreshUI()
   end, { min = 70 })
   ui.rec:SetPoint("TOPRIGHT", -12, -18)
-  ui.rec.tip = L("tRec")
 
   -- Interruptores como chips.
   ui.dun = U.button(ui.body, "", "on", function() db().settings.dungeons = not db().settings.dungeons; checkZone(); refreshUI() end)
@@ -1147,7 +1152,7 @@ local RT = {
     title = "Rangos de la guild", paste = "Pegá acá lo que copiaste del sitio (Miembros › Guild del juego › Copiar para el addon):",
     read = "Leer", none = "|cff3fbf3fTodos tienen el rango que les toca.|r", noCode = "Pegá el código del sitio para ver qué cambiar.",
     noPerm = "necesitás ser oficial o Guild Master para cambiar rangos.", bad = "el código no es válido: copialo de nuevo del sitio.",
-    pending = "%d por cambiar · un clic por paso", missing = "no está en la guild", ok = "|cff3fbf3f✓|r",
+    pending = "%d por cambiar · un clic por paso", missing = "no está en la guild", ok = "",
     promote = "Subir a %s", demote = "Bajar a %s", done = "%s: %s → %s.", onlyChanges = "Solo los que cambian",
     colWho = "Jugador", colNow = "Ahora", colTo = "Le toca", foot = "Primero los que cambian, después los que están bien.",
   },
@@ -1155,7 +1160,7 @@ local RT = {
     title = "Guild ranks", paste = "Paste what you copied from the site (Members › In-game guild › Copy for the addon):",
     read = "Read", none = "|cff3fbf3fEveryone has the right rank.|r", noCode = "Paste the site's code to see what to change.",
     noPerm = "you need to be an officer or Guild Master to change ranks.", bad = "the code isn't valid: copy it again from the site.",
-    pending = "%d to change · one click per step", missing = "not in the guild", ok = "|cff3fbf3f✓|r",
+    pending = "%d to change · one click per step", missing = "not in the guild", ok = "",
     promote = "Promote to %s", demote = "Demote to %s", done = "%s: %s → %s.", onlyChanges = "Only the ones that change",
     colWho = "Player", colNow = "Now", colTo = "Should be", foot = "The ones that change first, then the ones that are fine.",
   },
@@ -1280,7 +1285,7 @@ local function refreshRanks()
       if r.to then
         local up = r.to < r.rank
         local tc = up and C.green or C.amber
-        line.arrow:SetText(up and "▲" or "▼")
+        line.arrow:SetText(up and ns.ui.ICON.up or ns.ui.ICON.down)
         if line.arrow.SetTextColor then line.arrow:SetTextColor(tc[1], tc[2], tc[3]) end
         line.to:SetText(rankName(r.to))
         if line.to.SetTextColor then line.to:SetTextColor(tc[1], tc[2], tc[3]) end
@@ -1297,7 +1302,7 @@ local function refreshRanks()
       line.btn:SetEnabled(true); line.btn:Show(); line.state:SetText("")
     else
       line.btn:SetLabel(""); line.btn:Hide()
-      line.state:SetText((want and not r.missing and want[r.name]) and ("|cff" .. U.HEX.green .. "✓|r") or "")
+      line.state:SetText((want and not r.missing and want[r.name]) and U.ICON.check or "")
     end
     line:Show()
   end

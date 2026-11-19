@@ -23,7 +23,7 @@ local TX = {
     bad = "el texto no es un plan válido (copialo de nuevo del sitio).", loaded = "%d plan(es) leído(s).", cleared = "Planes pegados borrados.",
     tSummary = "Resumen", tProf = "Profesiones", tTalents = "Talentos", tLegacy = "Legado",
     level = "Nivel", total = "Avance", main = "main", fromApp = "de la app", pasted = "pegado", other = "Es de otro personaje: %s",
-    skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "▶ ahora",
+    skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "ahora",
     mats = "Materiales de toda la ruta (bolsas + banco)", noRoute = "Sin ruta (se sube recolectando).",
     planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
     legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
@@ -43,7 +43,7 @@ local TX = {
     bad = "the text isn't a valid plan (copy it again from the site).", loaded = "%d plan(s) read.", cleared = "Pasted plans cleared.",
     tSummary = "Summary", tProf = "Professions", tTalents = "Talents", tLegacy = "Legacy",
     level = "Level", total = "Progress", main = "main", fromApp = "from the app", pasted = "pasted", other = "It belongs to another character: %s",
-    skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "▶ now",
+    skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "now",
     mats = "Materials for the whole route (bags + bank)", noRoute = "No route (leveled by gathering).",
     planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
     legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
@@ -466,10 +466,10 @@ local function profLines(pr)
   for _, x in ipairs(pr.profs) do
     add(GOLD .. x.prof.name .. "|r  " .. T("skill") .. ": " .. (x.rank and (x.rank .. "/" .. (x.max or 300)) or T("notLearned")))
     if #x.prof.steps == 0 then add(GRAY .. T("noRoute") .. "|r")
-    elseif not x.step and x.rank then add(GREEN .. "✓ " .. T("done") .. "|r")
+    elseif not x.step and x.rank then add(ns.ui.ICON.check .. GREEN .. T("done") .. "|r")
     else add(GRAY .. T("step"):format(x.step or 1, #x.prof.steps) .. "|r") end
     for i, s in ipairs(x.prof.steps) do
-      local mark = i == x.step and (GOLD .. T("now") .. " ") or ((x.step and i < x.step or (not x.step and x.rank)) and GREEN .. "✓ " or GRAY .. "  ")
+      local mark = i == x.step and (ns.ui.ICON.play .. GOLD .. T("now") .. " ") or ((x.step and i < x.step or (not x.step and x.rank)) and ns.ui.ICON.check .. GREEN or GRAY .. "  ")
       add(mark .. s.from .. "→" .. s.to .. "  " .. s.name .. " ×" .. s.crafts .. "|r")
     end
     if #x.prof.mats > 0 then
@@ -1079,7 +1079,7 @@ local function drawTalentTab(p, pr)
   local s = pw.tstrip
   s:Show()
   local nx = pr.tal.next and (GRAY .. T("next"):format(WHITE_C .. pr.tal.next.t.name .. GRAY, pr.tal.next.have, pr.tal.next.t.rank) .. "|r")
-    or (pr.tal.matched >= pr.tal.planned and (GREEN .. "✓ " .. T("buildDone") .. "|r")) or ""
+    or (pr.tal.matched >= pr.tal.planned and (ns.ui.ICON.check .. GREEN .. T("buildDone") .. "|r")) or ""
   s:Set(pr.tal.matched, T("spentOf"):format(pr.tal.planned, pr.tal.spent), pr.tal.planned > 0 and pr.tal.matched / pr.tal.planned or 0,
     nx, pr.tal.off > 0 and T("off"):format(pr.tal.off) or "")
   local y = -44
@@ -1101,7 +1101,7 @@ local function drawLegacyTab(p)
   local nx = ""
   if #p.legacy == 0 then nx = GRAY .. T("noLegacy") .. "|r"
   elseif info.next then nx = GRAY .. T("lgNext"):format(WHITE_C .. info.next.name .. GRAY, info.next.have or 0, info.next.want) .. "|r"
-  elseif info.found > 0 and info.matched >= info.planned then nx = GREEN .. "✓ " .. T("lgDone") .. "|r" end
+  elseif info.found > 0 and info.matched >= info.planned then nx = ns.ui.ICON.check .. GREEN .. T("lgDone") .. "|r" end
   s:Set(info.found > 0 and info.spent or "?", T("lgTotal"):format(info.planned),
     info.planned > 0 and info.matched / info.planned or info.spent / 16, nx, "")
   local y = -44
@@ -1142,7 +1142,7 @@ local function drawHero(p, pr)
   local cname = (LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[token]) or p.cls
   local cc = ns.ui.classColor(token)
   tint(h.dot, cc)
-  h.name:SetText(p.name .. (p.main and ("  " .. GOLD .. "★ " .. T("main") .. "|r") or ""))
+  h.name:SetText(p.name .. (p.main and ("  " .. ns.ui.ICON.star .. GOLD .. " " .. T("main") .. "|r") or ""))
   color(h.name, cc)
   h.sub:SetText(p.race .. " · " .. cname .. " · " .. T(p.source == "app" and "fromApp" or "pasted"))
   h.other:SetText(not isMine(p) and T("other"):format(p.name .. (p.realm ~= "" and ("-" .. p.realm) or "")) or "")

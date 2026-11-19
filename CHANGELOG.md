@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.11.1] - 2026-11-19
+
+### Para todos
+
+- Los botones de Mazmorras y Posición muestran bien la tilde cuando están prendidos (antes salía un cuadradito), y lo mismo en Rangos y en el Plan.
+- El botón «Registrar» / «Detener» explica al pasar el mouse qué hace: qué se registra, cuándo se prende solo y cuándo lo sube la app.
+
+### Técnico
+
+- `UI.lua`: `ns.ui.ICON` (check, up, down, star, play) como texturas `|T…|t`; la fuente del juego no tiene ✓ ▲ ▼ ★ ▶. Reemplazados en la ventana principal, Rangos, Plan e Invitador («Canal »»).
+- Tooltips `tRecStart` / `tRecStop` según el estado del registro.
+
 ## [0.11.0] - 2026-11-19
 
 ### Para todos

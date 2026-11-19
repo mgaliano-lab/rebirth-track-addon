@@ -20,6 +20,20 @@ local C = {
   red = { 1, 0.478, 0.494 }, input = { 0.039, 0.047, 0.063 },
 }
 U.C = C
+-- Símbolos como texturas: la fuente del juego (Friz Quadrata) no trae ✓ ▲ ▼ ★ ▶ y salen como cuadraditos.
+local function glyph(path, size, r, g, b)
+  size = size or 14
+  if r then return ("|T%s:%d:%d:0:0:16:16:0:16:0:16:%d:%d:%d|t"):format(path, size, size, r, g, b) end
+  return ("|T%s:%d:%d:0:0|t"):format(path, size, size)
+end
+U.glyph = glyph
+U.ICON = {
+  check = glyph("Interface\\Buttons\\UI-CheckBox-Check", 16),
+  up = glyph("Interface\\Buttons\\Arrow-Up-Up", 14),
+  down = glyph("Interface\\Buttons\\Arrow-Down-Up", 14),
+  star = glyph("Interface\\TargetingFrame\\UI-RaidTargetingIcon_1", 12),
+  play = glyph("Interface\\ChatFrame\\ChatFrameExpandArrow", 12),
+}
 U.HEX = { gold = "f2c14e", muted = "8a909d", green = "5fd49b", amber = "f0b64f", red = "ff7a7e", text = "e6e8ec" }
 
 -- Opacidad del fondo elegida en Opciones (0.8–1).
