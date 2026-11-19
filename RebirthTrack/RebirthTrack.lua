@@ -774,11 +774,12 @@ local function createUI()
   local U, C = ns.ui, ns.ui.C
   local u = ui_db()
   ui = U.window("RebirthTrackFrame", UI_W, UI_H, "Rebirth Track", {
-    noEsc = true,
     point = { u.point or "CENTER", u.x or 300, u.y or 120 },
     onMoved = function(self) local point, _, _, x, y = self:GetPoint(); local d = ui_db(); d.point, d.x, d.y = point, x, y end,
     onClose = function() ui_db().shown = false; say(L("closed")) end,
   })
+  -- Esc la cierra como a las demás; queda cerrada también la próxima vez que entres.
+  if ui.HookScript then ui:HookScript("OnHide", function() if not UIParent.IsShown or UIParent:IsShown() then ui_db().shown = false end end) end -- (Alt+Z esconde todo: eso no cuenta)
   local logo = ui.header:CreateTexture(nil, "OVERLAY")
   logo:SetSize(18, 18); logo:SetPoint("LEFT", 10, 0); logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
   ui.title:ClearAllPoints(); ui.title:SetPoint("LEFT", logo, "RIGHT", 6, 0)

@@ -18,10 +18,12 @@ anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 ### Para todos
 
 - «Opciones» en combate ya no da error: avisa en el chat y las abre solas cuando termina el combate.
+- Esc también cierra la ventana principal del addon, como las demás.
 
 ### Técnico
 
 - `ns.openOptions()`: con `InCombatLockdown()` no llama a `Settings.OpenToCategory` (es protegida: `ADDON_ACTION_BLOCKED` con `OpenSettingsPanel()`); espera `PLAYER_REGEN_ENABLED` y reintenta. Texto `optCombat` (es/en).
+- La ventana principal entra en `UISpecialFrames` (sin `noEsc`); al ocultarse guarda `ui.shown = false`.
 
 ## [0.11.2] - 2026-11-19
 
