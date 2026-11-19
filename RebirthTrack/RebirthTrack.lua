@@ -54,7 +54,11 @@ local TEXTS = {
     optDungeons = "Registrar también las mazmorras", optDungeonsTip = "Prende el registro de combate al entrar a mazmorras, no solo a bandas.",
     optMinimap = "Mostrar el botón del minimapa", optMinimapTip = "El botón redondo del minimapa que abre la ventana.",
     optOpen = "Abrir la ventana", optLangTip = "Idioma del addon",
-    bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).",
+    bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).", bOptions = "Opciones",
+    sPerson = "Personaje", sGuild = "Guild", chipDun = "Mazmorras", chipPos = "Posición", recStart = "Registrar", recStop = "Detener",
+    stOn = "Registrando", stOff = "Registro apagado",
+    tlPlan = "Plan", tlBank = "Banco", tlStatus = "Estado", tlLoot = "Reparto", tlRequests = "Pedidos", tlPositions = "Posiciones",
+    tlRecruit = "Invitador", tlRanks = "Rangos", tlLink = "Vincular",
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
@@ -145,7 +149,11 @@ local TEXTS = {
     optDungeons = "Also record dungeons", optDungeonsTip = "Turns combat logging on in dungeons too, not only raids.",
     optMinimap = "Show the minimap button", optMinimapTip = "The round minimap button that opens the window.",
     optOpen = "Open the window", optLangTip = "Addon language",
-    bHelp = "Help", tHelp = "How to use it (/rt help).",
+    bHelp = "Help", tHelp = "How to use it (/rt help).", bOptions = "Options",
+    sPerson = "Character", sGuild = "Guild", chipDun = "Dungeons", chipPos = "Position", recStart = "Record", recStop = "Stop",
+    stOn = "Recording", stOff = "Logging off",
+    tlPlan = "Plan", tlBank = "Bank", tlStatus = "Status", tlLoot = "Loot", tlRequests = "Requests", tlPositions = "Positions",
+    tlRecruit = "Recruit", tlRanks = "Ranks", tlLink = "Link",
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
@@ -692,13 +700,14 @@ local function status()
 end
 
 -- ── Ventana del addon ───────────────────────────────────────────────────────────────────
--- Se puede mover (arrastrando), cerrar y cambiar de tamaño (esquina inferior derecha); los botones
--- se estiran con el ancho y la ayuda va en un área con scroll. Recuerda posición, tamaño y si estaba
+-- Estilo «Obsidiana» (UI.lua), en mosaicos: arriba el personaje con el estado del registro y su
+-- botón, los interruptores como chips, y cada ventana del addon es un mosaico con ícono (y contador,
+-- como los pedidos pendientes). La ayuda reemplaza los mosaicos. Recuerda posición y si estaba
 -- abierta. /rt mostrar (show) la vuelve a abrir; /rt ayuda (help) la abre con la explicación.
-local MIN_W, MIN_H, MAX_W, MAX_H = 220, 230, 600, 700
-local BTN_TOP, BTN_STEP = 52, 28
+local UI_W, UI_H = 340, 424
+local TILE_H = 62
 
-local ui, layout
+local ui
 local function ui_db()
   local d = db()
   d.ui = d.ui or { shown = true }
@@ -707,175 +716,160 @@ end
 
 local function refreshUI()
   if not ui then return end
-  ui.rec:SetText(session and L("stop") or L("start"))
-  ui.dun:SetText(L("dungeons") .. (db().settings.dungeons and L("yes") or L("no")))
-  ui.pos:SetText(L("position") .. (sharePos() and L("yes") or L("no")))
+  local U, C = ns.ui, ns.ui.C
+  ui.rec:SetKind(session and nil or "pri")
+  ui.rec:SetLabel(session and L("recStop") or L("recStart"))
+  local dun, pos = db().settings.dungeons and true or false, sharePos() and true or false
+  ui.dun:SetKind(dun and "on" or "off"); ui.dun:SetLabel((dun and "✓ " or "") .. L("chipDun"))
+  ui.pos:SetKind(pos and "on" or "off"); ui.pos:SetLabel((pos and "✓ " or "") .. L("chipPos"))
+  ui.pos:ClearAllPoints(); ui.pos:SetPoint("LEFT", ui.dun, "RIGHT", 6, 0)
   if ns.refreshOptions then ns.refreshOptions() end
   if ns.refreshRecruit then ns.refreshRecruit() end
-  ui.state:SetText(LoggingCombat() and L("stateOn") .. (session and session.instance and (" · " .. session.instance.name) or "") or L("stateOff"))
-  ui.lang:SetText(lang() == "es" and "EN" or "ES")
-  for _, b in ipairs(ui.buttons) do b:SetText(b.label and L(b.label) or b:GetText()) end
-  ui.back:SetText(L("back"))
+  local on = LoggingCombat()
+  ui.live:SetColor(on and C.green or C.muted)
+  ui.state:SetText(on and ("|cff" .. U.HEX.green .. L("stOn") .. "|r" .. (session and session.instance and ("|cff" .. U.HEX.muted .. " · " .. session.instance.name .. "|r") or ""))
+    or ("|cff" .. U.HEX.muted .. L("stOff") .. "|r"))
+  local name, cls = UnitName("player"), select(2, UnitClass("player"))
+  local cc = U.classColor(cls)
+  ui.name:SetText(name or "")
+  if ui.name.SetTextColor then ui.name:SetTextColor(cc[1], cc[2], cc[3]) end
+  ui.sub:SetText((UnitLevel and UnitLevel("player") or "") .. " · " .. (UnitClass("player") or ""))
+  if ui.portrait and SetPortraitTexture then pcall(SetPortraitTexture, ui.portrait, "player") end
+  ui.lang:SetLabel(lang() == "es" and "EN" or "ES")
+  ui.lang.tip = L("tLang")
+  for _, t in ipairs(ui.tiles) do
+    t.fs:SetText(L(t.label)); t.text = L(t.label)
+    local n = t.badge and t.badge() or 0
+    t.bd:SetShown(n > 0); t.bdText:SetText(n > 0 and tostring(n) or "")
+  end
+  ui.secMe:SetText(L("sPerson"):upper()); ui.secGuild:SetText(L("sGuild"):upper())
+  ui.helpBtn:SetLabel(L("bHelp")); ui.optBtn:SetLabel(L("bOptions"))
+  ui.optBtn:ClearAllPoints(); ui.optBtn:SetPoint("RIGHT", -10, 0)
+  ui.helpBtn:ClearAllPoints(); ui.helpBtn:SetPoint("RIGHT", ui.optBtn, "LEFT", -6, 0)
+  ui.back:SetLabel(L("back"))
   ui.help:SetText(table.concat(L("help"), "\n"))
-  layout()
-end
-
--- Alto mínimo para que entren todos los botones; la ventana nunca queda más chica que su contenido.
-local function minHeight() return BTN_TOP + #ui.buttons * BTN_STEP + 14 end
-
-function layout()
-  if not ui then return end
-  local w = ui:GetWidth()
-  for _, b in ipairs(ui.buttons) do b:SetWidth(math.max(120, w - 36)) end
-  ui.helpText:SetWidth(math.max(100, w - 58))
-  ui.help:SetWidth(math.max(100, w - 58))
   ui.helpText:SetHeight((ui.help:GetStringHeight() or 0) + 8)
 end
+ns.refreshMain = function() pcall(refreshUI) end
 
 local function showHelp(on)
   ui.helpOn = on
   ui.scroll:SetShown(on)
-  for _, b in ipairs(ui.buttons) do b:SetShown(not on) end
-  ui.state:SetShown(not on)
   ui.back:SetShown(on)
-  local u = ui_db()
-  local h = math.max(u.h or 0, minHeight())
-  if on then h = math.max(h, u.helpH or 380) end
-  ui:SetHeight(math.min(h, MAX_H))
-  layout()
-end
-
-local function setMinMax(frame)
-  if frame.SetResizeBounds then frame:SetResizeBounds(MIN_W, MIN_H, MAX_W, MAX_H)
-  elseif frame.SetMinResize then frame:SetMinResize(MIN_W, MIN_H); frame:SetMaxResize(MAX_W, MAX_H) end
+  ui.body:SetShown(not on)
 end
 
 local function createUI()
   if ui then return ui end
-  ui = CreateFrame("Frame", "RebirthTrackFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+  local U, C = ns.ui, ns.ui.C
   local u = ui_db()
-  ui:SetSize(math.max(u.w or 240, MIN_W), math.max(u.h or MIN_H, MIN_H))
-  ui:SetFrameStrata("MEDIUM")
-  ui:SetClampedToScreen(true)
-  ui:SetMovable(true)
-  ui:SetResizable(true)
-  setMinMax(ui)
-  ui:EnableMouse(true)
-  ui:RegisterForDrag("LeftButton")
-  ui:SetScript("OnDragStart", ui.StartMoving)
-  ui:SetScript("OnDragStop", function(self)
-    self:StopMovingOrSizing()
-    local point, _, rel, x, y = self:GetPoint()
-    local d = ui_db()
-    d.point, d.rel, d.x, d.y = point, rel, x, y
-  end)
-  ui:SetScript("OnSizeChanged", layout)
-  if ui.SetBackdrop then
-    ui:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-      tile = true, tileSize = 32, edgeSize = 24, insets = { left = 6, right = 6, top = 6, bottom = 6 } })
-  end
-  ui:SetPoint(u.point or "CENTER", UIParent, u.rel or "CENTER", u.x or 300, u.y or 120)
-
-  local title = ui:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-  title:SetPoint("TOP", 8, -14)
-  -- Con la versión, para saber cuál está cargada en el juego.
-  local ver = addonVersion()
-  title:SetText(ver ~= "" and ("Rebirth Track |cff9d9d9dv" .. ver .. "|r") or "Rebirth Track")
-  local logo = ui:CreateTexture(nil, "OVERLAY")
-  logo:SetSize(18, 18)
-  logo:SetPoint("RIGHT", title, "LEFT", -4, 0)
-  logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
-  local close = CreateFrame("Button", nil, ui, "UIPanelCloseButton")
-  close:SetPoint("TOPRIGHT", -2, -2)
-  close:SetScript("OnClick", function() ui:Hide(); ui_db().shown = false; say(L("closed")) end)
-
-  local function tip(frame, key)
-    frame:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L(key), 1, 1, 1, true); GameTooltip:Show() end)
-    frame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-  end
-
-  -- Selector de idioma (arriba a la izquierda): muestra el idioma al que cambia.
-  ui.lang = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
-  ui.lang:SetSize(34, 20)
-  ui.lang:SetPoint("TOPLEFT", 10, -9)
-  ui.lang:SetScript("OnClick", function()
+  ui = U.window("RebirthTrackFrame", UI_W, UI_H, "Rebirth Track", {
+    strata = "MEDIUM", noEsc = true,
+    point = { u.point or "CENTER", u.x or 300, u.y or 120 },
+    onMoved = function(self) local point, _, _, x, y = self:GetPoint(); local d = ui_db(); d.point, d.x, d.y = point, x, y end,
+    onClose = function() ui_db().shown = false; say(L("closed")) end,
+  })
+  local logo = ui.header:CreateTexture(nil, "OVERLAY")
+  logo:SetSize(18, 18); logo:SetPoint("LEFT", 10, 0); logo:SetTexture("Interface\\AddOns\\RebirthTrack\\icon")
+  ui.title:ClearAllPoints(); ui.title:SetPoint("LEFT", logo, "RIGHT", 6, 0)
+  ui.ver = U.font(ui.header, "GameFontHighlightSmall", C.muted, "LEFT"); ui.ver:SetPoint("LEFT", ui.title, "RIGHT", 6, 0)
+  ui.ver:SetText(addonVersion() ~= "" and ("v" .. addonVersion()) or "")
+  -- Selector de idioma: muestra el idioma al que cambia.
+  ui.lang = U.button(ui.header, "EN", nil, function()
     db().settings.lang = lang() == "es" and "en" or "es"
     say(L("langSay"))
     refreshUI()
-  end)
-  tip(ui.lang, "tLang")
+  end, { w = 30 })
+  ui.lang:SetPoint("RIGHT", ui.close, "LEFT", -4, 0)
 
-  ui.state = ui:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  ui.state:SetPoint("TOPLEFT", 16, -34)
-  ui.state:SetPoint("TOPRIGHT", -16, -34)
-  ui.state:SetJustifyH("CENTER")
+  -- Todo lo que no es la ayuda.
+  ui.body = CreateFrame("Frame", nil, ui)
+  ui.body:SetPoint("TOPLEFT", 0, ui.top); ui.body:SetPoint("BOTTOMRIGHT", 0, 37)
 
-  ui.buttons = {}
-  local function button(label, tipKey, onClick)
-    local b = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
-    b:SetHeight(24)
-    b:SetWidth(200)
-    b:SetPoint("TOP", 0, -BTN_TOP - #ui.buttons * BTN_STEP)
-    b.label = label
-    b:SetText(label and L(label) or "")
-    b:SetScript("OnClick", function() onClick(); refreshUI() end)
-    tip(b, tipKey)
-    table.insert(ui.buttons, b)
-    return b
-  end
-  button("bLink", "tLink", linkCharacter)
-  button("bStatus", "tStatus", function() status() end)
-  ui.rec = button(nil, "tRec", function()
+  -- Personaje y registro.
+  ui.portrait = ui.body:CreateTexture(nil, "ARTWORK")
+  ui.portrait:SetSize(40, 40); ui.portrait:SetPoint("TOPLEFT", 12, -10)
+  local ring = U.dot(ui.body, 44, C.border); ring:SetDrawLayer("BACKGROUND"); ring:SetPoint("CENTER", ui.portrait, "CENTER", 0, 0)
+  ui.name = U.font(ui.body, "GameFontNormal", C.text, "LEFT"); ui.name:SetPoint("TOPLEFT", ui.portrait, "TOPRIGHT", 10, -2)
+  ui.sub = U.font(ui.body, "GameFontHighlightSmall", C.muted, "LEFT"); ui.sub:SetPoint("LEFT", ui.name, "RIGHT", 6, 0)
+  ui.live = U.dot(ui.body, 8, C.green); ui.live:SetPoint("TOPLEFT", ui.name, "BOTTOMLEFT", 0, -7)
+  ui.state = U.font(ui.body, "GameFontHighlightSmall", C.text, "LEFT"); ui.state:SetPoint("LEFT", ui.live, "RIGHT", 6, 0)
+  ui.state:SetPoint("RIGHT", ui.body, "RIGHT", -90, 0)
+  ui.rec = U.button(ui.body, "", nil, function()
     if session then stopSession("manual") else startSession("manual") end
-  end)
-  ui.dun = button(nil, "tDungeons", function()
-    db().settings.dungeons = not db().settings.dungeons
-    checkZone()
-  end)
-  ui.pos = button(nil, "tPos", function() setSharePos(not sharePos()) end)
-  button("bPlan", "tPlan", function() SlashCmdList.REBIRTHTRACK("plan") end)
-  button("bLoot", "tLoot", function() SlashCmdList.REBIRTHTRACK("reparto") end)
-  button("bBank", "tBank", function() SlashCmdList.REBIRTHTRACK("banco") end)
-  button("bRequests", "tRequests", function() SlashCmdList.REBIRTHTRACK("pedidos") end)
-  button("bPositions", "tPositions", function() SlashCmdList.REBIRTHTRACK("posiciones") end)
-  button("bRecruit", "tRecruit", function() SlashCmdList.REBIRTHTRACK("invitar") end)
-  button("bRanks", "tRanksBtn", function() SlashCmdList.REBIRTHTRACK("rangos") end)
-  button("bHelp", "tHelp", function() showHelp(true) end)
+    refreshUI()
+  end, { min = 70 })
+  ui.rec:SetPoint("TOPRIGHT", -12, -18)
+  ui.rec.tip = L("tRec")
 
-  -- Ayuda: texto largo dentro de un área con scroll que ocupa el alto disponible.
+  -- Interruptores como chips.
+  ui.dun = U.button(ui.body, "", "on", function() db().settings.dungeons = not db().settings.dungeons; checkZone(); refreshUI() end)
+  ui.dun:SetPoint("TOPLEFT", 12, -60); ui.dun.tip = L("tDungeons")
+  ui.pos = U.button(ui.body, "", "off", function() setSharePos(not sharePos()); refreshUI() end)
+  ui.pos.tip = L("tPos")
+  U.hline(ui.body, -92, 0)
+
+  -- Mosaicos.
+  local function slash(cmd) return function() SlashCmdList.REBIRTHTRACK(cmd) end end
+  ui.tiles = {}
+  local tileW = math.floor((UI_W - 24 - 12) / 3)
+  local function tile(label, icon, tipKey, onClick, x, y, badge)
+    local t = CreateFrame("Button", nil, ui.body)
+    t:SetSize(tileW, TILE_H)
+    t:SetPoint("TOPLEFT", 12 + x * (tileW + 6), y)
+    t.bgT = U.fill(t, { 0.078, 0.090, 0.118 }, 1)
+    t.edgeT = U.edge(t, C.line, 1)
+    t.ic = t:CreateTexture(nil, "ARTWORK"); t.ic:SetSize(26, 26); t.ic:SetPoint("TOP", 0, -9); t.ic:SetTexture(icon)
+    if t.ic.SetTexCoord then t.ic:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+    t.fs = U.font(t, "GameFontHighlightSmall", C.text, "CENTER"); t.fs:SetPoint("BOTTOM", 0, 8); t.fs:SetWidth(tileW - 8)
+    if t.fs.SetWordWrap then t.fs:SetWordWrap(false) end
+    t.bd = CreateFrame("Frame", nil, t); t.bd:SetSize(18, 16); t.bd:SetPoint("TOPRIGHT", -4, -4)
+    U.fill(t.bd, C.action, 1)
+    t.bdText = U.font(t.bd, "GameFontHighlightSmall", { 0.09, 0.075, 0.04 }, "CENTER"); t.bdText:SetPoint("CENTER", 0, 0)
+    t.bd:Hide()
+    t.label, t.badge = label, badge
+    t:SetScript("OnClick", function() onClick(); refreshUI() end)
+    t:SetScript("OnEnter", function(self)
+      self.edgeT:SetColor(C.border[1], C.border[2], C.border[3], 1)
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(L(tipKey), 1, 1, 1, true); GameTooltip:Show()
+    end)
+    t:SetScript("OnLeave", function(self) self.edgeT:SetColor(C.line[1], C.line[2], C.line[3], 1); GameTooltip:Hide() end)
+    ui.tiles[#ui.tiles + 1] = t
+    return t
+  end
+  ui.secMe = U.label(ui.body, ""); ui.secMe:SetPoint("TOPLEFT", 12, -102)
+  tile("tlPlan", "Interface\\Icons\\INV_Misc_Book_09", "tPlan", slash("plan"), 0, -118)
+  tile("tlBank", "Interface\\Icons\\INV_Misc_Bag_08", "tBank", slash("banco"), 1, -118)
+  tile("tlStatus", "Interface\\Icons\\INV_Misc_PocketWatch_01", "tStatus", function() status() end, 2, -118)
+  ui.secGuild = U.label(ui.body, ""); ui.secGuild:SetPoint("TOPLEFT", 12, -190)
+  tile("tlLoot", "Interface\\Icons\\INV_Misc_Coin_01", "tLoot", slash("reparto"), 0, -206)
+  tile("tlRequests", "Interface\\Icons\\INV_Crate_01", "tRequests", slash("pedidos"), 1, -206, function() return ns.requestsBadge and ns.requestsBadge() or 0 end)
+  tile("tlPositions", "Interface\\Icons\\INV_Misc_Map_01", "tPositions", slash("posiciones"), 2, -206)
+  tile("tlRecruit", "Interface\\Icons\\Ability_Warrior_BattleShout", "tRecruit", slash("invitar"), 0, -274)
+  tile("tlRanks", "Interface\\Icons\\INV_BannerPVP_02", "tRanksBtn", slash("rangos"), 1, -274)
+  tile("tlLink", "Interface\\Icons\\INV_Misc_Key_03", "tLink", linkCharacter, 2, -274)
+
+  -- Pie: versión, ayuda y opciones.
+  local ft = U.footer(ui, 36)
+  ui.helpBtn = U.button(ft, "", nil, function() showHelp(true) end)
+  ui.helpBtn.tip = L("tHelp")
+  ui.optBtn = U.button(ft, "", nil, function() if ns.openOptions then ns.openOptions() end end)
+  ui.back = U.button(ft, "", "pri", function() showHelp(false) end)
+  ui.back:SetPoint("LEFT", 10, 0)
+
+  -- Ayuda: texto largo dentro de un área con scroll.
   ui.scroll = CreateFrame("ScrollFrame", "RebirthTrackHelpScroll", ui, "UIPanelScrollFrameTemplate")
-  ui.scroll:SetPoint("TOPLEFT", 14, -34)
-  ui.scroll:SetPoint("BOTTOMRIGHT", -32, 42)
+  ui.scroll:SetPoint("TOPLEFT", 12, ui.top - 8)
+  ui.scroll:SetPoint("BOTTOMRIGHT", -30, 44)
   ui.helpText = CreateFrame("Frame", nil, ui.scroll)
-  ui.helpText:SetSize(180, 400)
+  ui.helpText:SetSize(UI_W - 50, 400)
   ui.scroll:SetScrollChild(ui.helpText)
   ui.help = ui.helpText:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
   ui.help:SetPoint("TOPLEFT", 2, -2)
+  ui.help:SetWidth(UI_W - 54)
   ui.help:SetJustifyH("LEFT")
   ui.help:SetJustifyV("TOP")
   if ui.help.SetWordWrap then ui.help:SetWordWrap(true) end
-
-  ui.back = CreateFrame("Button", nil, ui, "UIPanelButtonTemplate")
-  ui.back:SetSize(100, 22)
-  ui.back:SetPoint("BOTTOM", 0, 14)
-  ui.back:SetScript("OnClick", function() showHelp(false) end)
-
-  -- Agarre para cambiar el tamaño (esquina inferior derecha); guarda el tamaño de cada vista.
-  local grip = CreateFrame("Button", nil, ui)
-  grip:SetSize(16, 16)
-  grip:SetPoint("BOTTOMRIGHT", -6, 6)
-  grip:SetNormalTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Up")
-  grip:SetHighlightTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Highlight")
-  grip:SetPushedTexture("Interface\\ChatFrame\\UI-ChatIM-SizeGrabber-Down")
-  grip:SetScript("OnMouseDown", function() ui:StartSizing("BOTTOMRIGHT") end)
-  grip:SetScript("OnMouseUp", function()
-    ui:StopMovingOrSizing()
-    local d = ui_db()
-    d.w = math.floor(ui:GetWidth())
-    if ui.helpOn then d.helpH = math.floor(ui:GetHeight()) else d.h = math.max(math.floor(ui:GetHeight()), minHeight()) end
-    showHelp(ui.helpOn)
-  end)
-  tip(grip, "tResize")
 
   refreshUI()
   showHelp(false)
