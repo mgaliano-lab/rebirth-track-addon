@@ -27,9 +27,9 @@ local TEXTS = {
     yell = "Gritar", tipYell = "Lo grita (/gritar): lo ven los que están cerca tuyo.",
     send = "Mandar a %s", sendNone = "Mandar al canal",
     tipSend = "Lo manda al canal elegido (por defecto el de Mundo).",
-    channel = "Canal ▸", tipChannel = "Cambia a qué canal se manda, entre los que tenés abiertos: %s.",
+    channel = "Canal »", tipChannel = "Cambia a qué canal se manda, entre los que tenés abiertos: %s.",
     noChannels = "no estás en ningún canal (probá /join world)",
-    noWorld = "No encuentro el canal de Mundo entre los tuyos: entrá con /join world (o el nombre que use el servidor) o elegí otro con «Canal ▸».",
+    noWorld = "No encuentro el canal de Mundo entre los tuyos: entrá con /join world (o el nombre que use el servidor) o elegí otro con «Canal »».",
     wait = "Esperá %d s antes de volver a mandarlo (para que no te silencien por spam).",
     sent = "Mandado (%d mensaje(s)) a %s.", yelled = "Gritado (%d mensaje(s)).",
     inviteLabel = "Invitar a:", invite = "Invitar a la guild", tipInvite = "Le manda la invitación a la guild al nombre escrito (si está vacío, a tu objetivo).",
@@ -47,9 +47,9 @@ local TEXTS = {
     yell = "Yell", tipYell = "Yells it (/yell): people near you see it.",
     send = "Send to %s", sendNone = "Send to channel",
     tipSend = "Sends it to the chosen channel (World by default).",
-    channel = "Channel ▸", tipChannel = "Changes which channel it goes to, among the ones you have open: %s.",
+    channel = "Channel »", tipChannel = "Changes which channel it goes to, among the ones you have open: %s.",
     noChannels = "you're not in any channel (try /join world)",
-    noWorld = "I can't find the World channel among yours: join it with /join world (or the name the server uses) or pick another with «Channel ▸».",
+    noWorld = "I can't find the World channel among yours: join it with /join world (or the name the server uses) or pick another with «Channel »».",
     wait = "Wait %d s before sending it again (so you don't get muted for spam).",
     sent = "Sent (%d message(s)) to %s.", yelled = "Yelled (%d message(s)).",
     inviteLabel = "Invite:", invite = "Invite to guild", tipInvite = "Sends the guild invite to the typed name (if empty, to your target).",
@@ -290,7 +290,7 @@ local function create()
   win.count = U.font(win, "GameFontHighlightSmall", U.C.green, "LEFT")
   win.count:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 2, -8); win.count:SetPoint("RIGHT", win, "RIGHT", -12, 0)
 
-  -- Envíos: Gritar · Mandar a … (la acción principal, ocupa lo que sobra) · Canal ▸
+  -- Envíos: Gritar · Mandar a … (la acción principal, ocupa lo que sobra) · Canal »
   win.yell = U.button(win, T("yell"), nil, function() yell() end, { h = 24 })
   win.yell:SetPoint("TOPLEFT", box, "BOTTOMLEFT", 0, -28)
   win.chan = U.button(win, T("channel"), nil, function() nextChannel(); ns.refreshRecruit() end, { h = 24 })
