@@ -402,11 +402,25 @@ assert(g.trees[2].cells[1].rank.text == "2/5", "Precisión a medias")
 assert(g.trees[3].cells[1].rank.text == "1", "Otro: fuera del plan")
 assert(g.trees[1].lines[1] and g.trees[1].lines[1].shown, "flecha del requisito")
 assert(g.trees[1].title.text:find("Asesinato", 1, true), "nombre de la rama")
--- Otra clase: queda la lista.
+-- Otra clase: el árbol sale del plan (sin lo gastado, que es de otro personaje).
 local realUnitClass = UnitClass
 UnitClass = function() return "Mago", "MAGE" end
 ns.planRefresh()
-assert(not g.shown, "otra clase: sin árbol")
+assert(g.shown and g.trees[1].cells[1].rank.text == "0/3", "otra clase: árbol armado con el plan")
+-- Con el plan completo del sitio (0.9.56): también los de rango 0, con ícono y requisito.
+local FULL = table.concat({
+  "RTP1;ff01;Roguebash;nightslayer;Orco;Rogue;pve;1",
+  "B;0;Asesinato", "T;0;1;1;3;3;Remate mejorado;;Improved Eviscerate;ability_warrior_decisivestrike;",
+  "T;0;2;1;0;5;Golpes letales;;Lethality;ability_criticalstrike;1.1",
+  "L;Aventura;2;5;Bien descansado;Well Rested;spell_nature_sleep", "L;Aventura;0;2;Alerta;High Alert;ability_hunter_eagleeye" }, "\n")
+FULL = FULL .. "\nZ;" .. ns.planCrc32(FULL)
+local fp = ns.planParse(FULL)[1].plan
+assert(fp.talents[2].icon == "ability_criticalstrike" and fp.talents[2].pre == "0-1-1" and fp.legacy[2].icon == "ability_hunter_eagleeye", "lee ícono y requisito")
+D2.drawLegacy(fp)
+local lg = D2.lgrid().trees[1].cells
+local sawIcon = false
+for _, cb in ipairs(lg) do if cb.icon and cb.icon.shown and cb.c and cb.c.pk.en == "Well Rested" then sawIcon = true; assert(cb.rank.text == "2/5", "sin leer el juego: lo planeado") end end
+assert(sawIcon, "el Legado con el ícono del plan")
 UnitClass = realUnitClass
 click("Resumen")
 assert(not g.shown, "otra pestaña: sin árbol")
