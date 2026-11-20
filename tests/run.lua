@@ -1323,6 +1323,88 @@ do
   print("árbol de talentos real OK")
 end
 
+-- Plan pegado viejo de otro personaje de la misma clase (Brujo) en WoW Forever (C_Traits, sin
+-- GetTalentInfo): el árbol cruza lo gastado con el juego, sale entero (las tres ramas) con el árbol de
+-- la clase de Plans.lua y los íconos del juego; sin ese árbol, avisa que hay que volver a copiarlo.
+do
+  local saved = { GetNumTalentTabs, GetNumTalents, GetTalentInfo, UnitClass }
+  GetNumTalentTabs, GetNumTalents, GetTalentInfo = nil, nil, nil
+  UnitClass = function() return "Brujo", "WARLOCK", 9 end
+  -- Texto viejo (antes del sitio 0.9.56): solo lo planeado, sin ícono ni requisito, sin Destrucción.
+  local body = table.concat({
+    "RTP1;cj01;Cj;bearg;Orco;Warlock;pve;1",
+    "B;0;Aflicción", "B;1;Demonología", "B;2;Destrucción",
+    "T;0;1;2;4;4;Supresión;18174;Suppression",
+    "T;0;2;3;5;5;Corrupción mejorada;1;Improved Corruption", -- hechizo que no es el del juego: por nombre inglés
+    "T;1;1;2;1;1;Abrazo demoníaco;18697;Demonic Embrace",
+  }, "\n")
+  local plan = ns.planParse(body .. "\nZ;" .. ns.planCrc32(body))[1].plan
+  local NODES = {
+    { id = 1, spell = 18174, rank = 4, max = 4, icon = 136230 },
+    { id = 2, spell = 17810, rank = 5, max = 5, name = "Improved Corruption", icon = 136118 },
+    { id = 3, spell = 18697, rank = 1, max = 1, icon = 136172 },
+    { id = 4, spell = 17815, rank = 2, max = 5, name = "Improved Immolate", icon = 135817 }, -- fuera del plan
+  }
+  local by = {}
+  for _, n in ipairs(NODES) do by[n.id] = n end
+  C_ClassTalents = { GetActiveConfigID = function() return 42 end }
+  C_Traits = {
+    GetConfigInfo = function(cfg) return cfg == 42 and { treeIDs = { 7 } } or nil end,
+    GetTreeNodes = function() local ids = {}; for _, n in ipairs(NODES) do ids[#ids + 1] = n.id end; return ids end,
+    GetNodeInfo = function(_, id) local n = by[id]; return n and { ranksPurchased = n.rank, maxRanks = n.max, activeEntry = { entryID = id } } end,
+    GetEntryInfo = function(_, e) return { definitionID = e } end,
+    GetDefinitionInfo = function(d) return { spellID = by[d].spell } end,
+    GetConfigIDBySystemID = function() return 0 end,
+  }
+  C_Spell = {
+    GetSpellName = function(id) for _, n in ipairs(NODES) do if n.spell == id then return n.name or ("Hechizo " .. id) end end end,
+    GetSpellTexture = function(id) for _, n in ipairs(NODES) do if n.spell == id then return n.icon end end end,
+  }
+  local st = ns._planTraits.state()
+  -- Sin el árbol de la clase: lo planeado con lo gastado del juego (antes salía todo en 0) y el aviso.
+  RebirthTrackTalents = nil
+  local trees, partial = ns._planDraw.planTrees(plan, st)
+  assert(partial, "plan viejo sin árbol de la clase: incompleto")
+  assert(trees[1].talents[1].rank == 4 and trees[1].talents[1].want == 4, "Supresión 4/4 cruzado por hechizo")
+  assert(trees[1].talents[2].rank == 5, "Corrupción mejorada 5/5 cruzada por nombre inglés")
+  assert(trees[1].talents[2].icon == 136118, "el ícono del juego")
+  assert(#trees == 3 and trees[3].name == "Destrucción" and #trees[3].talents == 0, "las tres ramas aunque una no tenga nada planeado")
+  ns.openPlan(body .. "\nZ;" .. ns.planCrc32(body))
+  click("Talentos")
+  local note = ns._planDraw.note()
+  assert(note and note.shown and note.text:find("Volvé a copiarlo", 1, true), "avisa que el plan es viejo")
+  local g = ns._planDraw.grid()
+  assert(g.trees[1].cells[1].rank.text == "4/4" and g.trees[1].cells[2].rank.text == "5/5", "el árbol marca lo aprendido")
+  -- Con el árbol de la clase de Plans.lua: entero, con ícono y requisito, y lo planeado encima.
+  RebirthTrackTalents = { games = { forever = { WARLOCK = {
+    "B;0;Aflicción", "B;1;Demonología", "B;2;Destrucción",
+    "T;0;1;2;0;4;Supresión;18174;Suppression;spell_shadow_unsummonbuilding;",
+    "T;0;1;3;0;5;Corrupción mejorada;17810;Improved Corruption;spell_shadow_abominationexplosion;",
+    "T;0;2;3;0;2;Toque persistente;18265;Lingering Touch;spell_shadow_lifedrain;1.3",
+    "T;1;1;2;0;1;Abrazo demoníaco;18697;Demonic Embrace;spell_shadow_metamorphosis;",
+    "T;2;1;2;0;5;Inmolar mejorado;17815;Improved Immolate;spell_fire_immolation;",
+  } } } }
+  trees, partial = ns._planDraw.planTrees(plan, st)
+  assert(not partial and #trees == 3, "entero con el árbol de la clase")
+  local aff = trees[1].talents
+  assert(#aff == 3 and aff[2].name == "Corrupción mejorada" and aff[2].row == 1 and aff[2].col == 3, "la posición del árbol de la clase")
+  assert(aff[2].want == 5 and aff[2].rank == 5, "lo planeado por nombre aunque el plan viejo lo tenga en otro lugar")
+  assert(aff[3].want == 0 and aff[3].pre == "0-1-3" and aff[3].icon == "Interface\\Icons\\spell_shadow_lifedrain", "rango 0 con ícono y requisito")
+  assert(trees[3].talents[1].rank == 2 and trees[3].talents[1].want == 0, "Destrucción con lo gastado fuera del plan")
+  ns.planRefresh()
+  assert(not note.shown, "sin aviso")
+  assert(g.trees[3].shown and g.trees[3].cells[1].rank.text == "2", "Destrucción dibujada")
+  assert(g.trees[1].count.text:find("9", 1, true), "Aflicción 9 gastados")
+  -- Otra clase: sin lo gastado (es de otro personaje), con el árbol entero igual.
+  UnitClass = function() return "Mago", "MAGE", 8 end
+  trees = ns._planDraw.planTrees(plan, st)
+  assert(trees[1].talents[1].rank == 0 and trees[1].talents[1].want == 4, "otra clase: solo lo planeado")
+  click("Borrar pegados")
+  RebirthTrackTalents, C_ClassTalents, C_Traits, C_Spell = nil, nil, nil, nil
+  GetNumTalentTabs, GetNumTalents, GetTalentInfo, UnitClass = saved[1], saved[2], saved[3], saved[4]
+  print("plan pegado viejo con C_Traits OK")
+end
+
 -- Personaje ya vinculado (Plans.lua › RebirthTrackLinked): sin «Vincular» y con «✓ Vinculado».
 do
   assert(not ns.isLinked(), "sin la lista: no vinculado")
