@@ -17,6 +17,10 @@
 --     sk1  habilidad=nivel/máx,…  (profesiones, secundarias y armas)           (se comparte)
 --     r1   profesión;nivel;máx;receta,…  (s<hechizo>, i<ítem> o n<nombre>)      (se comparte)
 --     cd1  profesión;receta=hora en que vuelve a estar lista,…                  (se comparte)
+--     rd1  profesión;nivel;máx;receta,…  la definición real de lo que ves en la ventana (se comparte):
+--          receta = id:ítem que fabrica:fabrica mín:máx:dificultad (o y g r):ítemxcantidad.…:nombre
+--     tt1  rama;CLASE;nombre;talento,…  el árbol de talentos real de tu clase (se comparte):
+--          talento = fila:columna:rango máx:id de talento:fila:columna del requisito:nombre:ícono
 --     eq1  ranura=ítem[:encantamiento],…  (propio o de alguien inspeccionado)   (se comparte el propio)
 --     t1   grupo;rama~puntos~fila.columna.rango,…/…  (talentos, salvo Retail)  (se comparte)
 --     pos1 mapa;x;y;continente;x;y;zona;instancia;nombre del continente  («off» si no la comparte) (se comparte)
@@ -43,8 +47,8 @@
 local ADDON, ns = ...
 ns = ns or {}
 
-local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true, pos1 = true }
-local KEYED = { r1 = true, cd1 = true, gb1 = true } -- una por profesión o pestaña
+local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true, pos1 = true, tt1 = true, rd1 = true }
+local KEYED = { r1 = true, cd1 = true, gb1 = true, tt1 = true, rd1 = true } -- una por profesión, rama o pestaña
 local MAX_EVENTS, MAX_PEERS, MAX_REPLY, CHUNK = 1500, 400, 40, 200
 local INSPECT_EVERY = 6 * 3600
 
@@ -221,6 +225,30 @@ local function recipeId(link)
   return it and ("i" .. it) or nil
 end
 local function readyAt(cd) return math.floor((time() + cd) / 300 + 0.5) * 300 end
+local function itemOf(link) return type(link) == "string" and tonumber(link:match("item:(%d+)")) or nil end
+-- La definición de una receta como la ve el juego (rd1): id:ítem:mín:máx:dificultad:componentes:nombre.
+local DIFF = { optimal = "o", orange = "o", medium = "y", yellow = "y", easy = "g", green = "g", trivial = "r", gray = "r", grey = "r" }
+local function recipeDef(id, item, lo, hi, kind, reag, name)
+  return table.concat({ id, item or 0, math.max(1, tonumber(lo) or 1), math.max(1, tonumber(hi) or tonumber(lo) or 1),
+    DIFF[kind or ""] or "r", table.concat(reag, "."), tok(name) }, ":")
+end
+-- Se comparte cuando cambia lo que sabés o cómo son las recetas; si solo cambian los colores (subiste de
+-- nivel), como mucho una vez por hora o cada 10 puntos, para no llenar el canal con cada punto.
+local function saveDefs(prof, rank, max, defs)
+  local g = me()
+  if not g or not prof or prof == "" or prof == "UNKNOWN" or #defs == 0 then return end
+  prof, rank = tok(prof), tonumber(rank) or 0
+  table.sort(defs)
+  local c = store().data[g]
+  local old = c and c["rd1:" .. prof]
+  if old then
+    local at, orank, olist = old:match("^rd1;[^;]*;(%d+);[^;]*;(%d*);%d*;(.*)$")
+    local function shape(list) return (tostring(list or ""):gsub(":[oygr]:", ":?:")) end
+    if at and shape(olist) == shape(table.concat(defs, ",")) and math.abs((tonumber(orank) or 0) - rank) < 10
+      and time() - (tonumber(at) or 0) < 3600 then return end
+  end
+  put(g, "rd1", J(prof, rank, max or 0, table.concat(defs, ",")), true)
+end
 
 -- Las recetas se suman a las que ya estaban: una lista con categorías cerradas o con filtros no
 -- borra nada. Si el nivel bajó (la olvidó y la volvió a aprender), arranca de cero.
@@ -250,19 +278,28 @@ end
 local function snapTradeSkill()
   if IsTradeSkillLinked and IsTradeSkillLinked() then return nil end -- la de otro (link en el chat)
   local prof, rank, max = GetTradeSkillLine()
-  local ids, cds = {}, {}
+  local ids, cds, defs = {}, {}, {}
   for i = 1, GetNumTradeSkills() or 0 do
     local name, kind = GetTradeSkillInfo(i)
     if name and kind ~= "header" and kind ~= "subheader" then
       local id = recipeId(GetTradeSkillRecipeLink and GetTradeSkillRecipeLink(i)) or recipeId(GetTradeSkillItemLink(i)) or ("n" .. tok(name))
       ids[#ids + 1] = id
+      local reag = {}
+      for j = 1, (GetTradeSkillNumReagents and GetTradeSkillNumReagents(i)) or 0 do
+        local _, _, count = GetTradeSkillReagentInfo(i, j)
+        local rid = itemOf(GetTradeSkillReagentItemLink and GetTradeSkillReagentItemLink(i, j))
+        if rid and count then reag[#reag + 1] = rid .. "x" .. count end
+      end
+      local lo, hi = 1, 1
+      if GetTradeSkillNumMade then lo, hi = GetTradeSkillNumMade(i) end
+      defs[#defs + 1] = recipeDef(id, itemOf(GetTradeSkillItemLink and GetTradeSkillItemLink(i)), lo, hi, kind, reag, name)
       local cd = GetTradeSkillCooldown and GetTradeSkillCooldown(i)
       if cd and cd > 0 then cds[#cds + 1] = id .. "=" .. readyAt(cd) end
     end
   end
   local again = GetTradeSkillLine() -- cambió mientras se leía la lista: no sirve
   if again ~= prof then return nil end
-  return { prof = prof, rank = rank, max = max, ids = ids, cds = cds, sig = table.concat(ids, ",") }
+  return { prof = prof, rank = rank, max = max, ids = ids, cds = cds, defs = defs, sig = table.concat(ids, ",") }
 end
 
 local function readTradeSkill()
@@ -296,6 +333,7 @@ local function readTradeSkill()
     local again = snapTradeSkill()
     if again and again.prof == first.prof and again.sig == first.sig then
       saveProfession(again.prof, again.rank, again.max, again.ids, again.cds)
+      saveDefs(again.prof, again.rank, again.max, again.defs)
     end
   end)
 end
@@ -305,14 +343,23 @@ local function readCraft()
   if not GetNumCrafts or not GetCraftDisplaySkillLine then return end
   local prof, rank, max = GetCraftDisplaySkillLine()
   if not prof or not rank or rank == 0 then return end -- Adiestrar bestias no tiene nivel
-  local ids = {}
+  local ids, defs = {}, {}
   for i = 1, GetNumCrafts() or 0 do
     local name, _, kind = GetCraftInfo(i)
     if name and kind ~= "header" then
-      ids[#ids + 1] = recipeId(GetCraftRecipeLink and GetCraftRecipeLink(i)) or recipeId(GetCraftItemLink and GetCraftItemLink(i)) or ("n" .. tok(name))
+      local id = recipeId(GetCraftRecipeLink and GetCraftRecipeLink(i)) or recipeId(GetCraftItemLink and GetCraftItemLink(i)) or ("n" .. tok(name))
+      ids[#ids + 1] = id
+      local reag = {}
+      for j = 1, (GetCraftNumReagents and GetCraftNumReagents(i)) or 0 do
+        local _, _, count = GetCraftReagentInfo(i, j)
+        local rid = itemOf(GetCraftReagentItemLink and GetCraftReagentItemLink(i, j))
+        if rid and count then reag[#reag + 1] = rid .. "x" .. count end
+      end
+      defs[#defs + 1] = recipeDef(id, itemOf(GetCraftItemLink and GetCraftItemLink(i)), 1, 1, kind, reag, name)
     end
   end
   saveProfession(prof, rank, max, ids, {})
+  saveDefs(prof, rank, max, defs)
 end
 
 -- ── Equipo y talentos ──────────────────────────────────────────────────────────────────
@@ -351,6 +398,39 @@ local function collectTalents()
     tabs[#tabs + 1] = tok(name) .. "~" .. points .. "~" .. table.concat(ranks, ",")
   end
   if #tabs > 0 then put(g, "t1", J(GetActiveTalentGroup and GetActiveTalentGroup() or 1, table.concat(tabs, "/")), true) end
+end
+
+-- El árbol de talentos real de tu clase (tt1, una línea por rama): para corregir el del sitio, que en
+-- Forever sale de otra fuente. No depende de los puntos gastados: cambia solo si cambia el juego.
+local function collectTalentTree()
+  local g = me()
+  if not g or not GetNumTalentTabs or not GetTalentInfo or not GetNumTalents then return end
+  local _, class = UnitClass("player")
+  if not class then return end
+  for tab = 1, GetNumTalentTabs() or 0 do
+    local a, b = GetTalentTabInfo(tab)
+    local tabName = type(a) == "string" and a or (type(b) == "string" and b or "")
+    local list = {}
+    for i = 1, GetNumTalents(tab) or 0 do
+      local name, icon, tier, col, _, max = GetTalentInfo(tab, i)
+      if name and tier and col then
+        local pt, pc = 0, 0
+        if GetTalentPrereqs then local t, c2 = GetTalentPrereqs(tab, i); pt, pc = tonumber(t) or 0, tonumber(c2) or 0 end
+        local link = GetTalentLink and GetTalentLink(tab, i)
+        local tid = type(link) == "string" and tonumber(link:match("talent:(%d+)")) or 0
+        list[#list + 1] = table.concat({ tier, col, max or 1, tid, pt, pc, tok(name), tonumber(icon) or "" }, ":")
+      end
+    end
+    if #list > 0 then
+      table.sort(list, function(x, y)
+        local a1, a2 = x:match("^(%d+):(%d+)"); local b1, b2 = y:match("^(%d+):(%d+)")
+        a1, a2, b1, b2 = tonumber(a1), tonumber(a2), tonumber(b1), tonumber(b2)
+        if a1 ~= b1 then return a1 < b1 end
+        return a2 < b2
+      end)
+      put(g, "tt1", J(tab, class, tok(tabName), table.concat(list, ",")), true)
+    end
+  end
 end
 
 -- «ítem:cantidad,…» ordenado por ítem (banco de la guild).
@@ -779,7 +859,7 @@ local ON = {
       for key in pairs(c) do if key == "mo1" or key:match("^inv1") then c[key] = nil end end
     end
     C_Timer.After(15, function()
-      for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectReputation, collectQuests }) do pcall(fn) end
+      for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectTalentTree, collectReputation, collectQuests }) do pcall(fn) end
       if ns.send then ns.send("E;" .. math.max(0, (store().syncAt or 0) - 86400)) end
       pcall(function() if QueryGuildEventLog and IsInGuild() then QueryGuildEventLog() end end)
     end)
@@ -856,6 +936,6 @@ end
 
 -- Para las pruebas.
 ns._collect = { put = put, collectPosition = collectPosition, resetPosition = function() last.at = -math.huge end, putPeer = putPeer, share = share, pattern = pattern,
-  collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
+  collectTalentTree = collectTalentTree, collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }
