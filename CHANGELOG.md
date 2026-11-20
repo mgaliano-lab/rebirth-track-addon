@@ -13,6 +13,17 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.12.1] - 2026-11-20
+
+### Para todos
+
+- **Plan › Resumen › Materiales**: botones para ver los de una sola profesión («Todas» o cada una del plan) y **«Solo lo que falta»**, que saca los materiales de los niveles que ya pasaste (del paso en el que estás cuenta la parte que te queda). Queda elegido para la próxima vez.
+
+### Técnico
+
+- `Plan.lua`: `remainingMats()` suma los componentes de los pasos que terminan arriba del nivel actual (el paso a medias, proporcional) con el catálogo de `Professions.lua` (`ns.catalogReagents`). Si alguna receta no está en el catálogo, va el total de la ruta y se avisa. El filtro queda en `RebirthTrackDB.ui.planMats`.
+- `refresh` declarado antes de `drawSummary` (lo usan los botones nuevos).
+
 ## [0.12.0] - 2026-11-20
 
 ### Para todos

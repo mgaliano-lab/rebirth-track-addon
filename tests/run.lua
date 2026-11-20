@@ -1236,3 +1236,28 @@ do
   for k, v in pairs(saved) do MEc[k] = v end
   print("profesiones de la guild OK")
 end
+
+-- Plan › materiales: «Solo lo que falta» con los componentes del catálogo y filtro por profesión.
+do
+  local x = { rank = 80, prof = { key = "mining", name = "Minería", mats = { { item = 2770, count = 130, name = "Mena de cobre" } },
+    steps = { { from = 1, to = 65, crafts = 70, spell = 2657 }, { from = 65, to = 125, crafts = 60, spell = 2659 } } } }
+  RebirthTrackCatalog = nil; ns._professions.resetCatalog()
+  assert(ns._planRemaining(x) == nil, "sin catálogo no se puede calcular (va el total)")
+  RebirthTrackCatalog = { games = { anniversary = { recipes = { mining = {
+    "2657;2840;1;1;1;;inv_ingot_02;Fundir cobre;2770:1;;trainer:::",
+    "2659;2841;1;1;65;;inv_ingot_bronze;Fundir bronce;2770:1,2771:1;;trainer:::" } }, items = { [2771] = "Mena de estaño;inv_ore_tin_01;1" } } } }
+  ns._professions.resetCatalog()
+  local left = ns._planRemaining(x)
+  assert(left and #left == 2, "lo que falta desde 80: el resto del paso 2")
+  assert(left[1].item == 2770 and left[1].count == 45 and left[2].item == 2771 and left[2].count == 45 and left[2].name == "Mena de estaño", "45 de cada uno (de 80 a 125)")
+  x.rank = 200
+  assert(#ns._planRemaining(x) == 0, "pasada la ruta no falta nada")
+  ns.openPlan()
+  click("Resumen")
+  click("Solo lo que falta")
+  assert(RebirthTrackDB.ui.planMats.left, "queda prendido")
+  click("Solo lo que falta")
+  assert(not RebirthTrackDB.ui.planMats.left, "y se apaga")
+  RebirthTrackCatalog = nil; ns._professions.resetCatalog()
+  print("plan › materiales que faltan OK")
+end
