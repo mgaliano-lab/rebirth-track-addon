@@ -21,6 +21,7 @@ assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Requests.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Professions.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Vendors.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -220,6 +221,26 @@ function GetCraftInfo() return "Encantar brazales: aguante", "", "optimal" end
 function GetCraftItemLink() return "|cffffffff|Henchant:13501|h[Encantar brazales: aguante]|h|r" end
 fire("CRAFT_SHOW")
 assert(D[ME]["r1:Encantamiento"]:match(";Encantamiento;120;150;s13501$"), D[ME]["r1:Encantamiento"])
+assert(D[ME]["rd1:Encantamiento"]:match(";Encantamiento;120;150;s13501:0:1:1:o::Encantar brazales  aguante$"), D[ME]["rd1:Encantamiento"])
+-- La definición real de las recetas (rd1): qué fabrica, cuántos, dificultad y componentes; se comparte.
+function GetTradeSkillNumReagents(i) return i == 2 and 2 or 0 end
+function GetTradeSkillReagentInfo(i, j) return "x", nil, j == 1 and 3 or 1 end
+function GetTradeSkillReagentItemLink(i, j) return j == 1 and "|Hitem:13463:0|h[Pétalo]|h" or "|Hitem:18256:0|h[Vial]|h" end
+function GetTradeSkillNumMade() return 1, 2 end
+sentAddon = {}
+fire("TRADE_SKILL_UPDATE")
+local rd = D[ME]["rd1:Alquimia"]
+assert(rd and rd:find(";Alquimia;290;300;i12360:12360:1:2:y:13463x3.18256x1:Transmutar  arcanita", 1, true), tostring(rd))
+local sharedRd = false
+for _, m in ipairs(sentAddon) do if m[2]:find(";rd1;", 1, true) then sharedRd = true end end
+assert(sharedRd, "rd1 se comparte por el canal")
+-- Subir un punto no la vuelve a mandar (cambian solo los colores).
+sentAddon = {}
+recipes[2][2] = "easy"
+function GetTradeSkillLine() return "Alquimia", 291, 300 end
+fire("TRADE_SKILL_UPDATE")
+for _, m in ipairs(sentAddon) do assert(not m[2]:find(";rd1;", 1, true), "un punto más no se manda de nuevo") end
+function GetTradeSkillLine() return "Alquimia", 290, 300 end
 print("profesiones OK")
 
 -- El balance, las bolsas y el banco de cada persona no se anotan (solo los de la guild), y al entrar
@@ -381,11 +402,25 @@ assert(g.trees[2].cells[1].rank.text == "2/5", "Precisión a medias")
 assert(g.trees[3].cells[1].rank.text == "1", "Otro: fuera del plan")
 assert(g.trees[1].lines[1] and g.trees[1].lines[1].shown, "flecha del requisito")
 assert(g.trees[1].title.text:find("Asesinato", 1, true), "nombre de la rama")
--- Otra clase: queda la lista.
+-- Otra clase: el árbol sale del plan (sin lo gastado, que es de otro personaje).
 local realUnitClass = UnitClass
 UnitClass = function() return "Mago", "MAGE" end
 ns.planRefresh()
-assert(not g.shown, "otra clase: sin árbol")
+assert(g.shown and g.trees[1].cells[1].rank.text == "0/3", "otra clase: árbol armado con el plan")
+-- Con el plan completo del sitio (0.9.56): también los de rango 0, con ícono y requisito.
+local FULL = table.concat({
+  "RTP1;ff01;Roguebash;nightslayer;Orco;Rogue;pve;1",
+  "B;0;Asesinato", "T;0;1;1;3;3;Remate mejorado;;Improved Eviscerate;ability_warrior_decisivestrike;",
+  "T;0;2;1;0;5;Golpes letales;;Lethality;ability_criticalstrike;1.1",
+  "L;Aventura;2;5;Bien descansado;Well Rested;spell_nature_sleep", "L;Aventura;0;2;Alerta;High Alert;ability_hunter_eagleeye" }, "\n")
+FULL = FULL .. "\nZ;" .. ns.planCrc32(FULL)
+local fp = ns.planParse(FULL)[1].plan
+assert(fp.talents[2].icon == "ability_criticalstrike" and fp.talents[2].pre == "0-1-1" and fp.legacy[2].icon == "ability_hunter_eagleeye", "lee ícono y requisito")
+D2.drawLegacy(fp)
+local lg = D2.lgrid().trees[1].cells
+local sawIcon = false
+for _, cb in ipairs(lg) do if cb.icon and cb.icon.shown and cb.c and cb.c.pk.en == "Well Rested" then sawIcon = true; assert(cb.rank.text == "2/5", "sin leer el juego: lo planeado") end end
+assert(sawIcon, "el Legado con el ícono del plan")
 UnitClass = realUnitClass
 click("Resumen")
 assert(not g.shown, "otra pestaña: sin árbol")
@@ -1260,4 +1295,86 @@ do
   assert(not RebirthTrackDB.ui.planMats.left, "y se apaga")
   RebirthTrackCatalog = nil; ns._professions.resetCatalog()
   print("plan › materiales que faltan OK")
+end
+
+-- El árbol de talentos real de la clase (tt1): cada rama con todos sus talentos, se comparte.
+do
+  local D = RebirthTrackDB.data
+  local ME = "Player-6065-044C2423"
+  local oldN, oldT, oldI = GetNumTalentTabs, GetNumTalents, GetTalentInfo
+  function GetNumTalentTabs() return 2 end
+  function GetTalentTabInfo(tab) return tab == 1 and "Asesinato" or "Combate", "", 0 end
+  function GetNumTalents(tab) return tab == 1 and 2 or 1 end
+  function GetTalentInfo(tab, i)
+    if tab == 1 and i == 1 then return "Remate mejorado", 132292, 1, 1, 2, 3 end
+    if tab == 1 and i == 2 then return "Golpes despiadados", 132109, 2, 2, 0, 3 end
+    return "Precisión", 132222, 1, 2, 0, 5
+  end
+  function GetTalentPrereqs(tab, i) if tab == 1 and i == 2 then return 1, 1 end end
+  function GetTalentLink(tab, i) return tab == 1 and i == 1 and "|cff4e96f7|Htalent:276:2|h[Remate mejorado]|h|r" or nil end
+  sentAddon = {}
+  ns._collect.collectTalentTree()
+  assert(D[ME]["tt1:1"] == "tt1;" .. ME .. ";" .. time() .. ";1;ROGUE;Asesinato;1:1:3:276:0:0:Remate mejorado:132292,2:2:3:0:1:1:Golpes despiadados:132109", tostring(D[ME]["tt1:1"]))
+  assert(D[ME]["tt1:2"]:match(";2;ROGUE;Combate;1:2:5:0:0:0:Precisión:132222$"), D[ME]["tt1:2"])
+  local n = 0
+  for _, m in ipairs(sentAddon) do if m[2]:find(";tt1;", 1, true) then n = n + 1 end end
+  assert(n == 2, "las dos ramas se comparten")
+  GetNumTalentTabs, GetNumTalents, GetTalentInfo = oldN, oldT, oldI
+  print("árbol de talentos real OK")
+end
+
+-- Personaje ya vinculado (Plans.lua › RebirthTrackLinked): sin «Vincular» y con «✓ Vinculado».
+do
+  assert(not ns.isLinked(), "sin la lista: no vinculado")
+  assert(pcall(click, "Vincular"), "sin vincular, está el mosaico")
+  RebirthTrackLinked = { games = { anniversary = { "Player-6065-044C2423;Roguebash;Nightslayer" } } }
+  assert(ns.isLinked(), "por guid")
+  RebirthTrackLinked = { games = { anniversary = { ";roguebash;Nightslayer" } } }
+  assert(ns.isLinked(), "por nombre y reino")
+  RebirthTrackLinked = { games = { anniversary = { ";Roguebash;OtroReino" } } }
+  assert(not ns.isLinked(), "otro reino no")
+  RebirthTrackLinked = { games = { anniversary = { "Player-6065-044C2423;Roguebash;Nightslayer" } } }
+  ns.refreshMain()
+  local tileShown, chip
+  for _, f in ipairs(__frames or {}) do end
+  RebirthTrackLinked = nil
+  ns.refreshMain()
+  print("vinculado OK")
+end
+
+-- Lo que se compra en un vendedor: lo que vende el que abrís (solo stock infinito y por oro) se anota y
+-- se comparte; lo que llega por el canal se guarda si no lo tenías; una lista fija para lo conocido.
+do
+  local merch = {
+    { "|Hitem:2692:0|h[Especias picantes]|h", 100, 1, -1 },
+    { "|Hitem:2320:0|h[Hilo basto]|h", 50, 5, -1 },
+    { "|Hitem:9999:0|h[Limitado]|h", 500, 1, 3 },
+  }
+  function GetMerchantNumItems() return #merch end
+  function GetMerchantItemInfo(i) return "x", nil, merch[i][2], merch[i][3], merch[i][4], true, true, nil end
+  function GetMerchantItemLink(i) return merch[i][1] end
+  local oldUN = UnitName
+  UnitName = function(u) if u == "npc" then return "Tharynn Bouden" end return oldUN(u) end
+  function GetZoneText() return "Bosque de Elwynn" end
+  sentAddon = {}
+  fire("MERCHANT_SHOW")
+  assert(ns.vendorInfo(2692).price == 100 and ns.vendorInfo(2692).vendor == "Tharynn Bouden", "se anota con precio y vendedor")
+  assert(ns.vendorInfo(2320).price == 10, "precio por unidad (50 por 5)")
+  assert(not RebirthTrackDB.vendors[9999], "lo de stock limitado no")
+  local sentV = 0
+  for _, m in ipairs(sentAddon) do if m[2]:find("^V;") then sentV = sentV + 1 end end
+  assert(sentV == 2, "se comparte lo nuevo: " .. sentV)
+  sentAddon = {}
+  fire("MERCHANT_SHOW")
+  for _, m in ipairs(sentAddon) do assert(not m[2]:find("^V;"), "lo mismo no se vuelve a mandar") end
+  UnitName = oldUN
+  fire("CHAT_MSG_ADDON", "RTK1", "V;4291;400;Otro vendedor;Orgrimmar", "GUILD", "Healz-Nightslayer")
+  assert(ns.vendorInfo(4291).vendor == "Otro vendedor", "lo que llega por el canal se guarda")
+  fire("CHAT_MSG_ADDON", "RTK1", "V;2692;1;Pisador;X", "GUILD", "Healz-Nightslayer")
+  assert(ns.vendorInfo(2692).price == 100, "no pisa lo que ya sabía")
+  assert(ns.vendorText(2692):find("Tharynn Bouden", 1, true) and ns.vendorText(2692):find("1p", 1, true), ns.vendorText(2692))
+  assert(ns.vendorText(3371) == "se vende en vendedores", "lista fija")
+  assert(ns.vendorText(12345) == nil, "lo que no se vende")
+  RebirthTrackDB.vendors = nil
+  print("vendedores OK")
 end

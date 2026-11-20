@@ -25,16 +25,16 @@ local TX = {
     level = "Nivel", total = "Avance", main = "main", fromApp = "de la app", pasted = "pegado", other = "Es de otro personaje: %s",
     skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "ahora",
     mats = "Materiales de toda la ruta (bolsas + banco)", matsLeftTitle = "Materiales que faltan (bolsas + banco)",
-    matsAll = "Todas", matsLeft = "Solo lo que falta", matsLeftTip = "Saca los materiales de los niveles de la profesión que ya pasaste: queda lo que falta desde tu nivel actual (del paso en el que estás, la parte que te queda).",
+    vendorShort = "vendedor", matsAll = "Todas", matsLeft = "Solo lo que falta", matsLeftTip = "Saca los materiales de los niveles de la profesión que ya pasaste: queda lo que falta desde tu nivel actual (del paso en el que estás, la parte que te queda).",
     matsNoCat = "%s: sin el catálogo de la app, va el total de la ruta.", matsNone = "No falta nada: ya pasaste la ruta.", noRoute = "Sin ruta (se sube recolectando).",
-    planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
+    planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d de %d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
     legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
     legend = "|cff40bf40verde|r: listo · |cffff8b3dnaranja|r: a medias · |cffffd100dorado|r: falta · |cffff4040rojo|r: fuera del plan",
     planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.",
-    ofPlan = "del plan", nextShort = "próximo: %s (%d→%d)", byTree = "Talentos por rama", seeTree = "Ver el árbol ›",
+    ofPlan = "del plan", nextShort = "próximo: %s (%d de %d)", byTree = "Talentos por rama", seeTree = "Ver el árbol ›",
     matsReady = "%d de %d listos", spentOf = "/ %d · %d gastados", lgCard = "/ 16 · plan %d",
-    lgTotal = "/ 16 puntos repartidos · plan %d", lgTree = "%s en la rama · plan %d", lgNext = "Próximo: %s %d → %d", lgDone = "Legado completo.",
+    lgTotal = "/ 16 puntos repartidos · plan %d", lgTree = "%s en la rama · plan %d", lgNext = "Próximo: %s (%d de %d)", lgDone = "Legado completo.",
     gate = "%d en rama", lgRank = "rango %s/%d", lgGateTip = "Pide %d puntos en la rama.", lgReqTip = "Pide: %s", nextTip = "El próximo a tocar.",
     lgOther = "Otros del plan", lgDoneL = "listo", lgPart = "a medias", lgTodo = "falta", lgOff = "fuera del plan", lgNextL = "el próximo",
     lgNone = "no está en el plan", lgReserved = "reservado (Blizzard la suma después)", lgGateL = "«5 en rama»: puntos que pide la rama",
@@ -47,16 +47,16 @@ local TX = {
     level = "Level", total = "Progress", main = "main", fromApp = "from the app", pasted = "pasted", other = "It belongs to another character: %s",
     skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "now",
     mats = "Materials for the whole route (bags + bank)", matsLeftTitle = "Materials still needed (bags + bank)",
-    matsAll = "All", matsLeft = "Only what's left", matsLeftTip = "Removes the materials for the profession levels you already passed: what's left from your current level (for the step you're on, the part that remains).",
+    vendorShort = "vendor", matsAll = "All", matsLeft = "Only what's left", matsLeftTip = "Removes the materials for the profession levels you already passed: what's left from your current level (for the step you're on, the part that remains).",
     matsNoCat = "%s: without the app's catalog, the whole route is shown.", matsNone = "Nothing left: you're past the route.", noRoute = "No route (leveled by gathering).",
-    planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
+    planned = "Planned", spent = "Spent", next = "Next to take: %s (%d of %d)", buildDone = "Build done.", off = "Off plan: %s",
     legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
     legend = "|cff40bf40green|r: done · |cffff8b3dorange|r: partial · |cffffd100gold|r: to take · |cffff4040red|r: off plan",
     planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.",
-    ofPlan = "of the plan", nextShort = "next: %s (%d→%d)", byTree = "Talents by tree", seeTree = "See the tree ›",
+    ofPlan = "of the plan", nextShort = "next: %s (%d of %d)", byTree = "Talents by tree", seeTree = "See the tree ›",
     matsReady = "%d of %d ready", spentOf = "/ %d · %d spent", lgCard = "/ 16 · plan %d",
-    lgTotal = "/ 16 points spent · plan %d", lgTree = "%s in the tree · plan %d", lgNext = "Next: %s %d → %d", lgDone = "Legacy done.",
+    lgTotal = "/ 16 points spent · plan %d", lgTree = "%s in the tree · plan %d", lgNext = "Next: %s (%d of %d)", lgDone = "Legacy done.",
     gate = "%d in tree", lgRank = "rank %s/%d", lgGateTip = "Needs %d points in the tree.", lgReqTip = "Requires: %s", nextTip = "Next to take.",
     lgOther = "Others in the plan", lgDoneL = "done", lgPart = "partial", lgTodo = "to take", lgOff = "off plan", lgNextL = "next",
     lgNone = "not in the plan", lgReserved = "reserved (Blizzard adds it later)", lgGateL = "«5 in tree»: points the tree needs",
@@ -120,8 +120,12 @@ local function fromLines(lines)
     elseif t == "S" and byKey[f[2]] then table.insert(byKey[f[2]].steps, { from = n(3), to = n(4), crafts = n(5), spell = n(6), name = f[7] or "" })
     elseif t == "M" and byKey[f[2]] then table.insert(byKey[f[2]].mats, { item = n(3), count = n(4), name = f[5] or "" })
     elseif t == "B" then p.trees[n(2) + 1] = f[3] or ""
-    elseif t == "T" then table.insert(p.talents, { tree = n(2), row = n(3), col = n(4), rank = n(5), max = n(6), name = f[7] or "", spells = idList(f[8]), en = f[9] or "" })
-    elseif t == "L" then table.insert(p.legacy, { tree = f[2] or "", rank = n(3), max = n(4), name = f[5] or "", en = f[6] or "" })
+    elseif t == "T" then
+      -- Desde el sitio 0.9.56 van todos los talentos (los de rango 0 también) con ícono y requisito «fila.columna».
+      local pr, pc = (f[11] or ""):match("^(%d+)%.(%d+)$")
+      table.insert(p.talents, { tree = n(2), row = n(3), col = n(4), rank = n(5), max = n(6), name = f[7] or "", spells = idList(f[8]), en = f[9] or "",
+        icon = (f[10] or "") ~= "" and f[10] or nil, pre = pr and (n(2) .. "-" .. pr .. "-" .. pc) or nil })
+    elseif t == "L" then table.insert(p.legacy, { tree = f[2] or "", rank = n(3), max = n(4), name = f[5] or "", en = f[6] or "", icon = (f[7] or "") ~= "" and f[7] or nil })
     elseif t == "N" then p.notes = table.concat(f, " ", 2)
     end
   end
@@ -372,6 +376,33 @@ local function talentTrees()
   end
   return out
 end
+-- El árbol armado con el plan (desde el sitio 0.9.56 trae todos los talentos de la clase, con ícono y
+-- requisito): para dibujarlo aunque el cliente no dé GetTalentInfo (Forever) o el plan sea de otra clase.
+-- Lo gastado sale del juego solo si el personaje es de la clase del plan (por hechizo o nombre).
+local function iconOf(t)
+  if t.icon then return "Interface\\Icons\\" .. t.icon end
+  local id = t.spells and t.spells[1]
+  local tex = id and ((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)) or (GetSpellTexture and GetSpellTexture(id)))
+  return tex or "Interface\\Icons\\INV_Misc_QuestionMark"
+end
+local function planTrees(p, state)
+  local _, token = UnitClass and UnitClass("player")
+  local same = token and token:upper() == (p.cls or ""):upper()
+  local out = {}
+  for _, t in ipairs(p.talents) do
+    local tree = out[t.tree + 1]
+    if not tree then tree = { tab = nil, name = p.trees[t.tree + 1], talents = {}, rows = 1 }; out[t.tree + 1] = tree end
+    local have = 0
+    if same and state then have = haveOf(state, t) end
+    table.insert(tree.talents, { name = t.name, icon = iconOf(t), row = t.row, col = t.col, rank = have or 0, max = t.max, spell = t.spells and t.spells[1],
+      key = t.tree .. "-" .. t.row .. "-" .. t.col, pre = t.pre })
+    if t.row > tree.rows then tree.rows = t.row end
+  end
+  local list = {}
+  for i = 1, #p.trees do if out[i] then list[#list + 1] = out[i] end end
+  for i, tr in pairs(out) do if i > #p.trees then list[#list + 1] = tr end end
+  return list
+end
 local function slug(s) return (tostring(s or ""):lower():gsub("[^%w]", "")) end
 local function isMine(p)
   local me = UnitName("player")
@@ -474,7 +505,7 @@ local function profLines(pr)
     else add(GRAY .. T("step"):format(x.step or 1, #x.prof.steps) .. "|r") end
     for i, s in ipairs(x.prof.steps) do
       local mark = i == x.step and (ns.ui.ICON.play .. GOLD .. T("now") .. " ") or ((x.step and i < x.step or (not x.step and x.rank)) and ns.ui.ICON.check .. GREEN or GRAY .. "  ")
-      add(mark .. s.from .. "→" .. s.to .. "  " .. s.name .. " ×" .. s.crafts .. "|r")
+      add(mark .. s.from .. "-" .. s.to .. "  " .. s.name .. " ×" .. s.crafts .. "|r")
     end
     if #x.prof.mats > 0 then
       add(""); add(GRAY .. T("mats") .. "|r")
@@ -566,7 +597,9 @@ local function cell(f, n)
   b.rank = b.badge:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); b.rank:SetPoint("CENTER", 0, 0)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-    if GameTooltip.SetTalent then GameTooltip:SetTalent(self.tab, self.i) else GameTooltip:AddLine(self.tname or "", 1, 1, 1) end
+    if self.tab and self.i and GameTooltip.SetTalent then GameTooltip:SetTalent(self.tab, self.i)
+    elseif self.spell and GameTooltip.SetSpellByID then GameTooltip:SetSpellByID(self.spell)
+    else GameTooltip:AddLine(self.tname or "", 1, 1, 1) end
     if self.want > 0 then GameTooltip:AddLine(T("planRank"):format(self.want, self.max), 0.95, 0.76, 0.31)
     else GameTooltip:AddLine(T("notPlanned"), 0.54, 0.56, 0.62) end
     if self.isNext then GameTooltip:AddLine(T("nextTip"), 1, 1, 1) end
@@ -578,14 +611,15 @@ local function cell(f, n)
 end
 
 -- Dibuja las tres ramas en pw.grid; devuelve el alto que ocupan.
-local function drawTalents(p)
+local function drawTalents(p, trees)
   local g = pw.grid
   local C = ns.ui.C
   local wanted = {}
   for _, t in ipairs(p.talents) do wanted[t.tree .. "-" .. t.row .. "-" .. t.col] = t.rank end
   local pr = progress(p)
   local nextKey = pr.tal and pr.tal.next and (pr.tal.next.t.tree .. "-" .. pr.tal.next.t.row .. "-" .. pr.tal.next.t.col)
-  local trees, height = talentTrees(), 0
+  local height = 0
+  trees = trees or talentTrees()
   local x0 = math.max(0, math.floor((CW - (3 * TREE_W + 2 * GAP)) / 2))
   for ti, tree in ipairs(trees) do
     local f = treeFrame(ti)
@@ -633,7 +667,7 @@ local function drawTalents(p)
       local want = wanted[t.key] or 0
       local st = stateOf(t.rank, want)
       local isNext = t.key == nextKey
-      b.tab, b.i, b.tname, b.want, b.max, b.isNext = tree.tab, t.i, t.name, want, t.max, isNext
+      b.tab, b.i, b.tname, b.want, b.max, b.isNext, b.spell = tree.tab, t.i, t.name, want, t.max, isNext, t.spell
       b:ClearAllPoints(); b:SetPoint("TOPLEFT", cellAt(t)); b:Show()
       b.icon:SetTexture(t.icon)
       if b.icon.SetDesaturated then b.icon:SetDesaturated(st == "none") end
@@ -805,9 +839,11 @@ local function spellIcon(n)
 end
 
 -- Dibuja las tres verticales en pw.lgrid; devuelve el alto.
-local function drawLegacyTrees(info)
+local function drawLegacyTrees(info, p)
   local g = pw.lgrid
   local C = ns.ui.C
+  local iconByEn = {}
+  for _, l in ipairs(p and p.legacy or {}) do if l.icon and l.en and l.en ~= "" then iconByEn[l.en] = l.icon end end
   local x0 = math.max(0, math.floor((CW - (3 * LTREE_W + 2 * GAP)) / 2))
   local nextC = info.next
   for ti, tr in ipairs(info.trees) do
@@ -832,10 +868,12 @@ local function drawLegacyTrees(info)
         tint(b.ring, ST[isNext and "next" or st][1])
         b.glow:SetShown(isNext)
         b.gl:SetAlpha(st == "none" and 0.25 or ((c.have or 0) > 0 and 1 or 0.5))
-        local icon = c.have and spellIcon(c.node)
+        -- El ícono del juego si se leyó el nodo; si no, el que manda el sitio en el plan (desde el 0.9.56).
+        local icon = (c.have and spellIcon(c.node)) or (iconByEn[c.pk.en] and ("Interface\\Icons\\" .. iconByEn[c.pk.en]))
         if icon then b.icon:SetTexture(icon); b.icon:Show(); b.icon:SetAlpha(st == "none" and 0.35 or 1) else b.icon:Hide() end
-        b.rank:SetText((c.have and tostring(c.have) or "?") .. "/" .. (c.want > 0 and c.want or c.pk.max))
-        color(b.rank, ST[st][2])
+        -- Sin leer el Legado del juego no se sabe lo gastado: queda lo planeado (o el máximo, en gris).
+        if c.have then b.rank:SetText(c.have .. "/" .. (c.want > 0 and c.want or c.pk.max)); color(b.rank, ST[st][2])
+        else b.rank:SetText(c.want > 0 and (c.want .. "/" .. c.pk.max) or ("/" .. c.pk.max)); color(b.rank, c.want > 0 and ns.ui.C.gold or ns.ui.C.muted) end
       end
     end
   end
@@ -1029,7 +1067,7 @@ local function drawSummary(p, pr)
         local fs = c.now[nn]
         if not fs then fs = nowrap(ns.ui.font(c, "GameFontHighlightSmall", C.text, "LEFT")); fs:SetWidth(CW - 20); c.now[nn] = fs end
         fs:ClearAllPoints(); fs:SetPoint("TOPLEFT", 10, ry); fs:Show()
-        fs:SetText(GOLD .. T("now") .. "|r  " .. GRAY .. x.prof.name .. ":|r " .. st.name .. GRAY .. "  ×" .. st.crafts .. " · " .. st.from .. "→" .. st.to .. "|r")
+        fs:SetText(GOLD .. T("now") .. "|r  " .. GRAY .. x.prof.name .. ":|r " .. st.name .. GRAY .. "  ×" .. st.crafts .. " · " .. st.from .. "-" .. st.to .. "|r")
         ry = ry - 16
       end
     end
@@ -1098,7 +1136,10 @@ local function drawSummary(p, pr)
       it:ClearAllPoints(); it:SetPoint("TOPLEFT", 10 + ((i - 1) % 3) * mw, top - math.floor((i - 1) / 3) * 36)
       it.icon:SetItem(m.item > 0 and m.item or nil, m.count)
       it.name:SetText(m.name)
-      it.cnt:SetText(have .. " / " .. m.count); color(it.cnt, have >= m.count and C.green or C.red)
+      -- Lo que falta y se compra en un vendedor: dicho al lado de la cantidad (y entero en el tooltip).
+      local v = have < m.count and ns.vendorText and ns.vendorText(m.item) or nil
+      it.cnt:SetText(have .. " / " .. m.count .. (v and (" |cffe0b04a· " .. T("vendorShort") .. "|r") or "")); color(it.cnt, have >= m.count and C.green or C.red)
+      it.icon.extra = v
     end
     hideFrom(c.items, #mats + 1)
     c.right:SetText(T("matsReady"):format(ready, #mats))
@@ -1162,9 +1203,10 @@ local function drawTalentTab(p, pr)
   s:Set(pr.tal.matched, T("spentOf"):format(pr.tal.planned, pr.tal.spent), pr.tal.planned > 0 and pr.tal.matched / pr.tal.planned or 0,
     nx, pr.tal.off > 0 and T("off"):format(pr.tal.off) or "")
   local y = -44
-  if canDraw(p) then
+  local trees = canDraw(p) and talentTrees() or planTrees(p, pr.tal and pr.tal.state)
+  if #trees > 0 then
     pw.grid:ClearAllPoints(); pw.grid:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y)
-    y = y - drawTalents(p) - 10
+    y = y - drawTalents(p, trees) - 10
     local lg = pw.tlegend
     lg:ClearAllPoints(); lg:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y); lg:Show()
     y = y - lg:Set(talentLegend())
@@ -1185,7 +1227,7 @@ local function drawLegacyTab(p)
     info.planned > 0 and info.matched / info.planned or info.spent / 16, nx, "")
   local y = -44
   pw.lgrid:ClearAllPoints(); pw.lgrid:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y)
-  y = y - drawLegacyTrees(info) - 10
+  y = y - drawLegacyTrees(info, p) - 10
   local lg = pw.llegend
   lg:ClearAllPoints(); lg:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y); lg:Show()
   local items = talentLegend()
@@ -1210,7 +1252,8 @@ end
 
 ns._planTraits = { state = function() return talentState() end, legacy = function(st) return legacyNodes(st) end, nodeFor = function(...) return nodeFor(...) end }
 ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end,
-  legacy = function(p) return legacyInfo(p) end, legacyLayout = LEGACY }
+  legacy = function(p) return legacyInfo(p) end, legacyLayout = LEGACY, lgrid = function() return pw and pw.lgrid end,
+  drawLegacy = function(p) return drawLegacyTrees(legacyInfo(p), p) end }
 
 -- Cabecera del personaje.
 local function drawHero(p, pr)

@@ -76,7 +76,10 @@ local function calc(reagents)
   if not useful then return nil end
   for _, r in ipairs(reagents) do
     local short = r.need * next - (r.have or 0) - (r.bank or 0)
-    if short > 0 then lines[#lines + 1] = "|cffff6060" .. T("missing"):format(r.name or "?", short) .. "|r" end
+    if short > 0 then
+      local v = ns.vendorText and r.id and ns.vendorText(r.id)
+      lines[#lines + 1] = "|cffff6060" .. T("missing"):format(r.name or "?", short) .. "|r" .. (v and (" |cffe0b04a· " .. v .. "|r") or "")
+    end
   end
   return { bags = bags, total = total, extra = 0, partial = true, lines = lines }
 end
