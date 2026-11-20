@@ -20,7 +20,7 @@ local TEXTS = {
     title = "Posiciones de la guild", you = "vos", channel = "por el canal", off = "no comparte", instance = "en una instancia",
     intro = "Lo que llegó por el canal de la guild (y lo tuyo). Cada addon avisa cada 10 s mientras se mueve y cada minuto si está quieto; nada desde mazmorras ni bandas.",
     summary = "%d anotadas · %d en el mapa ahora (avisaron hace menos de %d s)",
-    sharing = "Tu posición: %s", on = "compartida", offShort = "apagada (/rt posicion)",
+    sharing = "Tu posición: %s", on = "compartida", 
     recorded = "anotadas", liveNow = "en vivo",
     colPlayer = "Jugador", colZone = "Zona", colCoord = "Coord.", colSeen = "Visto",
     none = "Todavía no llegó ninguna posición. Se necesita que otros miembros tengan el addon (0.6.0 o más nuevo) y estén conectados.",
@@ -32,7 +32,7 @@ local TEXTS = {
     title = "Guild positions", you = "you", channel = "over the channel", off = "not sharing", instance = "in an instance",
     intro = "What arrived over the guild channel (and yours). Each addon reports every 10 s while moving and every minute while still; nothing from dungeons or raids.",
     summary = "%d recorded · %d on the map now (reported less than %d s ago)",
-    sharing = "Your position: %s", on = "shared", offShort = "off (/rt position)",
+    sharing = "Your position: %s", on = "shared", 
     recorded = "recorded", liveNow = "live",
     colPlayer = "Player", colZone = "Zone", colCoord = "Coords", colSeen = "Seen",
     none = "No position has arrived yet. Other members need the addon (0.6.0 or newer) and to be online.",
@@ -275,10 +275,7 @@ function ns.refreshPositions()
   local X = U.HEX
   win.counts:SetText(("|cff%s%d|r |cff%s%s|r    |cff%s%d|r |cff%s%s|r"):format(X.text, #list, X.muted, T("recorded"), X.green, live, X.muted, T("liveNow")))
   win.strip.tipText = T("summary"):format(#list, live, GONE_AFTER)
-  local sharing = ns.sharePos and ns.sharePos()
-  win.sharing:SetText(T("sharing"):format(sharing and T("on") or T("offShort")))
-  local sc = sharing and U.C.green or U.C.red
-  if win.sharing.SetTextColor then win.sharing:SetTextColor(sc[1], sc[2], sc[3]) end
+  win.sharing:SetText(T("sharing"):format(T("on")))
   for _, r in ipairs(rows) do r:Hide() end
   win.none:SetShown(#list == 0)
   win.none:SetText(T("none"))

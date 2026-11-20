@@ -13,6 +13,25 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.12.0] - 2026-11-20
+
+### Para todos
+
+- **Profesiones de la guild en el juego** (mosaico «Profesiones» o `/rt profesiones`), como la página de la web:
+  - **Por profesión**: quién la tiene, con su barra de habilidad, cuántas recetas sabe y sus cooldowns («Transmutar: lista»), ordenado por nivel, recetas o nombre.
+  - **Recetas de la guild**: todas las recetas de la profesión (las que no sabe nadie, en gris), con buscador, orden, nivel, personajes y «Solo adquiridas». Al elegir una ves el nivel que pide, los colores, los componentes (y cuántos tenés), cómo se consigue y quién la sabe hacer. «Pedir materiales» le pide a la guild lo que te falta.
+  - **Clic derecho en un nombre**: susurrar, invitar al grupo o copiar el nombre.
+  - El catálogo completo llega con la app; sin la app se ven las recetas que sabe alguien de la guild.
+- **Tu posición se comparte siempre** con la guild (para el mapa del juego y el del sitio): ya no se puede apagar.
+- En la ventana principal «Estado» pasó a ser un botón de abajo y «Vincular» va con lo tuyo.
+
+### Técnico
+
+- `Professions.lua` (nuevo): arma las profesiones con lo que llegó por el canal (`p1`, `sk1`, `r1:*`, `cd1:*` de `RebirthTrackDB.data`, solo personajes de la guild y de la misma versión) y el catálogo `RebirthTrackCatalog` de Plans.lua (sitio 0.9.51, `shared/addonCatalog.ts`). Limpia las listas mezcladas como `cleanRecipeList` del sitio (catálogo, venenos y mayoría de la guild). Menú propio para el clic derecho y los desplegables.
+- `Requests.lua`: `ns.requestReagents(receta, componentes)` pide lo que falta de cada componente.
+- Posición: `sharePos()` siempre es verdadero; sin el chip «Posición» ni la opción; `/rt posicion` solo avisa.
+- Pruebas: profesiones de la guild (miembros, limpieza, filtros, sin catálogo, ventana y menú) y la posición siempre compartida.
+
 ## [0.11.4] - 2026-11-19
 
 ### Para todos

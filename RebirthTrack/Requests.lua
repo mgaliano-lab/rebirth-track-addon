@@ -30,7 +30,7 @@ local EXPIRY_DAYS = { 0, 7, 14, 30 }
 local TEXTS = {
   es = {
     ask = "Solicitar a la Guild", askTip = "Tildalo para pedirle a la guild este componente, en la cantidad del cuadrito (propone lo que te falta para hacer la receta una vez, descontando bolsas y banco; cambiala y apretá Enter). Lo ven el GM, los oficiales y los revisores; cuando lo trasladan, lo ve toda la guild en el tooltip del material. Destildalo cuando ya no lo necesites.",
-    asked = "pedido a la guild: %s (%s).", cancelled = "pedido cerrado: %s.",
+    asked = "pedido a la guild: %s (%s).", cancelled = "pedido cerrado: %s.", allHave = "ya tenés todos los componentes para hacerla.",
     title = "Pedidos de la guild", tabMine = "Mis pedidos", tabPending = "Pendientes", tabGuild = "En la guild", tabReviewers = "Revisores",
     none = "No hay pedidos.", promote = "Trasladar", close = "Cerrar", expires = "Vence: %s", never = "nunca",
     inDays = "en %d d", expired = "vencido", pending = "pendiente", inGuild = "en la guild", closed = "cerrado",
@@ -47,7 +47,7 @@ local TEXTS = {
   },
   en = {
     ask = "Request from the Guild", askTip = "Tick it to ask the guild for this reagent, in the amount in the box (it suggests what you're missing to craft the recipe once, counting bags and bank; change it and press Enter). The GM, officers and reviewers see it; once they promote it, the whole guild sees it on the material's tooltip. Untick it when you no longer need it.",
-    asked = "requested from the guild: %s (%s).", cancelled = "request closed: %s.",
+    asked = "requested from the guild: %s (%s).", cancelled = "request closed: %s.", allHave = "you already have every reagent to craft it.",
     title = "Guild requests", tabMine = "My requests", tabPending = "Pending", tabGuild = "In the guild", tabReviewers = "Reviewers",
     none = "No requests.", promote = "Promote", close = "Close", expires = "Expires: %s", never = "never",
     inDays = "in %d d", expired = "expired", pending = "pending", inGuild = "in the guild", closed = "closed",
@@ -357,6 +357,22 @@ local function setItem(recipe, id, n)
   r.items = items
   local saved = commit(r)
   if saved then say(T("asked"):format(saved.recipe, itemsText(saved.items))) end
+  return saved
+end
+
+-- Desde /rt profesiones: pide de cada componente lo que te falta para hacerla una vez (bolsas y banco).
+local function have(id)
+  if C_Item and C_Item.GetItemCount then return C_Item.GetItemCount(id, true) or 0 end
+  if GetItemCount then return GetItemCount(id, true) or 0 end
+  return 0
+end
+function ns.requestReagents(recipe, reagents)
+  local saved, asked = nil, 0
+  for _, g in ipairs(reagents or {}) do
+    local n = (g.count or 0) - have(g.item)
+    if n > 0 then saved = setItem(recipe, g.item, n) or saved; asked = asked + 1 end
+  end
+  if asked == 0 then say(T("allHave")) end
   return saved
 end
 
