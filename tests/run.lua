@@ -963,6 +963,11 @@ do
   assert(not R.store().lines.hz1, "un Q de otro que no es el autor no vale")
   fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hz, "GUILD", "Healz-Nightslayer")
   assert(R.store().lines.hz1, "el pedido de Healz entra")
+  -- Forever: «Nombre Apellido» y el remitente llega con otro reino que el que da el juego acá.
+  local fv = R.build({ id = "fv1", who = "Baldor Dwimorberg", created = 205, at = 205, status = "p", by = "Baldor Dwimorberg", expires = 0, recipe = "Venda", items = { { id = 1001, n = 3 } } })
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. fv, "GUILD", "Baldor Dwimorberg-OtroReino")
+  assert(R.store().lines.fv1, "el pedido de Forever entra aunque el reino del remitente sea otro")
+  R.store().lines.fv1 = nil
   -- Healz (rango 3) no puede trasladarlo ni ponerle vencimiento.
   local up = R.build({ id = "hz1", who = "Healz", created = 200, at = 210, status = "g", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1001, n = 1 } } })
   fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. up, "GUILD", "Healz-Nightslayer")
@@ -1051,6 +1056,14 @@ do
   local relay = R.build({ id = "rl1", who = "Healz", created = 500, at = 500, status = "p", by = "Healz", expires = 0, recipe = "Venda", items = { { id = 2592, n = 3 } } })
   fire("CHAT_MSG_ADDON", "RTK1", "W;" .. relay, "GUILD", "Otro-Dreamscythe")
   assert(R.store().lines.rl1, "un reenvío del pedido de Healz vale")
+  -- El que entra ya tiene cambios más nuevos que mi pedido abierto: igual se lo reenvío.
+  local mio = R.setItem("Té viejo", 2592, 4)
+  local n0 = #sentAddon
+  fire("CHAT_MSG_ADDON", "RTK1", "R;" .. (mio.at + 100000), "GUILD", "Otro-Dreamscythe")
+  local got
+  for i = n0 + 1, #sentAddon do if sentAddon[i][2]:find("^W;rq1;" .. mio.id .. ";") then got = true end end
+  assert(got, "mis pedidos abiertos llegan al que entra aunque su «desde» sea más nuevo")
+  R.setItem("Té viejo", 2592, nil)
 
   -- Revisores: solo el GM cambia la lista; los que agrega revisan.
   assert(not R.setReviewers({ "Otro-Dreamscythe" }), "Roguebash (rango 1) no es GM")

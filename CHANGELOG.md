@@ -13,6 +13,18 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.11.4] - 2026-11-19
+
+### Para todos
+
+- **Los pedidos de materiales ahora le llegan al GM y a los oficiales.** En WoW Forever un pedido tildado en la receta se quedaba solo en la PC de quien lo hizo: el GM y los oficiales no lo veían en «Pendientes». Además, al conectarte ahora siempre recibís los pedidos abiertos de los que están conectados.
+
+### Técnico
+
+- `Requests.lua`: `key()` identifica por nombre sin reino. En Forever el reino del remitente de `CHAT_MSG_ADDON` no coincide con el de `GetNormalizedRealmName`, así que `onQ` descartaba los `Q;` de otros (`key(by) ~= key(sender)`). Las posiciones (`Collect.lua`) no comparan y por eso viajaban.
+- `reply()` / `R;`: cada uno reenvía siempre sus pedidos abiertos al que entra; con solo `r.at > desde`, si el que entraba tenía cualquier cambio más nuevo, nunca recibía los anteriores.
+- Pruebas: pedido de Forever con remitente de otro reino y puesta al día con «desde» más nuevo.
+
 ## [0.11.3] - 2026-11-19
 
 ### Para todos
