@@ -335,6 +335,7 @@ function U.icon(parent, size)
     if not self.id then return end
     GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
     if GameTooltip.SetItemByID then GameTooltip:SetItemByID(self.id) else GameTooltip:SetHyperlink("item:" .. self.id) end
+    if self.extra then GameTooltip:AddLine(self.extra, 0.88, 0.69, 0.29, true) end
     GameTooltip:Show()
   end)
   f:SetScript("OnLeave", function() GameTooltip:Hide() end)

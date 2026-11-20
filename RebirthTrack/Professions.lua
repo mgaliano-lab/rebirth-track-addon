@@ -36,7 +36,7 @@ local TEXTS = {
     none = "Ninguna receta con esos filtros.", shown = "Mostrando %d de %d",
     nobodyShort = "nadie", onlyOne = "solo 1", peopleN = "%d personas",
     pick = "Elegí una receta para ver su detalle.", makes = "Fabrica %d", cooldown = "con cooldown",
-    requires = "Requiere %s %d", reagents = "Componentes", have = "tenés %d", howTo = "Cómo se consigue",
+    requires = "Requiere %s %d", reagents = "Componentes", vendorShort = "vendedor", have = "tenés %d", howTo = "Cómo se consigue",
     taughtBy = "La enseña: %s", knownBy = "La saben hacer (%d)", nobodyKnows = "Nadie de la guild la sabe hacer.",
     rightClick = "Clic derecho en un nombre: susurrar, invitar o copiar.",
     link = "Enlazar en el chat", ask = "Pedir materiales", askTip = "Pide a la guild lo que te falta para hacerla una vez (descontando bolsas y banco). Va a «Pedidos de la guild».",
@@ -76,7 +76,7 @@ local TEXTS = {
     none = "No recipe with those filters.", shown = "Showing %d of %d",
     nobodyShort = "nobody", onlyOne = "only 1", peopleN = "%d people",
     pick = "Pick a recipe to see its details.", makes = "Makes %d", cooldown = "has a cooldown",
-    requires = "Requires %s %d", reagents = "Reagents", have = "you have %d", howTo = "How to get it",
+    requires = "Requires %s %d", reagents = "Reagents", vendorShort = "vendor", have = "you have %d", howTo = "How to get it",
     taughtBy = "Taught by: %s", knownBy = "Known by (%d)", nobodyKnows = "Nobody in the guild knows it.",
     rightClick = "Right-click a name: whisper, invite or copy.",
     link = "Link in chat", ask = "Request materials", askTip = "Asks the guild for what you're missing to craft it once (counting bags and bank). It goes to «Guild requests».",
@@ -1012,7 +1012,9 @@ local function drawDetail(row, key, byGuid, e)
       local have = itemCount(g.item)
       if have < g.count then missing = missing + 1 end
       x.name:SetText(itemName(g.item) .. " |cff" .. U.HEX.muted .. "×" .. g.count .. "|r")
-      x.have:SetText(T("have"):format(have))
+      local v = have < g.count and ns.vendorText and ns.vendorText(g.item) or nil
+      x.have:SetText(T("have"):format(have) .. (v and (" |cffe0b04a· " .. T("vendorShort") .. "|r") or ""))
+      x.icon.extra = v
       x:ClearAllPoints(); x:SetPoint("TOPLEFT", 12, y)
       x:Show()
       y = y - 26

@@ -25,7 +25,7 @@ local TX = {
     level = "Nivel", total = "Avance", main = "main", fromApp = "de la app", pasted = "pegado", other = "Es de otro personaje: %s",
     skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "ahora",
     mats = "Materiales de toda la ruta (bolsas + banco)", matsLeftTitle = "Materiales que faltan (bolsas + banco)",
-    matsAll = "Todas", matsLeft = "Solo lo que falta", matsLeftTip = "Saca los materiales de los niveles de la profesión que ya pasaste: queda lo que falta desde tu nivel actual (del paso en el que estás, la parte que te queda).",
+    vendorShort = "vendedor", matsAll = "Todas", matsLeft = "Solo lo que falta", matsLeftTip = "Saca los materiales de los niveles de la profesión que ya pasaste: queda lo que falta desde tu nivel actual (del paso en el que estás, la parte que te queda).",
     matsNoCat = "%s: sin el catálogo de la app, va el total de la ruta.", matsNone = "No falta nada: ya pasaste la ruta.", noRoute = "Sin ruta (se sube recolectando).",
     planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
     legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
@@ -47,7 +47,7 @@ local TX = {
     level = "Level", total = "Progress", main = "main", fromApp = "from the app", pasted = "pasted", other = "It belongs to another character: %s",
     skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "now",
     mats = "Materials for the whole route (bags + bank)", matsLeftTitle = "Materials still needed (bags + bank)",
-    matsAll = "All", matsLeft = "Only what's left", matsLeftTip = "Removes the materials for the profession levels you already passed: what's left from your current level (for the step you're on, the part that remains).",
+    vendorShort = "vendor", matsAll = "All", matsLeft = "Only what's left", matsLeftTip = "Removes the materials for the profession levels you already passed: what's left from your current level (for the step you're on, the part that remains).",
     matsNoCat = "%s: without the app's catalog, the whole route is shown.", matsNone = "Nothing left: you're past the route.", noRoute = "No route (leveled by gathering).",
     planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
     legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
@@ -1098,7 +1098,10 @@ local function drawSummary(p, pr)
       it:ClearAllPoints(); it:SetPoint("TOPLEFT", 10 + ((i - 1) % 3) * mw, top - math.floor((i - 1) / 3) * 36)
       it.icon:SetItem(m.item > 0 and m.item or nil, m.count)
       it.name:SetText(m.name)
-      it.cnt:SetText(have .. " / " .. m.count); color(it.cnt, have >= m.count and C.green or C.red)
+      -- Lo que falta y se compra en un vendedor: dicho al lado de la cantidad (y entero en el tooltip).
+      local v = have < m.count and ns.vendorText and ns.vendorText(m.item) or nil
+      it.cnt:SetText(have .. " / " .. m.count .. (v and (" |cffe0b04a· " .. T("vendorShort") .. "|r") or "")); color(it.cnt, have >= m.count and C.green or C.red)
+      it.icon.extra = v
     end
     hideFrom(c.items, #mats + 1)
     c.right:SetText(T("matsReady"):format(ready, #mats))

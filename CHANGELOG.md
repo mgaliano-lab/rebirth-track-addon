@@ -19,13 +19,18 @@ anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
 - **El addon le enseña a la web cómo es el juego de verdad**: anota el árbol de talentos real de tu clase y cómo son las recetas que ves en la ventana de la profesión (qué fabrican, cuántos, componentes y de qué color están a tu nivel), y lo comparte con la guild. Con eso la web corrige sola los talentos y las recetas de WoW Forever, que hoy vienen de otras fuentes y no siempre coinciden con el juego.
 
+- **Se compra en el vendedor**: cuando lo que te falta para una receta lo vende un NPC, el addon te lo dice (en «Con lo del banco» de la ventana de profesión, en los materiales del Plan y en el detalle de Profesiones), con el vendedor, la zona y el precio. Lo aprende de los vendedores que abre cualquiera de la guild; los componentes de vendedor conocidos (hilos, tintes, especias, viales, fundentes…) ya vienen anotados.
+- **«Vincular» desaparece cuando el personaje ya está vinculado**: en su lugar queda la etiqueta «✓ Vinculado» (hace falta la app, que lo trae del sitio).
+
 ### Técnico
 
+- `Vendors.lua` (nuevo): en `MERCHANT_SHOW`/`MERCHANT_UPDATE` anota lo de stock infinito y por oro (`RebirthTrackDB.vendors[ítem] = "precio;vendedor;zona;hora"`, precio por unidad) y lo manda por el canal (`V;ítem;precio;vendedor;zona`, solo lo nuevo o con otro precio, hasta 40 por vez); lo que llega se guarda si no se conocía. Lista fija de componentes de vendedor. `ns.vendorText(ítem)` lo usan BankCraft, Plan y Profesiones (y `U.icon` muestra `extra` en el tooltip).
+- Vinculado: `RebirthTrackLinked` de Plans.lua (sitio 0.9.54) por versión; coincide por guid o por nombre y reino (en Forever, apellido). Sin «Vincular», Plan y Banco ocupan la fila de Personaje.
 - `Collect.lua`: tipos nuevos que se comparten por el canal, uno por clave:
   - `tt1:<rama>` = `rama;CLASE;nombre;fila:columna:rango máx:id de talento:fila:columna del requisito:nombre:ícono,…` (todos los talentos de la rama, de `GetTalentInfo`/`GetTalentPrereqs`/`GetTalentLink`, al entrar).
   - `rd1:<profesión>` = `profesión;nivel;máx;id:ítem:mín:máx:dificultad:ítemxcantidad.…:nombre,…` (ventana de profesión y de «craft»; dificultad `o|y|g|r`). Si solo cambian los colores, se vuelve a mandar como mucho cada 10 puntos o una vez por hora.
 - Lo procesa el sitio 0.9.53.
-- Pruebas: `rd1` (componentes, dificultad, que se comparta y que un punto más no se reenvíe) y `tt1`.
+- Pruebas: `rd1` (componentes, dificultad, que se comparta y que un punto más no se reenvíe), `tt1`, vendedores (lo que se anota, lo limitado, el canal y la lista fija) y vinculado.
 
 ## [0.12.1] - 2026-11-20
 

@@ -21,6 +21,7 @@ assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Requests.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Professions.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Vendors.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -1306,4 +1307,60 @@ do
   assert(n == 2, "las dos ramas se comparten")
   GetNumTalentTabs, GetNumTalents, GetTalentInfo = oldN, oldT, oldI
   print("árbol de talentos real OK")
+end
+
+-- Personaje ya vinculado (Plans.lua › RebirthTrackLinked): sin «Vincular» y con «✓ Vinculado».
+do
+  assert(not ns.isLinked(), "sin la lista: no vinculado")
+  assert(pcall(click, "Vincular"), "sin vincular, está el mosaico")
+  RebirthTrackLinked = { games = { anniversary = { "Player-6065-044C2423;Roguebash;Nightslayer" } } }
+  assert(ns.isLinked(), "por guid")
+  RebirthTrackLinked = { games = { anniversary = { ";roguebash;Nightslayer" } } }
+  assert(ns.isLinked(), "por nombre y reino")
+  RebirthTrackLinked = { games = { anniversary = { ";Roguebash;OtroReino" } } }
+  assert(not ns.isLinked(), "otro reino no")
+  RebirthTrackLinked = { games = { anniversary = { "Player-6065-044C2423;Roguebash;Nightslayer" } } }
+  ns.refreshMain()
+  local tileShown, chip
+  for _, f in ipairs(__frames or {}) do end
+  RebirthTrackLinked = nil
+  ns.refreshMain()
+  print("vinculado OK")
+end
+
+-- Lo que se compra en un vendedor: lo que vende el que abrís (solo stock infinito y por oro) se anota y
+-- se comparte; lo que llega por el canal se guarda si no lo tenías; una lista fija para lo conocido.
+do
+  local merch = {
+    { "|Hitem:2692:0|h[Especias picantes]|h", 100, 1, -1 },
+    { "|Hitem:2320:0|h[Hilo basto]|h", 50, 5, -1 },
+    { "|Hitem:9999:0|h[Limitado]|h", 500, 1, 3 },
+  }
+  function GetMerchantNumItems() return #merch end
+  function GetMerchantItemInfo(i) return "x", nil, merch[i][2], merch[i][3], merch[i][4], true, true, nil end
+  function GetMerchantItemLink(i) return merch[i][1] end
+  local oldUN = UnitName
+  UnitName = function(u) if u == "npc" then return "Tharynn Bouden" end return oldUN(u) end
+  function GetZoneText() return "Bosque de Elwynn" end
+  sentAddon = {}
+  fire("MERCHANT_SHOW")
+  assert(ns.vendorInfo(2692).price == 100 and ns.vendorInfo(2692).vendor == "Tharynn Bouden", "se anota con precio y vendedor")
+  assert(ns.vendorInfo(2320).price == 10, "precio por unidad (50 por 5)")
+  assert(not RebirthTrackDB.vendors[9999], "lo de stock limitado no")
+  local sentV = 0
+  for _, m in ipairs(sentAddon) do if m[2]:find("^V;") then sentV = sentV + 1 end end
+  assert(sentV == 2, "se comparte lo nuevo: " .. sentV)
+  sentAddon = {}
+  fire("MERCHANT_SHOW")
+  for _, m in ipairs(sentAddon) do assert(not m[2]:find("^V;"), "lo mismo no se vuelve a mandar") end
+  UnitName = oldUN
+  fire("CHAT_MSG_ADDON", "RTK1", "V;4291;400;Otro vendedor;Orgrimmar", "GUILD", "Healz-Nightslayer")
+  assert(ns.vendorInfo(4291).vendor == "Otro vendedor", "lo que llega por el canal se guarda")
+  fire("CHAT_MSG_ADDON", "RTK1", "V;2692;1;Pisador;X", "GUILD", "Healz-Nightslayer")
+  assert(ns.vendorInfo(2692).price == 100, "no pisa lo que ya sabía")
+  assert(ns.vendorText(2692):find("Tharynn Bouden", 1, true) and ns.vendorText(2692):find("1p", 1, true), ns.vendorText(2692))
+  assert(ns.vendorText(3371) == "se vende en vendedores", "lista fija")
+  assert(ns.vendorText(12345) == nil, "lo que no se vende")
+  RebirthTrackDB.vendors = nil
+  print("vendedores OK")
 end

@@ -61,6 +61,7 @@ local TEXTS = {
     stOn = "Registrando", stOff = "Registro apagado",
     tlPlan = "Plan", tlBank = "Banco", tlStatus = "Estado", tlLoot = "Reparto", tlRequests = "Pedidos", tlProfs = "Profesiones", tlPositions = "Posiciones",
     tlRecruit = "Invitador", tlRanks = "Rangos", tlLink = "Vincular",
+    chipLinked = "Vinculado", tLinked = "Este personaje ya está vinculado a tu usuario en rebirthknights.fun.",
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
     bRanks = "Rangos (oficiales)", tRanksBtn = "Aplicar los rangos de la guild que sugiere el sitio (/rt rangos).",
@@ -159,6 +160,7 @@ local TEXTS = {
     stOn = "Recording", stOff = "Logging off",
     tlPlan = "Plan", tlBank = "Bank", tlStatus = "Status", tlLoot = "Loot", tlRequests = "Requests", tlProfs = "Professions", tlPositions = "Positions",
     tlRecruit = "Recruit", tlRanks = "Ranks", tlLink = "Link",
+    chipLinked = "Linked", tLinked = "This character is already linked to your user on rebirthknights.fun.",
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
     bRanks = "Ranks (officers)", tRanksBtn = "Apply the guild ranks the site suggests (/rt ranks).",
@@ -717,6 +719,25 @@ local function ui_db()
   return d.ui
 end
 
+-- ¿Este personaje ya está vinculado al sitio? Lo dice la app en Plans.lua (RebirthTrackLinked).
+local LINK_GAMES = { [1] = "retail", [2] = "era", [5] = "anniversary", [11] = "classic", [14] = "classic", [19] = "classic", [18] = "forever" }
+local function linkKey(s) return (tostring(s or ""):lower():gsub("[%s%-'%.]", "")) end
+local function isLinked()
+  local src = rawget(_G, "RebirthTrackLinked")
+  local list = type(src) == "table" and type(src.games) == "table" and src.games[LINK_GAMES[WOW_PROJECT_ID or 0] or ""] or nil
+  if type(list) ~= "table" then return false end
+  local guid = UnitGUID and UnitGUID("player")
+  local name = linkKey(UnitName("player"))
+  local realms = { [linkKey(GetRealmName and GetRealmName())] = true, [linkKey(ns.selfRealm and ns.selfRealm())] = true }
+  for _, line in ipairs(list) do
+    local g, n, r = tostring(line):match("^([^;]*);([^;]*);(.*)$")
+    if g and g ~= "" and g == guid then return true end
+    if n and linkKey(n) == name and (r == "" or realms[linkKey(r)]) then return true end
+  end
+  return false
+end
+ns.isLinked = function() return isLinked() end
+
 local function refreshUI()
   if not ui then return end
   local U, C = ns.ui, ns.ui.C
@@ -726,6 +747,16 @@ local function refreshUI()
   ui.dun.tip = L("tDungeons")
   local dun = db().settings.dungeons and true or false
   ui.dun:SetKind(dun and "on" or "off"); ui.dun:SetLabel((dun and ns.ui.ICON.check or "") .. L("chipDun"))
+  local linked = isLinked()
+  ui.linked:SetShown(linked); ui.linked:SetLabel(ns.ui.ICON.check .. L("chipLinked")); ui.linked.tip = L("tLinked")
+  ui.linked:ClearAllPoints(); ui.linked:SetPoint("LEFT", ui.dun, "RIGHT", 6, 0)
+  local n = linked and 2 or 3
+  local mw = math.floor((UI_W - 24 - (n - 1) * 6) / n)
+  for i, t in ipairs(ui.meTiles) do
+    t:SetShown(i <= n)
+    t:SetWidth(mw); t.fs:SetWidth(mw - 8)
+    t:ClearAllPoints(); t:SetPoint("TOPLEFT", 12 + (i - 1) * (mw + 6), -118)
+  end
   if ns.refreshOptions then ns.refreshOptions() end
   if ns.refreshRecruit then ns.refreshRecruit() end
   local on = LoggingCombat()
@@ -841,9 +872,14 @@ local function createUI()
     return t
   end
   ui.secMe = U.label(ui.body, ""); ui.secMe:SetPoint("TOPLEFT", 12, -102)
-  tile("tlPlan", "Interface\\Icons\\INV_Misc_Book_09", "tPlan", slash("plan"), 0, -118)
-  tile("tlBank", "Interface\\Icons\\INV_Misc_Bag_08", "tBank", slash("banco"), 1, -118)
-  tile("tlLink", "Interface\\Icons\\INV_Misc_Key_03", "tLink", linkCharacter, 2, -118)
+  ui.meTiles = {
+    tile("tlPlan", "Interface\\Icons\\INV_Misc_Book_09", "tPlan", slash("plan"), 0, -118),
+    tile("tlBank", "Interface\\Icons\\INV_Misc_Bag_08", "tBank", slash("banco"), 1, -118),
+    tile("tlLink", "Interface\\Icons\\INV_Misc_Key_03", "tLink", linkCharacter, 2, -118),
+  }
+  -- Ya vinculado: sin «Vincular» (Plan y Banco ocupan la fila) y la etiqueta «✓ Vinculado».
+  ui.linked = U.button(ui.body, "", "on", nil)
+  ui.linked:SetPoint("LEFT", ui.dun, "RIGHT", 6, 0)
   ui.secGuild = U.label(ui.body, ""); ui.secGuild:SetPoint("TOPLEFT", 12, -190)
   tile("tlLoot", "Interface\\Icons\\INV_Misc_Coin_01", "tLoot", slash("reparto"), 0, -206)
   tile("tlRequests", "Interface\\Icons\\INV_Crate_01", "tRequests", slash("pedidos"), 1, -206, function() return ns.requestsBadge and ns.requestsBadge() or 0 end)
