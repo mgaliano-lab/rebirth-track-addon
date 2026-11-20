@@ -1211,6 +1211,15 @@ function ns.openProfessions(tab, prof)
 end
 ns.refreshProfessions = function() refresh() end
 
+-- Para el plan (Plan.lua › materiales que faltan): los componentes de una receta del catálogo.
+function ns.catalogReagents(prof, spell)
+  local c = catalog()
+  local e = c and c.profs[prof]
+  local r = e and e.bySpell[spell]
+  return r and r.reagents or nil
+end
+ns.catalogItemName = itemName
+
 -- Para las pruebas.
 ns._professions = { build = build, chars = chars, catalog = catalog, recipeRows = recipeRows, filterRows = filterRows,
   cleanList = cleanList, profOf = profOf, targetName = targetName, parseRecipe = parseRecipe, window = function() return win end,

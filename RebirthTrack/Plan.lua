@@ -24,7 +24,9 @@ local TX = {
     tSummary = "Resumen", tProf = "Profesiones", tTalents = "Talentos", tLegacy = "Legado",
     level = "Nivel", total = "Avance", main = "main", fromApp = "de la app", pasted = "pegado", other = "Es de otro personaje: %s",
     skill = "Habilidad", notLearned = "sin aprender", step = "Paso %d de %d", done = "Ruta completa", now = "ahora",
-    mats = "Materiales de toda la ruta (bolsas + banco)", noRoute = "Sin ruta (se sube recolectando).",
+    mats = "Materiales de toda la ruta (bolsas + banco)", matsLeftTitle = "Materiales que faltan (bolsas + banco)",
+    matsAll = "Todas", matsLeft = "Solo lo que falta", matsLeftTip = "Saca los materiales de los niveles de la profesión que ya pasaste: queda lo que falta desde tu nivel actual (del paso en el que estás, la parte que te queda).",
+    matsNoCat = "%s: sin el catálogo de la app, va el total de la ruta.", matsNone = "No falta nada: ya pasaste la ruta.", noRoute = "Sin ruta (se sube recolectando).",
     planned = "Planeados", spent = "Gastados", next = "Próximo a tocar: %s (%d→%d)", buildDone = "Build completa.", off = "Fuera del plan: %s",
     legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
@@ -44,7 +46,9 @@ local TX = {
     tSummary = "Summary", tProf = "Professions", tTalents = "Talents", tLegacy = "Legacy",
     level = "Level", total = "Progress", main = "main", fromApp = "from the app", pasted = "pasted", other = "It belongs to another character: %s",
     skill = "Skill", notLearned = "not learned", step = "Step %d of %d", done = "Route done", now = "now",
-    mats = "Materials for the whole route (bags + bank)", noRoute = "No route (leveled by gathering).",
+    mats = "Materials for the whole route (bags + bank)", matsLeftTitle = "Materials still needed (bags + bank)",
+    matsAll = "All", matsLeft = "Only what's left", matsLeftTip = "Removes the materials for the profession levels you already passed: what's left from your current level (for the step you're on, the part that remains).",
+    matsNoCat = "%s: without the app's catalog, the whole route is shown.", matsNone = "Nothing left: you're past the route.", noRoute = "No route (leveled by gathering).",
     planned = "Planned", spent = "Spent", next = "Next to take: %s (%d→%d)", buildDone = "Build done.", off = "Off plan: %s",
     legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
@@ -941,6 +945,44 @@ local function showBody(y, text)
   return -y + th(pw.body) + 8
 end
 
+local refresh
+-- Filtro de la lista de materiales del resumen (queda guardado).
+local function matsState()
+  local d = ns.db and ns.db()
+  d.ui = d.ui or {}
+  d.ui.planMats = d.ui.planMats or {}
+  return d.ui.planMats
+end
+-- Lo que falta de una profesión desde el nivel actual: los pasos que terminan arriba de tu nivel, con
+-- los componentes del catálogo (Professions.lua) por las veces de cada paso; del paso en el que estás,
+-- la parte que queda. nil si alguna receta no está en el catálogo (entonces va el total de la ruta).
+local function remainingMats(x)
+  if not ns.catalogReagents then return nil end
+  local rank = x.rank or 0
+  local totals, order = {}, {}
+  for _, st in ipairs(x.prof.steps) do
+    if st.to > rank then
+      local reag = ns.catalogReagents(x.prof.key, st.spell)
+      if not reag then return nil end
+      local crafts = st.crafts
+      if rank > st.from and st.to > st.from then crafts = math.ceil(st.crafts * (st.to - rank) / (st.to - st.from)) end
+      for _, g in ipairs(reag) do
+        if not totals[g.item] then totals[g.item] = 0; order[#order + 1] = g.item end
+        totals[g.item] = totals[g.item] + g.count * crafts
+      end
+    end
+  end
+  local names = {}
+  for _, m in ipairs(x.prof.mats) do names[m.item] = m.name end
+  local out = {}
+  for _, id in ipairs(order) do
+    out[#out + 1] = { item = id, count = totals[id], name = names[id] or (ns.catalogItemName and ns.catalogItemName(id)) or ("#" .. id) }
+  end
+  return out
+end
+
+ns._planRemaining = function(x) return remainingMats(x) end
+
 local function drawSummary(p, pr)
   local s = pw.sum
   local C = ns.ui.C
@@ -997,13 +1039,50 @@ local function drawSummary(p, pr)
     y = y - (-ry + 8) - 10
   else c:Hide() end
 
-  -- Materiales (bolsas + banco), con el ícono del ítem y lo que tenés contra lo que pide.
+  -- Materiales (bolsas + banco), con el ícono del ítem y lo que tenés contra lo que pide. Filtro por
+  -- profesión y «Solo lo que falta» (sin los niveles que ya pasaste, con los componentes del catálogo).
   c = s.mats
-  local mats = {}
-  for _, x in ipairs(pr.profs) do for _, m in ipairs(x.prof.mats) do mats[#mats + 1] = m end end
-  if #mats > 0 then
+  local ms = matsState()
+  local withMats = {}
+  for _, x in ipairs(pr.profs) do if #x.prof.mats > 0 then withMats[#withMats + 1] = x end end
+  if ms.prof then
+    local ok = false
+    for _, x in ipairs(withMats) do if x.prof.key == ms.prof then ok = true end end
+    if not ok then ms.prof = nil end
+  end
+  local mats, noCat = {}, {}
+  for _, x in ipairs(withMats) do
+    if not ms.prof or ms.prof == x.prof.key then
+      local list = ms.left and remainingMats(x) or nil
+      if ms.left and not list then noCat[#noCat + 1] = x.prof.name end
+      for _, m in ipairs(list or x.prof.mats) do mats[#mats + 1] = m end
+    end
+  end
+  if #withMats > 0 then
     c:ClearAllPoints(); c:SetPoint("TOPLEFT", 0, y); c:SetWidth(CW); c:Show()
-    setLbl(c.lbl, T("mats"))
+    setLbl(c.lbl, T(ms.left and "matsLeftTitle" or "mats"))
+    -- Botones: Todas, una por profesión y, a la derecha, «Solo lo que falta».
+    local chips = { { key = nil, label = T("matsAll") } }
+    for _, x in ipairs(withMats) do chips[#chips + 1] = { key = x.prof.key, label = x.prof.name } end
+    c.chips = c.chips or {}
+    local prev
+    for i, ch in ipairs(chips) do
+      local b = pool(c.chips, i, function() return ns.ui.button(c, "", "off", nil, { h = 20 }) end)
+      b:SetScript("OnClick", function() matsState().prof = ch.key; refresh() end)
+      b:SetKind(ms.prof == ch.key and "on" or "off"); b:SetLabel(ch.label)
+      b:ClearAllPoints()
+      if prev then b:SetPoint("LEFT", prev, "RIGHT", 6, 0) else b:SetPoint("TOPLEFT", 10, -26) end
+      prev = b
+    end
+    hideFrom(c.chips, #chips + 1)
+    if not c.left then c.left = ns.ui.button(c, "", "off", function() matsState().left = not matsState().left; refresh() end, { h = 20 }) end
+    c.left:SetKind(ms.left and "on" or "off"); c.left:SetLabel((ms.left and ns.ui.ICON.check or "") .. T("matsLeft")); c.left.tip = T("matsLeftTip")
+    c.left:ClearAllPoints(); c.left:SetPoint("TOPRIGHT", -10, -26)
+    c.note = c.note or nowrap(ns.ui.font(c, "GameFontHighlightSmall", C.muted, "LEFT"))
+    local top = -54
+    local note = #noCat > 0 and T("matsNoCat"):format(table.concat(noCat, ", ")) or (#mats == 0 and T("matsNone")) or nil
+    c.note:SetShown(note ~= nil)
+    if note then c.note:ClearAllPoints(); c.note:SetPoint("TOPLEFT", 10, top); c.note:SetWidth(CW - 20); c.note:SetText(note); top = top - 18 end
     local ready = 0
     local mw = math.floor((CW - 20) / 3)
     for i, m in ipairs(mats) do
@@ -1016,14 +1095,14 @@ local function drawSummary(p, pr)
       end)
       local have = GetItemCount and GetItemCount(m.item, true) or 0
       if have >= m.count then ready = ready + 1 end
-      it:ClearAllPoints(); it:SetPoint("TOPLEFT", 10 + ((i - 1) % 3) * mw, -26 - math.floor((i - 1) / 3) * 36)
+      it:ClearAllPoints(); it:SetPoint("TOPLEFT", 10 + ((i - 1) % 3) * mw, top - math.floor((i - 1) / 3) * 36)
       it.icon:SetItem(m.item > 0 and m.item or nil, m.count)
       it.name:SetText(m.name)
       it.cnt:SetText(have .. " / " .. m.count); color(it.cnt, have >= m.count and C.green or C.red)
     end
     hideFrom(c.items, #mats + 1)
     c.right:SetText(T("matsReady"):format(ready, #mats))
-    local hh = 26 + math.ceil(#mats / 3) * 36 + 4
+    local hh = -top + math.ceil(#mats / 3) * 36 + 4
     c:SetHeight(hh)
     y = y - hh - 10
   else c:Hide() end
@@ -1151,7 +1230,7 @@ local function drawHero(p, pr)
   h.bar:SetValue(pr.pct / 100, ns.ui.C.gold)
 end
 
-local function refresh()
+function refresh()
   if not pw then return end
   local list = allPlans()
   if sel and not list[sel] then sel = nil end
