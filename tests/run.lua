@@ -20,6 +20,7 @@ assert(loadfile("RebirthTrack/Recruit.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Plan.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Council.lua"))("RebirthTrack", ns)
 assert(loadfile("RebirthTrack/Requests.lua"))("RebirthTrack", ns)
+assert(loadfile("RebirthTrack/Professions.lua"))("RebirthTrack", ns)
 fire("ADDON_LOADED", "RebirthTrack")
 fire("PLAYER_LOGIN")
 fire("PLAYER_ENTERING_WORLD")
@@ -508,7 +509,7 @@ assert(#LC.pending() == 1, "/rt reparto agregar suma el ítem (Retail: desde las
 print("reparto OK")
 
 -- Posición: el mapa de la zona y el del continente, compartida por el canal; dentro de una instancia
--- va solo la instancia; apagada (opciones o /rt posicion) se manda «off» y deja de anotarse.
+-- va solo la instancia. Se comparte siempre.
 local function vec(x, y) return { GetXY = function() return x, y end } end
 Enum = Enum or {}
 C_Map = {
@@ -534,16 +535,13 @@ function IsInInstance() return true, "party" end
 CP.collectPosition()
 assert(pos1():match(";0;0;0;0;0;0;[^;]+;%d+;$"), "en instancias solo la instancia: " .. pos1())
 function IsInInstance() return false end
+-- Desde la 0.12.0 no se puede apagar: un «sharePos = false» de antes no cuenta y no hay botón.
+RebirthTrackDB.settings.sharePos = false
 rt("posicion")
-assert(RebirthTrackDB.settings.sharePos == false and pos1():match(";off$"), "apagada manda off: " .. pos1())
-sentAddon = {}
+CP.resetPosition()
 CP.collectPosition()
-assert(not sharedPos(), "apagada no manda nada más")
-rt("posicion on")
-assert(RebirthTrackDB.settings.sharePos == true and pos1():match("Bosque de Elwynn;0;Reinos del Este$"))
-click("Posición")
-assert(RebirthTrackDB.settings.sharePos == false, "el botón de la ventana la apaga")
-rt("posicion on")
+assert(pos1():match("Bosque de Elwynn;0;Reinos del Este$"), "se comparte siempre: " .. pos1())
+assert(not pcall(click, "Posición"), "ya no hay botón de Posición")
 rt("opciones") -- sin panel de opciones en este cliente: no falla
 do -- en combate no abre (el panel del juego es protegido): avisa y espera a que termine
   local opened, combat = 0, true
@@ -1150,4 +1148,91 @@ do
   RebirthTrackDB.settings.requests = nil
   RebirthTrackBank = nil
   print("opción banco en recetas OK")
+end
+
+-- ── Profesiones de la guild (/rt profesiones) ─────────────────────────────────────────────
+do
+  local P = ns._professions
+  local D = RebirthTrackDB.data
+  local now = time()
+  -- Lo propio de las pruebas de antes (Collect.lua) se aparta: acá solo cuentan los de abajo.
+  local MEc, saved = D["Player-6065-044C2423"], {}
+  for k, v in pairs(MEc) do if k:match("^r1") or k:match("^cd1") or k == "sk1" then saved[k] = v; MEc[k] = nil end end
+  D["Player-6065-0411"] = {
+    p1 = "@Healz;p1;Player-6065-0411;" .. now .. ";Healz;Nightslayer;us;5;PRIEST;Human;60;Alliance;Rebirth Knights",
+    sk1 = "@Healz;sk1;Player-6065-0411;" .. now .. ";Alquimia=300/300,Herboristería=280/300",
+    ["r1:Alquimia"] = "@Healz;r1;Player-6065-0411;" .. now .. ";Alquimia;300;300;s3450,s2330,s99999,s2835",
+    ["cd1:Alquimia"] = "@Healz;cd1;Player-6065-0411;" .. now .. ";Alquimia;s11479=" .. (now + 7200),
+  }
+  D["Player-6065-0500"] = { -- de otra guild: no cuenta
+    p1 = "@Mole;p1;Player-6065-0500;" .. now .. ";Mole;Nightslayer;us;5;MAGE;Gnome;60;Alliance;Otra guild",
+    ["r1:Alquimia"] = "@Mole;r1;Player-6065-0500;" .. now .. ";Alquimia;150;300;s2330",
+  }
+  D["Player-6065-0600"] = { -- lista mezclada de una versión vieja: la receta de Alquimia en Primeros auxilios
+    p1 = "@Thal;p1;Player-6065-0600;" .. now .. ";Thal;Nightslayer;us;5;HUNTER;Dwarf;60;Alliance;Rebirth Knights",
+    ["r1:Primeros auxilios"] = "@Thal;r1;Player-6065-0600;" .. now .. ";Primeros auxilios;150;225;s3450,s3275",
+  }
+  RebirthTrackCatalog = { at = now, games = { anniversary = {
+    recipes = {
+      alchemy = {
+        "3450;3825;1;2;175;175,190,205,220;inv_potion_43;Elixir de fortaleza;3355:1,3372:1;3830:1:Receta Elixir de fortaleza;trainer:::1800~vendorAt:Kendor Kabonka:Ventormenta:",
+        "2330;118;1;1;1;1,55,75,95;inv_potion_49;Poción de sanación menor;2447:1,765:1;;trainer:::10",
+        "11479;7068;1;2;225;;inv_misc_stonetablet_05;Transmutar: hierro a oro;3575:1;;trainer:::5000",
+      },
+      firstaid = { "3275;1251;1;1;1;;inv_misc_bandage_15;Venda de lino;2589:1;;starter" },
+    },
+    items = { [3355] = "Raíz de ira;inv_misc_herb_07;1", [3372] = "Vial;inv_drink_06;1" },
+  } } }
+  P.resetCatalog()
+  local profs, byGuid = P.build()
+  local alc = profs.alchemy
+  assert(alc and #alc.members == 1 and alc.members[1].guid == "Player-6065-0411", "Alquimia: solo Healz (Mole es de otra guild)")
+  assert(alc.members[1].rank == 300 and alc.members[1].max == 300, "nivel del sk1")
+  assert(alc.members[1].recipes == 3, "sin el veneno y con la que no está en el catálogo: " .. alc.members[1].recipes)
+  assert(#alc.members[1].cds == 1, "cooldown")
+  assert(profs.firstaid and profs.firstaid.members[1].recipes == 1, "la de Alquimia anotada en Primeros auxilios se saca")
+  assert(profs.herbalism and profs.herbalism.members[1].rank == 280, "las de recolección salen del sk1")
+  local rows = P.recipeRows(alc, "alchemy")
+  assert(#rows == 4, "las 3 del catálogo y la que no está: " .. #rows)
+  local byKey = {}
+  for _, r in ipairs(rows) do byKey[r.key] = r end
+  assert(#byKey.s3450.who == 1 and #byKey.s11479.who == 0 and byKey.s99999.loose, "quién sabe cada una")
+  local f = P.filterRows(rows, { onlyKnown = true, sort = "level" })
+  assert(#f == 3 and f[1].key == "s2330", "solo adquiridas, de la más simple a la más compleja")
+  assert(#P.filterRows(rows, { q = "fortaleza" }) == 1, "buscador")
+  assert(#P.filterRows(rows, { rank = 2 }) == 1 and P.filterRows(rows, { rank = 2 })[1].key == "s3450", "nivel Experto (150–224)")
+  assert(#P.filterRows(rows, { picks = { ["Player-6065-0411"] = true } }) == 3, "por personaje")
+  assert(P.targetName(byGuid["Player-6065-0411"]) == "Healz", "mismo reino: sin reino")
+  -- La ventana: el mosaico la abre, las dos pestañas se dibujan y el clic derecho en un nombre ofrece susurrar.
+  click("Profesiones")
+  local w = P.window()
+  assert(w and w:IsShown(), "se abre desde la principal")
+  ns.openProfessions("members", "alchemy")
+  assert(not w.err, "por profesión se dibuja: " .. tostring(w.err))
+  click("Healz") -- clic en la fila: sus recetas
+  assert(RebirthTrackDB.ui.profs.tab == "recipes" and RebirthTrackDB.ui.profs.picks["Player-6065-0411"], "pasa a recetas con Healz elegido")
+  RebirthTrackDB.ui.profs.picks = nil
+  ns.openProfessions("recipes", "alchemy")
+  assert(not w.err, "recetas se dibuja: " .. tostring(w.err))
+  click("Elixir de fortaleza")
+  assert(not w.err and w.selRow and w.selRow.key == "s3450", "el detalle se dibuja: " .. tostring(w.err))
+  local told
+  ChatFrame_SendTell = function(n) told = n end
+  P.nameMenu(byGuid["Player-6065-0411"])
+  click("Susurrar")
+  assert(told == "Healz", "susurra a Healz")
+  -- Sin el catálogo de la web: solo las que sabe alguien.
+  RebirthTrackCatalog = nil
+  P.resetCatalog()
+  profs = P.build()
+  rows = P.recipeRows(profs.alchemy, "alchemy")
+  assert(#rows == 3, "sin catálogo, las 3 anotadas (sin el veneno): " .. #rows)
+  ns.openProfessions("recipes", "alchemy")
+  assert(not w.err, "sin catálogo se dibuja: " .. tostring(w.err))
+  ns.openProfessions("members", "herbalism")
+  assert(not w.err, tostring(w.err))
+  rt("profesiones")
+  for _, g in ipairs({ "Player-6065-0411", "Player-6065-0500", "Player-6065-0600" }) do D[g] = nil end
+  for k, v in pairs(saved) do MEc[k] = v end
+  print("profesiones de la guild OK")
 end

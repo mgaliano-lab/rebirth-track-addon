@@ -49,19 +49,17 @@ local TEXTS = {
     tRecStart = "Registrar ahora: prende el registro de combate del juego (el archivo WoWCombatLog.txt, en modo avanzado) y empieza a anotar dónde estás: la banda o mazmorra, quiénes van en el grupo, los jefes que se pelean y cuánto dura. La app lo sube al sitio cuando el juego guarda (al hacer /reload o al salir).\n\nAl entrar a una banda se prende solo; usalo si no arrancó o si querés registrar algo fuera de una banda. (/rt registrar)",
     tRecStop = "Detener: apaga el registro de combate y cierra lo que se anotó de esta banda o mazmorra. La app lo sube cuando el juego guarda (al hacer /reload o al salir). Si saliste de la instancia, se detiene solo. (/rt detener)",
     bDungeons = "Mazmorras", tDungeons = "Incluir o no las mazmorras (/rt mazmorras).",
-    position = "Posición: ", tPos = "Compartir o no dónde está tu personaje con la guild, para el mapa del juego y el del sitio (/rt posicion).",
-    posSay = "posición %s.", shared = "|cff3fbf3fCOMPARTIDA|r con la guild", notShared = "sin compartir",
+    posAlways = "tu posición se comparte siempre con la guild (para el mapa del juego y el del sitio).",
     optIntro = "Registra tus bandas y mazmorras y comparte con la guild lo que sirve para el sitio (rebirthknights.fun). La app de tu PC lo sube cuando el juego guarda: al hacer /reload o al salir.",
-    optPos = "Compartir mi posición con la guild", optPosTip = "Cada minuto avisa por el canal de addons de la guild en qué zona y en qué punto del mapa está tu personaje, para el mapa de miembros del sitio. Dentro de instancias va solo la instancia. Apagado, el sitio deja de mostrarte.",
     optDungeons = "Registrar también las mazmorras", optDungeonsTip = "Prende el registro de combate al entrar a mazmorras, no solo a bandas.",
     optMinimap = "Mostrar el botón del minimapa", optMinimapTip = "El botón redondo del minimapa que abre la ventana.",
     optOpen = "Abrir la ventana", optLangTip = "Idioma del addon",
     bHelp = "Ayuda", tHelp = "Cómo se usa (/rt ayuda).", bOptions = "Opciones",
     optGroupLog = "Registro y guild", optGroupUI = "Interfaz", optAlpha = "Opacidad del fondo",
     optAlphaTip = "Qué tan opaco es el fondo de las ventanas del addon (80–100 %, por defecto 96 %).",
-    sPerson = "Personaje", sGuild = "Guild", chipDun = "Mazmorras", chipPos = "Posición", recStart = "Registrar", recStop = "Detener",
+    sPerson = "Personaje", sGuild = "Guild", chipDun = "Mazmorras", recStart = "Registrar", recStop = "Detener",
     stOn = "Registrando", stOff = "Registro apagado",
-    tlPlan = "Plan", tlBank = "Banco", tlStatus = "Estado", tlLoot = "Reparto", tlRequests = "Pedidos", tlPositions = "Posiciones",
+    tlPlan = "Plan", tlBank = "Banco", tlStatus = "Estado", tlLoot = "Reparto", tlRequests = "Pedidos", tlProfs = "Profesiones", tlPositions = "Posiciones",
     tlRecruit = "Invitador", tlRanks = "Rangos", tlLink = "Vincular",
     bLoot = "Reparto de botín", tLoot = "El reparto por consejo: responder por los ítems del jefe y, si sos del consejo, votar (/rt reparto).",
     bPlan = "Plan del personaje", tPlan = "Tu plan del sitio (ruta de profesión, talentos y Legado) contra tu avance real (/rt plan).",
@@ -70,6 +68,7 @@ local TEXTS = {
     bPositions = "Posiciones de la guild", tPositions = "Lista de las posiciones que llegaron por el canal (zona, coordenadas y hace cuánto) para ver que se esté sincronizando (/rt posiciones).",
     optPins = "Mostrar a la guild en el mapa del juego", optPinsTip = "Un punto del color de su clase por cada miembro que comparte su posición, en el mapa del mundo (el de Blizzard o el addon de mapa que uses). No reemplaza tu mapa.",
     bBank = "Banco personal", tBank = "Lo que tenés en el banco, sin ir al banco (/rt banco). Se anota cada vez que lo abrís y queda solo en tu PC.",
+    tProfs = "Profesiones de la guild: quién tiene cada una y a qué nivel, y todas las recetas con quién las sabe hacer, como en la web (/rt profesiones).",
     bRequests = "Pedidos de la guild", tRequests = "Materiales que pide la gente de la guild para sus recetas. El GM, los oficiales y los revisores los trasladan a toda la guild (/rt pedidos).",
     optRequests = "Pedidos de materiales a la guild", optRequestsTip = "«Solicitar a la Guild» en las recetas, los pedidos por el canal de la guild, «Requerido por» en el tooltip de los ítems y los avisos al vender o destruir. Apagado, el addon no muestra ni reenvía pedidos.",
     optBankCraft = "Mostrar lo del banco en las recetas", optBankCraftTip = "En la ventana de profesión, «(+Banco n) (total)» y «(+Parcial Banco)» al lado de cada receta, con lo que anotó tu banco personal.",
@@ -106,8 +105,8 @@ local TEXTS = {
       "/rt registrar · start",
       "/rt detener · stop",
       "/rt mazmorras · dungeons",
-      "/rt posicion · position (compartir o no)",
-      "/rt posiciones · positions (lista de la guild)",
+      "/rt posiciones · positions (lista de la guild; tu posición se comparte siempre)",
+      "/rt profesiones · professions (profesiones y recetas de la guild)",
       "/rt invitar · invite (invitador: mensaje de reclutamiento e invitar a la guild)",
       "/rt opciones · options (Esc › Opciones › AddOns)",
       "/rt banco · bank (ventana con lo que tenés en el banco)",
@@ -148,19 +147,17 @@ local TEXTS = {
     tRecStart = "Record now: turns on the game's combat log (the WoWCombatLog.txt file, in advanced mode) and starts noting where you are: the raid or dungeon, who's in the group, the bosses you fight and how long it takes. The app uploads it to the site when the game saves (on /reload or when you log out).\n\nIt turns on by itself when you enter a raid; use this if it didn't start or to record something outside a raid. (/rt start)",
     tRecStop = "Stop: turns off the combat log and closes what was noted for this raid or dungeon. The app uploads it when the game saves (on /reload or when you log out). Leaving the instance stops it by itself. (/rt stop)",
     bDungeons = "Dungeons", tDungeons = "Include dungeons or not (/rt dungeons).",
-    position = "Position: ", tPos = "Share where your character is with the guild, for the site's map (/rt position).",
-    posSay = "position %s.", shared = "|cff3fbf3fSHARED|r with the guild", notShared = "not shared",
+    posAlways = "your position is always shared with the guild (for the game's map and the site's).",
     optIntro = "Records your raids and dungeons and shares with the guild what the site (rebirthknights.fun) uses. The app on your PC uploads it when the game saves: on /reload or logout.",
-    optPos = "Share my position with the guild", optPosTip = "Every minute it tells the guild addon channel which zone and where on the map your character is, for the site's member map. Inside instances only the instance is sent. Off, the site stops showing you.",
     optDungeons = "Also record dungeons", optDungeonsTip = "Turns combat logging on in dungeons too, not only raids.",
     optMinimap = "Show the minimap button", optMinimapTip = "The round minimap button that opens the window.",
     optOpen = "Open the window", optLangTip = "Addon language",
     bHelp = "Help", tHelp = "How to use it (/rt help).", bOptions = "Options",
     optGroupLog = "Logging and guild", optGroupUI = "Interface", optAlpha = "Background opacity",
     optAlphaTip = "How opaque the addon windows' background is (80–100 %, 96 % by default).",
-    sPerson = "Character", sGuild = "Guild", chipDun = "Dungeons", chipPos = "Position", recStart = "Record", recStop = "Stop",
+    sPerson = "Character", sGuild = "Guild", chipDun = "Dungeons", recStart = "Record", recStop = "Stop",
     stOn = "Recording", stOff = "Logging off",
-    tlPlan = "Plan", tlBank = "Bank", tlStatus = "Status", tlLoot = "Loot", tlRequests = "Requests", tlPositions = "Positions",
+    tlPlan = "Plan", tlBank = "Bank", tlStatus = "Status", tlLoot = "Loot", tlRequests = "Requests", tlProfs = "Professions", tlPositions = "Positions",
     tlRecruit = "Recruit", tlRanks = "Ranks", tlLink = "Link",
     bLoot = "Loot council", tLoot = "Council loot: answer for the boss items and, if you're on the council, vote (/rt loot).",
     bPlan = "Character plan", tPlan = "Your plan from the site (profession route, talents and Legacy) against your real progress (/rt plan).",
@@ -169,6 +166,7 @@ local TEXTS = {
     bPositions = "Guild positions", tPositions = "List of the positions that arrived over the channel (zone, coordinates and how long ago) to check it's syncing (/rt positions).",
     optPins = "Show the guild on the game's map", optPinsTip = "A class-coloured dot for each member sharing their position, on the world map (Blizzard's or whatever map addon you use). It doesn't replace your map.",
     bBank = "Personal bank", tBank = "What's in your bank, without going there (/rt bank). Recorded every time you open it; stays on your PC only.",
+    tProfs = "Guild professions: who has each one and at what level, and every recipe with who can craft it, like on the site (/rt professions).",
     bRequests = "Guild requests", tRequests = "Materials guild members need for their recipes. The GM, officers and reviewers promote them to the whole guild (/rt requests).",
     optRequests = "Guild material requests", optRequestsTip = "«Request from the Guild» on recipes, requests over the guild channel, «Needed by» on item tooltips and the warnings when selling or destroying. Off, the addon neither shows nor relays requests.",
     optBankCraft = "Show bank items on recipes", optBankCraftTip = "In the profession window, «(+Bank n) (total)» and «(+Partial Bank)» next to each recipe, from what your personal bank recorded.",
@@ -205,8 +203,8 @@ local TEXTS = {
       "/rt start · registrar",
       "/rt stop · detener",
       "/rt dungeons · mazmorras",
-      "/rt position · posicion (share or not)",
-      "/rt positions · posiciones (guild list)",
+      "/rt positions · posiciones (guild list; your position is always shared)",
+      "/rt professions · profesiones (guild professions and recipes)",
       "/rt invite · invitar (recruiter: recruiting message and guild invite)",
       "/rt options · opciones (Esc › Options › AddOns)",
       "/rt bank · banco (window with what's in your bank)",
@@ -237,12 +235,9 @@ local function db()
   return RebirthTrackDB
 end
 ns.db = db
--- Posición compartida con la guild: prendida salvo que el jugador la apague.
-local function sharePos() return db().settings.sharePos ~= false end
-local function setSharePos(on)
-  db().settings.sharePos = on and true or false
-  if ns.collectPosition then ns.collectPosition() end
-end
+-- Posición: se comparte siempre con la guild (desde la 0.12.0 no se puede apagar; un «sharePos = false»
+-- que haya quedado de antes no cuenta).
+local function sharePos() return true end
 ns.sharePos = sharePos
 ns.lang = lang
 ns.say = say
@@ -728,11 +723,9 @@ local function refreshUI()
   ui.rec:SetKind(session and nil or "pri")
   ui.rec:SetLabel(session and L("recStop") or L("recStart"))
   ui.rec.tip = session and L("tRecStop") or L("tRecStart")
-  ui.dun.tip, ui.pos.tip = L("tDungeons"), L("tPos")
-  local dun, pos = db().settings.dungeons and true or false, sharePos() and true or false
+  ui.dun.tip = L("tDungeons")
+  local dun = db().settings.dungeons and true or false
   ui.dun:SetKind(dun and "on" or "off"); ui.dun:SetLabel((dun and ns.ui.ICON.check or "") .. L("chipDun"))
-  ui.pos:SetKind(pos and "on" or "off"); ui.pos:SetLabel((pos and ns.ui.ICON.check or "") .. L("chipPos"))
-  ui.pos:ClearAllPoints(); ui.pos:SetPoint("LEFT", ui.dun, "RIGHT", 6, 0)
   if ns.refreshOptions then ns.refreshOptions() end
   if ns.refreshRecruit then ns.refreshRecruit() end
   local on = LoggingCombat()
@@ -756,6 +749,8 @@ local function refreshUI()
   ui.helpBtn:SetLabel(L("bHelp")); ui.optBtn:SetLabel(L("bOptions"))
   ui.optBtn:ClearAllPoints(); ui.optBtn:SetPoint("RIGHT", -10, 0)
   ui.helpBtn:ClearAllPoints(); ui.helpBtn:SetPoint("RIGHT", ui.optBtn, "LEFT", -6, 0)
+  ui.statusBtn:SetLabel(L("tlStatus")); ui.statusBtn.tip = L("tStatus")
+  ui.statusBtn:ClearAllPoints(); ui.statusBtn:SetPoint("RIGHT", ui.helpBtn, "LEFT", -6, 0)
   ui.back:SetLabel(L("back"))
   ui.help:SetText(table.concat(L("help"), "\n"))
   ui.helpText:SetHeight((ui.help:GetStringHeight() or 0) + 8)
@@ -815,8 +810,6 @@ local function createUI()
   -- Interruptores como chips.
   ui.dun = U.button(ui.body, "", "on", function() db().settings.dungeons = not db().settings.dungeons; checkZone(); refreshUI() end)
   ui.dun:SetPoint("TOPLEFT", 12, -60); ui.dun.tip = L("tDungeons")
-  ui.pos = U.button(ui.body, "", "off", function() setSharePos(not sharePos()); refreshUI() end)
-  ui.pos.tip = L("tPos")
   U.hline(ui.body, -92, 0)
 
   -- Mosaicos.
@@ -850,20 +843,21 @@ local function createUI()
   ui.secMe = U.label(ui.body, ""); ui.secMe:SetPoint("TOPLEFT", 12, -102)
   tile("tlPlan", "Interface\\Icons\\INV_Misc_Book_09", "tPlan", slash("plan"), 0, -118)
   tile("tlBank", "Interface\\Icons\\INV_Misc_Bag_08", "tBank", slash("banco"), 1, -118)
-  tile("tlStatus", "Interface\\Icons\\INV_Misc_PocketWatch_01", "tStatus", function() status() end, 2, -118)
+  tile("tlLink", "Interface\\Icons\\INV_Misc_Key_03", "tLink", linkCharacter, 2, -118)
   ui.secGuild = U.label(ui.body, ""); ui.secGuild:SetPoint("TOPLEFT", 12, -190)
   tile("tlLoot", "Interface\\Icons\\INV_Misc_Coin_01", "tLoot", slash("reparto"), 0, -206)
   tile("tlRequests", "Interface\\Icons\\INV_Crate_01", "tRequests", slash("pedidos"), 1, -206, function() return ns.requestsBadge and ns.requestsBadge() or 0 end)
-  tile("tlPositions", "Interface\\Icons\\INV_Misc_Map_01", "tPositions", slash("posiciones"), 2, -206)
-  tile("tlRecruit", "Interface\\Icons\\Ability_Warrior_BattleShout", "tRecruit", slash("invitar"), 0, -274)
-  tile("tlRanks", "Interface\\Icons\\INV_BannerPVP_02", "tRanksBtn", slash("rangos"), 1, -274)
-  tile("tlLink", "Interface\\Icons\\INV_Misc_Key_03", "tLink", linkCharacter, 2, -274)
+  tile("tlProfs", "Interface\\Icons\\Trade_BlackSmithing", "tProfs", slash("profesiones"), 2, -206)
+  tile("tlPositions", "Interface\\Icons\\INV_Misc_Map_01", "tPositions", slash("posiciones"), 0, -274)
+  tile("tlRecruit", "Interface\\Icons\\Ability_Warrior_BattleShout", "tRecruit", slash("invitar"), 1, -274)
+  tile("tlRanks", "Interface\\Icons\\INV_BannerPVP_02", "tRanksBtn", slash("rangos"), 2, -274)
 
   -- Pie: versión, ayuda y opciones.
   local ft = U.footer(ui, 36)
   ui.helpBtn = U.button(ft, "", nil, function() showHelp(true) end)
   ui.helpBtn.tip = L("tHelp")
   ui.optBtn = U.button(ft, "", nil, function() if ns.openOptions then ns.openOptions() end end)
+  ui.statusBtn = U.button(ft, "", nil, function() status() end)
   ui.back = U.button(ft, "", "pri", function() showHelp(false) end)
   ui.back:SetPoint("LEFT", 10, 0)
 
@@ -1043,7 +1037,6 @@ local function createOptions()
   end
   check(logP, "optDungeons", "optDungeonsTip", function() return db().settings.dungeons end,
     function(on) db().settings.dungeons = on; checkZone() end)
-  check(logP, "optPos", "optPosTip", sharePos, setSharePos)
   check(logP, "optPins", "optPinsTip", function() return db().settings.mapPins ~= false end,
     function(on) db().settings.mapPins = on; if ns.refreshPositions then ns.refreshPositions() end end)
   check(logP, "optRequests", "optRequestsTip", function() return db().settings.requests ~= false end,
@@ -1393,6 +1386,7 @@ local COMMANDS = {
   opciones = "options", options = "options", config = "options",
   banco = "bank", bank = "bank",
   pedidos = "requests", pedido = "requests", requests = "requests", request = "requests", requeridos = "requests",
+  profesiones = "professions", profesion = "professions", ["profesión"] = "professions", professions = "professions", profs = "professions", recetas = "professions", recipes = "professions",
   posiciones = "positions", positions = "positions", ubicaciones = "positions",
   invitar = "recruit", invitador = "recruit", reclutar = "recruit", recruit = "recruit", invite = "recruit",
   borrar = "reset", reset = "reset",
@@ -1426,9 +1420,7 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     say(L("dungeonsSay"):format(db().settings.dungeons and L("included") or L("excluded")))
     checkZone()
   elseif cmd == "position" then
-    local on = (arg == "on" or arg == "si" or arg == "sí") or (arg ~= "off" and arg ~= "no" and not sharePos())
-    setSharePos(on)
-    say(L("posSay"):format(on and L("shared") or L("notShared")))
+    say(L("posAlways"))
   elseif cmd == "positions" then
     if ns.openPositions then ns.openPositions() end
   elseif cmd == "diag" then
@@ -1437,6 +1429,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
     if ns.openRecruit then ns.openRecruit() end
   elseif cmd == "bank" then
     if ns.openBank then ns.openBank() end
+  elseif cmd == "professions" then
+    if ns.openProfessions then ns.openProfessions() end
   elseif cmd == "requests" then
     if ns.openRequests then ns.openRequests() end
   elseif cmd == "options" then

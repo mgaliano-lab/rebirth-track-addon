@@ -709,8 +709,8 @@ end
 -- 10 s mientras se mueve y cada minuto si está quieto (así su punto no desaparece del mapa de los
 -- demás). Va el mapa de la zona y el del continente (uiMapID) con la posición en cada uno (0 a 1),
 -- para el mapa del juego (Positions.lua) y el del sitio. Dentro de instancias el juego no da
--- coordenadas: va solo la instancia, una vez. Si el jugador la apaga (opciones del addon o
--- /rt posicion) se manda «off» una vez, así deja de verse.
+-- coordenadas: va solo la instancia, una vez. Desde la 0.12.0 se comparte siempre (no se puede
+-- apagar); los addons viejos todavía pueden mandar «off».
 local CONTINENT = Enum and Enum.UIMapType and Enum.UIMapType.Continent or 2
 local MOVED, SEND_EVERY, STILL_EVERY = 0.002, 10, 60
 local last = { at = -math.huge }
