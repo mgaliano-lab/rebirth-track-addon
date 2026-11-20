@@ -79,8 +79,12 @@ local function full(name)
   if not n or n == "" then n, r = name, homeRealm() end
   return n .. "-" .. realmKey(r)
 end
-local function key(name) return full(name):lower() end
 local function short(name) return (full(name):gsub("%-[^%-]+$", "")) end
+-- Quién es, sin el reino: en Forever el juego no muestra reino y el que trae el remitente de un
+-- mensaje de addon no siempre es el que da GetNormalizedRealmName (ni el de la lista de la guild);
+-- comparando con reino, el pedido de otro se descartaba en silencio. Las posiciones (Collect.lua)
+-- ya confían en el remitente así; un mismo nombre en dos reinos dentro de una guild es muy raro.
+local function key(name) return (short(name):lower():gsub("%s+", " ")) end
 -- En Forever el personaje es «Nombre Apellido» (así viene en la lista de la guild): GetUnitName(…, true).
 local function me() return full((GetUnitName and GetUnitName("player", true)) or UnitName("player") or "") end
 
@@ -249,12 +253,15 @@ local function acceptReviewers(line, sender, relay)
   return true
 end
 
+-- Mis pedidos abiertos se mandan siempre al que entra: «desde» es la hora de su último cambio, y si
+-- tenía uno más nuevo que mi pedido (de cualquiera), con solo «r.at > desde» no le llegaba nunca.
+local function ownOpen(r) return isOpen(r) and key(r.who) == key(me()) end
 local function reply(since)
   local asked = nowT()
   C_Timer.After(2 + math.random() * 5, function()
     local sent = 0
     for _, r in ipairs(all()) do
-      if r.at > since and not (heardAt[r.id] and heardAt[r.id] >= asked) then
+      if (r.at > since or ownOpen(r)) and not (heardAt[r.id] and heardAt[r.id] >= asked) then
         send("W;" .. r.line); sent = sent + 1
         if sent >= MAX_REPLY then break end
       end
@@ -268,7 +275,8 @@ ns.onComm = ns.onComm or {}
 ns.onComm.Q = function(rest, sender) onQ(rest, sender, false) end
 ns.onComm.W = function(rest, sender) onQ(rest, sender, true) end
 ns.onComm.Y = function(rest, sender) if enabled() and acceptReviewers(rest, sender, false) then changed() end end
-ns.onComm.R = function(rest) if enabled() then local since = tonumber(rest); if since and newestAt() > since then reply(since) end end end
+local function hasOwnOpen() for _, r in ipairs(all()) do if ownOpen(r) then return true end end return false end
+ns.onComm.R = function(rest) if enabled() then local since = tonumber(rest); if since and (newestAt() > since or hasOwnOpen()) then reply(since) end end end
 
 -- Un cambio hecho acá: se guarda y se avisa por el canal.
 local function commit(r)
