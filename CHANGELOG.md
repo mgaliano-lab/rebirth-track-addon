@@ -13,6 +13,21 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.13.1] - 2026-11-20
+
+### Para todos
+
+- **Plan › Talentos marca lo que ya aprendiste**: el árbol vuelve a cruzar lo gastado en el juego con el plan, como hacía la lista (antes salía todo en 0).
+- **El árbol sale entero**: las tres ramas de la clase, cada talento en su lugar y con su ícono, aunque el plan esté pegado de antes y solo traiga lo planeado. Para eso usa el árbol de la clase que deja la app (sitio 0.9.57). Si no lo tiene, avisa que hay que volver a copiar el plan desde el sitio.
+- Los íconos salen del juego cuando el talento es tuyo, así no quedan signos de pregunta.
+
+### Técnico
+
+- `Plan.lua`: `local _, token = UnitClass and UnitClass("player")` se quedaba solo con el primer valor (`token` siempre `nil`), así que el árbol armado con el plan nunca leía lo gastado. Ahora `sameClass()`.
+- `planTrees()` completa un plan sin el árbol entero (sin talentos de rango 0 ni íconos) con `RebirthTrackTalents.games[juego][CLASE]` (líneas `B`/`T` de Plans.lua). Lo planeado se cruza primero por nombre (español o inglés) y por posición solo lo que no aparece por nombre. Dibuja todas las ramas, también las vacías. Sin el árbol de la clase, devuelve `partial` y la pestaña muestra el aviso.
+- `traitNodes()` guarda el hechizo real del nodo y su textura; el ícono y la tooltip del árbol usan el nodo del juego que le corresponde.
+- Test: plan pegado viejo de otro personaje de la misma clase con C_Traits de Forever (con y sin el árbol de la clase, y de otra clase).
+
 ## [0.13.0] - 2026-11-20
 
 ### Para todos

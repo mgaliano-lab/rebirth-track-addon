@@ -31,7 +31,7 @@ local TX = {
     legacyNote = "No se encontró tu Legado en el juego (con ? los que no se pudieron leer): tildalo a mano en el planificador del sitio y pasá /rt diag a quien mantiene el addon.",
     notes = "Notas", noTalents = "Sin build de talentos en el plan.", noLegacy = "Sin reparto de Legado en el plan.",
     legend = "|cff40bf40verde|r: listo · |cffff8b3dnaranja|r: a medias · |cffffd100dorado|r: falta · |cffff4040rojo|r: fuera del plan",
-    planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.",
+    planRank = "Plan: %d/%d", notPlanned = "No está en el plan.", otherClass = "El plan es de otra clase: se ve como lista.", oldPlan = "Este plan pegado es de antes: trae solo lo planeado. Volvé a copiarlo desde el sitio («Copiar para el addon») o abrí la app para ver el árbol entero.",
     ofPlan = "del plan", nextShort = "próximo: %s (%d de %d)", byTree = "Talentos por rama", seeTree = "Ver el árbol ›",
     matsReady = "%d de %d listos", spentOf = "/ %d · %d gastados", lgCard = "/ 16 · plan %d",
     lgTotal = "/ 16 puntos repartidos · plan %d", lgTree = "%s en la rama · plan %d", lgNext = "Próximo: %s (%d de %d)", lgDone = "Legado completo.",
@@ -53,7 +53,7 @@ local TX = {
     legacyNote = "Your Legacy wasn't found in the game (? marks what couldn't be read): tick it by hand in the site's planner and send /rt diag to the addon's maintainer.",
     notes = "Notes", noTalents = "No talent build in the plan.", noLegacy = "No Legacy points in the plan.",
     legend = "|cff40bf40green|r: done · |cffff8b3dorange|r: partial · |cffffd100gold|r: to take · |cffff4040red|r: off plan",
-    planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.",
+    planRank = "Plan: %d/%d", notPlanned = "Not in the plan.", otherClass = "The plan is for another class: shown as a list.", oldPlan = "This pasted plan is old: it only has what was planned. Copy it again from the site («Copy for the addon») or open the app to see the whole tree.",
     ofPlan = "of the plan", nextShort = "next: %s (%d of %d)", byTree = "Talents by tree", seeTree = "See the tree ›",
     matsReady = "%d of %d ready", spentOf = "/ %d · %d spent", lgCard = "/ 16 · plan %d",
     lgTotal = "/ 16 points spent · plan %d", lgTree = "%s in the tree · plan %d", lgNext = "Next: %s (%d of %d)", lgDone = "Legacy done.",
@@ -240,8 +240,9 @@ local function traitNodes(configID)
         local spell = def and def.spellID
         local name = (def and def.overrideName ~= "" and def.overrideName) or spellName(spell)
         if spell or name then
+          local icon = spell and ((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(spell)) or (GetSpellTexture and GetSpellTexture(spell))) or nil
           out[#out + 1] = { spells = { [spell or 0] = true, [def and def.overriddenSpellID or 0] = true }, name = name and name:lower() or nil,
-            rank = node.ranksPurchased or node.currentRank or node.activeRank or 0, max = node.maxRanks, tree = treeID }
+            rank = node.ranksPurchased or node.currentRank or node.activeRank or 0, max = node.maxRanks, tree = treeID, spell = spell, icon = icon }
         end
       end
     end
@@ -379,29 +380,79 @@ end
 -- El árbol armado con el plan (desde el sitio 0.9.56 trae todos los talentos de la clase, con ícono y
 -- requisito): para dibujarlo aunque el cliente no dé GetTalentInfo (Forever) o el plan sea de otra clase.
 -- Lo gastado sale del juego solo si el personaje es de la clase del plan (por hechizo o nombre).
-local function iconOf(t)
-  if t.icon then return "Interface\\Icons\\" .. t.icon end
-  local id = t.spells and t.spells[1]
-  local tex = id and ((C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)) or (GetSpellTexture and GetSpellTexture(id)))
-  return tex or "Interface\\Icons\\INV_Misc_QuestionMark"
+local function iconOf(t, n)
+  if n and n.icon then return n.icon end -- el del juego (Forever: el nodo de C_Traits que le corresponde)
+  if t.icon then return t.icon:find("\\") and t.icon or ("Interface\\Icons\\" .. t.icon) end
+  for _, id in ipairs(t.spells or {}) do
+    local tex = (C_Spell and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(id)) or (GetSpellTexture and GetSpellTexture(id))
+    if tex then return tex end
+  end
+  return "Interface\\Icons\\INV_Misc_QuestionMark"
 end
+-- El árbol entero de la clase que manda la app en Plans.lua (RebirthTrackTalents, desde el sitio 0.9.57):
+-- para completar un plan pegado viejo, que trae solo lo planeado.
+local GAMES = { [1] = "retail", [2] = "era", [5] = "anniversary", [11] = "classic", [14] = "classic", [19] = "classic", [18] = "forever" }
+local function classTree(cls)
+  local src = rawget(_G, "RebirthTrackTalents")
+  local games = type(src) == "table" and type(src.games) == "table" and src.games or nil
+  if not games or not cls or cls == "" then return nil end
+  local g = games[GAMES[WOW_PROJECT_ID or 0] or ""] or games.forever
+  local lines = type(g) == "table" and g[cls:upper()]
+  if type(lines) ~= "table" or #lines == 0 then return nil end
+  local all = { "RTP1;;;;;" .. cls }
+  for _, l in ipairs(lines) do all[#all + 1] = tostring(l) end
+  local c = fromLines(all)
+  return #c.talents > 0 and c or nil
+end
+-- ¿El plan trae el árbol entero? (desde el sitio 0.9.56: talentos de rango 0 o con ícono).
+local function isFull(p)
+  for _, t in ipairs(p.talents) do if t.rank == 0 or t.icon then return true end end
+  return false
+end
+local function sameClass(p)
+  if not UnitClass then return false end
+  local _, token = UnitClass("player") -- ojo: «UnitClass and UnitClass(…)» se queda solo con el primer valor
+  return token ~= nil and token:upper() == (p.cls or ""):upper()
+end
+-- Devuelve las ramas y si quedó incompleto (plan viejo sin el árbol de la clase para completarlo).
 local function planTrees(p, state)
-  local _, token = UnitClass and UnitClass("player")
-  local same = token and token:upper() == (p.cls or ""):upper()
-  local out = {}
+  local same = sameClass(p)
+  local base, partial = p, false
+  if not isFull(p) then
+    local c = classTree(p.cls)
+    if c then base = c else partial = true end
+  end
+  -- Lo planeado de cada casillero. Con el árbol de la clase, primero por nombre (el plan viejo puede tener
+  -- algo en otro lugar) y por posición solo lo que no se encontró por nombre.
+  local wantAt, wantName, inBase = {}, {}, {}
+  local function low(x) return x and x ~= "" and x:lower() or nil end
+  if base ~= p then for _, t in ipairs(base.talents) do for _, nm in ipairs({ low(t.name), low(t.en) }) do inBase[nm] = true end end end
   for _, t in ipairs(p.talents) do
+    local n1, n2 = low(t.name), low(t.en)
+    if n1 then wantName[n1] = t.rank end
+    if n2 then wantName[n2] = t.rank end
+    if base == p or not ((n1 and inBase[n1]) or (n2 and inBase[n2])) then wantAt[t.tree .. "-" .. t.row .. "-" .. t.col] = t.rank end
+  end
+  local out = {}
+  local names = #base.trees >= #p.trees and base.trees or p.trees
+  for i = 1, math.max(#names, 1) do if names[i] then out[i] = { tab = nil, name = names[i], talents = {}, rows = 1 } end end
+  for _, t in ipairs(base.talents) do
     local tree = out[t.tree + 1]
-    if not tree then tree = { tab = nil, name = p.trees[t.tree + 1], talents = {}, rows = 1 }; out[t.tree + 1] = tree end
-    local have = 0
-    if same and state then have = haveOf(state, t) end
-    table.insert(tree.talents, { name = t.name, icon = iconOf(t), row = t.row, col = t.col, rank = have or 0, max = t.max, spell = t.spells and t.spells[1],
-      key = t.tree .. "-" .. t.row .. "-" .. t.col, pre = t.pre })
+    if not tree then tree = { tab = nil, name = names[t.tree + 1], talents = {}, rows = 1 }; out[t.tree + 1] = tree end
+    local have, node = 0, nil
+    if same and state then have, node = haveOf(state, t) end
+    local key = t.tree .. "-" .. t.row .. "-" .. t.col
+    local want
+    if base == p then want = t.rank
+    else want = wantName[low(t.name) or ""] or wantName[low(t.en) or ""] or wantAt[key] or 0 end
+    table.insert(tree.talents, { name = t.name, icon = iconOf(t, node), row = t.row, col = t.col, rank = have or 0, max = t.max,
+      spell = (node and node.spell) or (t.spells and t.spells[1]), key = key, pre = t.pre, want = want })
     if t.row > tree.rows then tree.rows = t.row end
   end
   local list = {}
-  for i = 1, #p.trees do if out[i] then list[#list + 1] = out[i] end end
-  for i, tr in pairs(out) do if i > #p.trees then list[#list + 1] = tr end end
-  return list
+  for i = 1, #names do if out[i] then list[#list + 1] = out[i] end end
+  for i, tr in pairs(out) do if i > #names then list[#list + 1] = tr end end
+  return list, partial
 end
 local function slug(s) return (tostring(s or ""):lower():gsub("[^%w]", "")) end
 local function isMine(p)
@@ -626,7 +677,7 @@ local function drawTalents(p, trees)
     local h = HEAD + PADY * 2 + (tree.rows - 1) * STEP + CELL + 6
     f:ClearAllPoints(); f:SetPoint("TOPLEFT", x0 + (ti - 1) * (TREE_W + GAP), 0); f:SetHeight(h); f:Show()
     local spent, plan = 0, 0
-    for _, t in ipairs(tree.talents) do spent = spent + t.rank; plan = plan + (wanted[t.key] or 0) end
+    for _, t in ipairs(tree.talents) do spent = spent + t.rank; plan = plan + (t.want or wanted[t.key] or 0) end
     f.title:SetText(tree.name or ("#" .. ti))
     f.count:SetText(((plan > 0 and spent >= plan) and GREEN or ORANGE) .. spent .. "|r " .. GRAY .. "/ " .. plan .. "|r")
     if tree.icon then f.emb:SetTexture(tree.icon); tint(f.emb, { 1, 1, 1 }) else f.emb:SetTexture(WHITE); tint(f.emb, C.line) end
@@ -647,7 +698,7 @@ local function drawTalents(p, trees)
       if pre then
         local x1, y1 = cellAt(pre)
         local x2, y2 = cellAt(t)
-        local on = (wanted[t.key] or 0) > 0 and (wanted[pre.key] or 0) > 0
+        local on = (t.want or wanted[t.key] or 0) > 0 and (pre.want or wanted[pre.key] or 0) > 0
         local c = on and C.action or C.btnLine
         if x1 ~= x2 then
           nl = nl + 1
@@ -664,7 +715,7 @@ local function drawTalents(p, trees)
     for k = nl + 1, #f.lines do f.lines[k]:Hide() end
     for n, t in ipairs(tree.talents) do
       local b = cell(f, n)
-      local want = wanted[t.key] or 0
+      local want = t.want or wanted[t.key] or 0
       local st = stateOf(t.rank, want)
       local isNext = t.key == nextKey
       b.tab, b.i, b.tname, b.want, b.max, b.isNext, b.spell = tree.tab, t.i, t.name, want, t.max, isNext, t.spell
@@ -1203,8 +1254,14 @@ local function drawTalentTab(p, pr)
   s:Set(pr.tal.matched, T("spentOf"):format(pr.tal.planned, pr.tal.spent), pr.tal.planned > 0 and pr.tal.matched / pr.tal.planned or 0,
     nx, pr.tal.off > 0 and T("off"):format(pr.tal.off) or "")
   local y = -44
-  local trees = canDraw(p) and talentTrees() or planTrees(p, pr.tal and pr.tal.state)
+  local trees, partial
+  if canDraw(p) then trees = talentTrees() else trees, partial = planTrees(p, pr.tal and pr.tal.state) end
   if #trees > 0 then
+    if partial then
+      if not pw.tnote then pw.tnote = ns.ui.font(pw.child, "GameFontNormalSmall", ns.ui.C.muted, "LEFT"); pw.tnote:SetWidth(CW - 8) end
+      pw.tnote:ClearAllPoints(); pw.tnote:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 4, y); pw.tnote:SetText(ORANGE .. T("oldPlan") .. "|r"); pw.tnote:Show()
+      y = y - math.max(14, th(pw.tnote)) - 8
+    elseif pw.tnote then pw.tnote:Hide() end
     pw.grid:ClearAllPoints(); pw.grid:SetPoint("TOPLEFT", pw.child, "TOPLEFT", 0, y)
     y = y - drawTalents(p, trees) - 10
     local lg = pw.tlegend
@@ -1253,7 +1310,8 @@ end
 ns._planTraits = { state = function() return talentState() end, legacy = function(st) return legacyNodes(st) end, nodeFor = function(...) return nodeFor(...) end }
 ns._planDraw = { trees = talentTrees, draw = function(p) return drawTalents(p) end, canDraw = function(p) return canDraw(p) end, grid = function() return pw and pw.grid end,
   legacy = function(p) return legacyInfo(p) end, legacyLayout = LEGACY, lgrid = function() return pw and pw.lgrid end,
-  drawLegacy = function(p) return drawLegacyTrees(legacyInfo(p), p) end }
+  drawLegacy = function(p) return drawLegacyTrees(legacyInfo(p), p) end, planTrees = function(p, st) return planTrees(p, st) end,
+  note = function() return pw and pw.tnote end }
 
 -- Cabecera del personaje.
 local function drawHero(p, pr)
@@ -1294,6 +1352,7 @@ function refresh()
   local pr = p and progress(p)
   drawHero(p, pr)
   pw.sum:Hide(); pw.grid:Hide(); pw.lgrid:Hide(); pw.tstrip:Hide(); pw.lstrip:Hide(); pw.tlegend:Hide(); pw.llegend:Hide()
+  if pw.tnote then pw.tnote:Hide() end
   pw.body:SetText("")
   local h
   if not p then h = showBody(-4, T("none") .. "\n\n" .. GRAY .. T("noneHint") .. "|r")
