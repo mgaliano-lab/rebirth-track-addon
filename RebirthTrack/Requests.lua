@@ -7,11 +7,14 @@
 -- sitio; si no, 0 y 1) y los revisores que agregue el GM. Cuando lo trasladan a la guild, todos los
 -- que tengan el addon ven «Requerido por» en el tooltip del ítem (bolsas, banco, subasta, enlaces) y
 -- un aviso al ir a venderlo o destruirlo. Alt+clic en el ítem abre los nombres listos para copiar.
--- No vence salvo que un revisor le ponga vencimiento; lo cierra quien lo pidió (destildando) o un revisor.
+-- No vence salvo que un revisor le ponga vencimiento. Lo cierra quien lo pidió (destildando, o con los
+-- botones) o un revisor (el GM, los oficiales y los que agregue el GM), como «Resuelto» o «Cancelado».
 --
 -- RebirthTrackDB.requests = { lines = { [id] = "rq1;…" }, reviewers = "rv1;…" } (lo sube la app):
---   rq1;id;quien pidió;creado;cambiado;estado;quién lo cambió;vence;receta;ítem:cantidad,…
+--   rq1;id;quien pidió;creado;cambiado;estado;quién lo cambió;vence;receta;ítem:cantidad,…[;cómo se cerró]
 --       estado: p pendiente (solo lo ven los revisores) · g trasladado a la guild · c cerrado
+--       cómo se cerró (solo con «c», desde la 0.13.2): x cancelado · r resuelto. Va al final para que los
+--       addons viejos (que no lo leen) lo sigan viendo cerrado.
 --       vence: 0 = nunca. «@web» como autor: lo cambió el sitio (rebirthknights.fun).
 --   rv1;cambiado;quién (el GM);Nombre-Reino,…   revisores que agregó el GM
 -- RebirthTrackRequests (Plans.lua, lo escribe la app): lo que trasladaron o cerraron en el sitio.
@@ -32,7 +35,8 @@ local TEXTS = {
     ask = "Solicitar a la Guild", askTip = "Tildalo para pedirle a la guild este componente, en la cantidad del cuadrito (propone lo que te falta para hacer la receta una vez, descontando bolsas y banco; cambiala y apretá Enter). Lo ven el GM, los oficiales y los revisores; cuando lo trasladan, lo ve toda la guild en el tooltip del material. Destildalo cuando ya no lo necesites.",
     asked = "pedido a la guild: %s (%s).", cancelled = "pedido cerrado: %s.", allHave = "ya tenés todos los componentes para hacerla.",
     title = "Pedidos de la guild", tabMine = "Mis pedidos", tabPending = "Pendientes", tabGuild = "En la guild", tabReviewers = "Revisores",
-    none = "No hay pedidos.", promote = "Trasladar", close = "Cerrar", expires = "Vence: %s", never = "nunca",
+    none = "No hay pedidos.", promote = "Trasladar", close = "Cerrar", resolve = "Resuelto", cancelBtn = "Cancelar", reopen = "Reabrir",
+    tabClosed = "Cerrados", resolved = "resuelto", cancelledSt = "cancelado", resolvedMsg = "pedido resuelto: %s.", expires = "Vence: %s", never = "nunca",
     inDays = "en %d d", expired = "vencido", pending = "pendiente", inGuild = "en la guild", closed = "cerrado",
     page = "%d / %d", noPerm = "Solo el GM, los oficiales y los revisores revisan los pedidos.",
     reviewersIntro = "Revisan los pedidos el GM y los oficiales (rangos %s). El GM puede sumar personajes:",
@@ -49,7 +53,8 @@ local TEXTS = {
     ask = "Request from the Guild", askTip = "Tick it to ask the guild for this reagent, in the amount in the box (it suggests what you're missing to craft the recipe once, counting bags and bank; change it and press Enter). The GM, officers and reviewers see it; once they promote it, the whole guild sees it on the material's tooltip. Untick it when you no longer need it.",
     asked = "requested from the guild: %s (%s).", cancelled = "request closed: %s.", allHave = "you already have every reagent to craft it.",
     title = "Guild requests", tabMine = "My requests", tabPending = "Pending", tabGuild = "In the guild", tabReviewers = "Reviewers",
-    none = "No requests.", promote = "Promote", close = "Close", expires = "Expires: %s", never = "never",
+    none = "No requests.", promote = "Promote", close = "Close", resolve = "Resolved", cancelBtn = "Cancel", reopen = "Reopen",
+    tabClosed = "Closed", resolved = "resolved", cancelledSt = "cancelled", resolvedMsg = "request resolved: %s.", expires = "Expires: %s", never = "never",
     inDays = "in %d d", expired = "expired", pending = "pending", inGuild = "in the guild", closed = "closed",
     page = "%d / %d", noPerm = "Only the GM, officers and reviewers review requests.",
     reviewersIntro = "The GM and officers (ranks %s) review requests. The GM can add characters:",
@@ -141,8 +146,9 @@ local function parse(line)
   local items = {}
   for id, n in f[10]:gmatch("(%d+):(%d+)") do items[#items + 1] = { id = tonumber(id), n = tonumber(n) } end
   if #items == 0 then return nil end
+  local how = f[6] == "c" and (f[11] == "x" or f[11] == "r") and f[11] or nil
   return { id = f[2], who = f[3], created = tonumber(f[4]) or 0, at = tonumber(f[5]) or 0, status = f[6], by = f[7],
-    expires = tonumber(f[8]) or 0, recipe = f[9], items = items, line = line }
+    expires = tonumber(f[8]) or 0, recipe = f[9], items = items, how = how, line = line }
 end
 local function build(r)
   local parts = {}
@@ -150,9 +156,10 @@ local function build(r)
   local itemsStr = table.concat(parts, ",")
   local head = table.concat({ "rq1", r.id, full(r.who), r.created, r.at, r.status, r.by, r.expires or 0 }, ";")
   -- Que entre en un mensaje (255, con «Q;» adelante): se acorta la receta.
-  local room = 250 - #head - #itemsStr - 2
+  local how = r.status == "c" and (r.how == "x" or r.how == "r") and (";" .. r.how) or ""
+  local room = 250 - #head - #itemsStr - 2 - #how
   local recipe = tok(r.recipe):sub(1, math.max(0, math.min(48, room)))
-  return head .. ";" .. recipe .. ";" .. itemsStr
+  return head .. ";" .. recipe .. ";" .. itemsStr .. how
 end
 
 local function expired(r, now) return (r.expires or 0) > 0 and (now or time()) >= r.expires end
@@ -347,7 +354,7 @@ local function setItem(recipe, id, n)
   if n and n > 0 then items[#items + 1] = { id = id, n = math.min(math.floor(n), 9999) } end
   if #items == 0 then
     if not cur then return nil end
-    cur.status = "c"
+    cur.status, cur.how = "c", "x"
     local saved = commit(cur)
     if saved then say(T("cancelled"):format(saved.recipe)) end
     return saved
@@ -379,15 +386,18 @@ end
 local function cancel(recipe)
   local cur = mineFor(recipe)
   if not cur then return nil end
-  cur.status = "c"
+  cur.status, cur.how = "c", "x"
   local saved = commit(cur)
   if saved then say(T("cancelled"):format(saved.recipe)) end
   return saved
 end
 
-local function setStatus(r, status)
+-- status «c» con how: «r» resuelto o «x» cancelado (sin how, cancelado).
+local function setStatus(r, status, how)
   r = parse(store().lines[r.id]) or r
   r.status = status
+  r.how = status == "c" and (how == "r" and "r" or "x") or nil
+  if status == "g" and (r.expires or 0) > 0 and r.expires <= time() then r.expires = 0 end -- reabrir uno vencido
   return commit(r)
 end
 local function cycleExpiry(r)
@@ -687,8 +697,8 @@ end)
 -- Estilo «Obsidiana» (UI.lua): pestañas con contador y una tabla con columnas Quién · Receta ·
 -- Materiales (íconos con la cantidad y el tooltip del ítem) · Estado · Vence · acciones.
 local win
-local ROWS, ROW_H, WIN_W, WIN_H = 9, 36, 660, 470
-local COLS = { { "who", 130 }, { "recipe", 0 }, { "items", 136 }, { "state", 86 }, { "exp", 62 }, { "act", 170, "", "RIGHT" } }
+local ROWS, ROW_H, WIN_W, WIN_H = 9, 36, 780, 470
+local COLS = { { "who", 130 }, { "recipe", 0 }, { "items", 136 }, { "state", 86 }, { "exp", 62 }, { "act", 270, "", "RIGHT" } }
 
 local function expiryText(r)
   if (r.expires or 0) == 0 then return T("never") end
@@ -700,10 +710,12 @@ end
 -- Qué muestra cada pestaña (para la ventana y las pruebas).
 local function tabRows(tab)
   local out, mine, now = {}, key(me()), time()
+  local reviewer = tab == "closed" and isReviewer(me())
   for _, r in ipairs(all()) do
     if tab == "mine" and key(r.who) == mine and isOpen(r, now) then out[#out + 1] = r
     elseif tab == "pending" and r.status == "p" and isOpen(r, now) then out[#out + 1] = r
-    elseif tab == "guild" and r.status == "g" and isOpen(r, now) then out[#out + 1] = r end
+    elseif tab == "guild" and r.status == "g" and isOpen(r, now) then out[#out + 1] = r
+    elseif tab == "closed" and not isOpen(r, now) and (reviewer or key(r.who) == mine) then out[#out + 1] = r end
   end
   return out
 end
@@ -720,7 +732,7 @@ local function createWindow()
   local U, C = ns.ui, ns.ui.C
   win = U.window("RebirthTrackRequestsFrame", WIN_W, WIN_H, "", { point = { "CENTER", 0, 40 } })
   win.tab, win.page = "mine", 1
-  win.tabs = U.tabs(win, win.top, { { "mine", "" }, { "pending", "" }, { "guild", "" }, { "reviewers", "" } }, function(k)
+  win.tabs = U.tabs(win, win.top, { { "mine", "" }, { "pending", "" }, { "guild", "" }, { "closed", "" }, { "reviewers", "" } }, function(k)
     win.tab, win.page = k, 1; refreshWin()
   end)
   local y = win.top - 30
@@ -747,7 +759,8 @@ local function createWindow()
     row.pill = U.pill(row); row.pill:SetPoint("LEFT", 8 + pos.state.x, 0)
     row.exp = U.font(row, "GameFontHighlightSmall", C.muted, "LEFT"); row.exp:SetPoint("LEFT", 8 + pos.exp.x, 0); row.exp:SetWidth(pos.exp.w - 8)
     row.c = U.button(row, "", "dng", function() if row.onC then row.onC() end end); row.c:SetPoint("RIGHT", -8, 0)
-    row.b = U.button(row, "", nil, function() if row.onB then row.onB() end end); row.b:SetPoint("RIGHT", row.c, "LEFT", -4, 0)
+    row.d = U.button(row, "", nil, function() if row.onD then row.onD() end end); row.d:SetPoint("RIGHT", row.c, "LEFT", -4, 0)
+    row.b = U.button(row, "", nil, function() if row.onB then row.onB() end end); row.b:SetPoint("RIGHT", row.d, "LEFT", -4, 0)
     row.a = U.button(row, "", "pri", function() if row.onA then row.onA() end end); row.a:SetPoint("RIGHT", row.b, "LEFT", -4, 0)
     win.rows[i] = row
   end
@@ -787,10 +800,10 @@ function refreshWin()
   local reviewer, gm = isReviewer(me()), isGM(me())
   if (win.tab == "pending" or win.tab == "reviewers") and not reviewer then win.tab = "mine" end
   win.title:SetText(T("title"))
-  local counts = { mine = #tabRows("mine"), guild = #tabRows("guild"), hot = "pending" }
+  local counts = { mine = #tabRows("mine"), guild = #tabRows("guild"), closed = #tabRows("closed"), hot = "pending" }
   if reviewer then counts.pending = #tabRows("pending"); counts.reviewers = #reviewerList() end
   win.tabs:Update(win.tab, counts, { pending = reviewer, reviewers = reviewer },
-    { mine = T("tabMine"), pending = T("tabPending"), guild = T("tabGuild"), reviewers = T("tabReviewers") })
+    { mine = T("tabMine"), pending = T("tabPending"), guild = T("tabGuild"), closed = T("tabClosed"), reviewers = T("tabReviewers") })
   local rowsData, msg = {}, nil
   if win.tab == "reviewers" then
     local _, ranks = councilRanks()
@@ -809,8 +822,8 @@ function refreshWin()
   for i, row in ipairs(win.rows) do
     row:ClearAllPoints(); row:SetPoint("TOPLEFT", 1, top - (i - 1) * ROW_H); row:SetPoint("RIGHT", win, "RIGHT", -1, 0)
     local d = rowsData[(win.page - 1) * ROWS + i]
-    row.onA, row.onB, row.onC, row.onEnter = nil, nil, nil, nil
-    row.a:Hide(); row.b:Hide(); row.c:Hide()
+    row.onA, row.onB, row.onC, row.onD, row.onEnter = nil, nil, nil, nil, nil
+    row.a:Hide(); row.b:Hide(); row.c:Hide(); row.d:Hide()
     for _, ic in ipairs(row.icons) do ic:Hide() end
     row.more:SetText(""); row.pill:Hide(); row.exp:SetText(""); row.recipe:SetText("")
     if not d then row:Hide()
@@ -833,7 +846,11 @@ function refreshWin()
         if k > 4 then row.more:SetText("+" .. (#r.items - 4)); break end
         row.icons[k]:SetItem(it.id, it.n); row.icons[k]:Show()
       end
-      row.pill:Set(r.status == "g" and T("inGuild") or T("pending"), r.status == "g" and "guild" or "pend"); row.pill:Show()
+      local open = isOpen(r)
+      if open then row.pill:Set(r.status == "g" and T("inGuild") or T("pending"), r.status == "g" and "guild" or "pend")
+      elseif r.status ~= "c" then row.pill:Set(T("expired"), "exp")
+      else row.pill:Set(r.how == "r" and T("resolved") or r.how == "x" and T("cancelledSt") or T("closed"), r.how == "r" and "ok" or "closed") end
+      row.pill:Show()
       row.exp:SetText(expiryText(r))
       row.onEnter = function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -842,14 +859,28 @@ function refreshWin()
         GameTooltip:AddLine(itemsText(r.items), 0.85, 0.85, 0.85, true)
         GameTooltip:Show()
       end
-      if reviewer or key(r.who) == key(me()) then
-        row.c:SetLabel(T("close")); row.c:Show(); row.onC = function() setStatus(r, "c"); refreshWin() end
+      -- Cerrar como resuelto o cancelado: quien lo pidió, el GM, los oficiales y los revisores.
+      if open and (reviewer or key(r.who) == key(me())) then
+        row.c:SetLabel(T("cancelBtn")); row.c:Show(); row.onC = function() setStatus(r, "c", "x"); refreshWin() end
+        row.d:SetLabel(T("resolve")); row.d:Show(); row.onD = function() setStatus(r, "c", "r"); refreshWin() end
       end
-      if reviewer then
+      if reviewer and open then
         row.b:SetLabel(T("expiryBtn")); row.b:Show(); row.onB = function() cycleExpiry(r); refreshWin() end
       end
-      if reviewer and r.status == "p" then
+      if reviewer and not open then
+        row.a:SetLabel(T("reopen")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
+      end
+      if reviewer and open and r.status == "p" then
         row.a:SetLabel(T("promote")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
+      end
+      -- Los botones visibles, pegados de derecha a izquierda (sin huecos de los ocultos).
+      local prev
+      for _, bt in ipairs({ row.c, row.d, row.b, row.a }) do
+        if bt:IsShown() then
+          bt:ClearAllPoints()
+          if prev then bt:SetPoint("RIGHT", prev, "LEFT", -4, 0) else bt:SetPoint("RIGHT", -8, 0) end
+          prev = bt
+        end
       end
       row:Show()
     end
