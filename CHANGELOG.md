@@ -13,6 +13,22 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.13.2] - 2026-11-22
+
+### Para todos
+
+- **Pedidos: «Resuelto» o «Cancelado»**: el GM, los oficiales y los revisores pueden cerrar cualquier pedido de la guild marcándolo como resuelto (ya se consiguió el material) o como cancelado. Quien lo pidió también puede cerrar el suyo de las dos formas; destildarlo en la receta lo cancela.
+- **Pestaña «Cerrados»** en /rt pedidos: lo resuelto, cancelado o vencido de los últimos 30 días, con su estado. Los revisores ven todos y pueden **Reabrir** uno en la guild; cada miembro ve los suyos.
+- El cierre llega a todos los que tengan el addon y a la web, y lo que se cierre en la web llega al juego.
+
+### Técnico
+
+- `Requests.lua`: la línea `rq1` suma al final un campo opcional «cómo se cerró» (`x` cancelado, `r` resuelto), solo con estado `c`. Los addons anteriores lo ignoran y lo siguen viendo cerrado. `build` le hace lugar acortando la receta.
+- `setStatus(r, "c", "r"|"x")`; reabrir (`g`) le saca el vencimiento si ya venció. Los permisos no cambian: los revisores cierran cualquiera y quien pidió, solo el suyo.
+- Ventana: un cuarto botón por fila, la pestaña `closed` y los botones visibles alineados a la derecha sin huecos (la ventana pasa a 780 de ancho).
+- Necesita la web 0.9.58 para guardar y mostrar el «cómo» (con la web anterior, el cierre se ve como «Cerrado»).
+- Tests: resuelto y cancelado por un oficial, por quien pidió y por un miembro ajeno (rechazado), reabrir, cierre desde el sitio y los botones de la ventana.
+
 ## [0.13.1] - 2026-11-20
 
 ### Para todos

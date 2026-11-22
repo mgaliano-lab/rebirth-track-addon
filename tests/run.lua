@@ -1071,6 +1071,56 @@ do
   local close = R.build({ id = "hz1", who = "Healz", created = 200, at = e.at + 6, status = "c", by = "Healz", expires = 0, recipe = "Sage's Tea", items = { { id = 1002, n = 4 } } })
   fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. close, "GUILD", "Healz-Nightslayer")
   assert(R.parse(R.store().lines.hz1).status == "c" and #R.forItem(1002) == 0, "cerrado: ya no aparece")
+  assert(R.parse(R.store().lines.hz1).how == nil, "cerrado al estilo viejo: sin decir cómo")
+
+  -- Cerrar como «Resuelto» o «Cancelado»: el GM y los oficiales cualquier pedido; un miembro, solo el suyo.
+  local function hzLine(at, status, how, by)
+    return R.build({ id = "hz2", who = "Healz", created = 220, at = at, status = status, by = by or "Healz", expires = 0, recipe = "Venda", items = { { id = 2592, n = 5 } }, how = how })
+  end
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hzLine(230, "p"), "GUILD", "Healz-Nightslayer")
+  assert(R.store().lines.hz2, "pedido nuevo de Healz")
+  assert(hzLine(240, "c", "r"):match(";Venda;2592:5;r$") and hzLine(240, "p", "r"):match(";2592:5$"), "«cómo» va al final y solo cerrado")
+  local res = R.setStatus(R.parse(R.store().lines.hz2), "c", "r") -- Roguebash es oficial (rango 1)
+  assert(res and res.status == "c" and res.how == "r", "el oficial lo marca resuelto")
+  assert(lastSent("^Q;rq1;hz2;.*;c;Roguebash%-Nightslayer;.*;r$"), "sale por el canal con «r»")
+  assert(#R.tabRows("closed") >= 1 and #R.tabRows("pending") == 0, "pasa a Cerrados")
+  local back2 = R.parse("rq1;zz;A-B;1;2;c;A-B;0;X;1:1") -- addon viejo
+  assert(back2 and back2.how == nil, "una línea vieja sigue valiendo")
+  -- Reabrir (revisor) y cancelar.
+  local re = R.setStatus(res, "g")
+  assert(re.status == "g" and re.how == nil and #R.tabRows("guild") >= 1, "reabierto en la guild")
+  local can = R.setStatus(re, "c", "x")
+  assert(can.how == "x" and lastSent(";c;Roguebash%-Nightslayer;.*;x$"), "cancelado")
+  -- Un miembro no cierra (ni resuelve) un pedido ajeno; el que pidió sí, y lo ven todos.
+  local reo = R.setStatus(can, "g")
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hzLine(reo.at + 5, "c", "r", "Otro"), "GUILD", "Otro-Dreamscythe")
+  assert(R.parse(R.store().lines.hz2).status == "g", "Otro no lo resuelve")
+  fire("CHAT_MSG_ADDON", "RTK1", "Q;" .. hzLine(reo.at + 6, "c", "r"), "GUILD", "Healz-Nightslayer")
+  assert(R.parse(R.store().lines.hz2).how == "r", "Healz lo da por resuelto")
+  -- Cerrado en el sitio: llega por Plans.lua con «x».
+  local webClose = "rq1;hz2;Healz-Nightslayer;220;" .. (reo.at + 50) .. ";c;@web;0;Venda;2592:5;x"
+  RebirthTrackRequests = { at = 1, lines = { anniversary = { webClose } } }
+  assert(R.loadWeb() == 1 and R.parse(R.store().lines.hz2).how == "x", "cancelado en el sitio")
+  RebirthTrackRequests = nil
+  -- Destildar el propio lo cancela.
+  local own = R.setItem("Té de prueba", 2592, 2)
+  R.setItem("Té de prueba", 2592, nil)
+  assert(R.parse(R.store().lines[own.id]).how == "x", "destildar = cancelado")
+  -- La ventana: en «En la guild» los botones Resuelto y Cancelar, y en Cerrados el estado.
+  local g3 = R.build({ id = "hz3", who = "Healz", created = 300, at = 300, status = "g", by = "Roguebash", expires = 0, recipe = "Poción", items = { { id = 1001, n = 1 } } })
+  R.accept(g3, false)
+  ns.openRequests("guild")
+  click("Resuelto")
+  assert(R.parse(R.store().lines.hz3).how == "r", "botón Resuelto")
+  ns.openRequests("closed")
+  local nClosed = #R.tabRows("closed")
+  click("Reabrir")
+  assert(#R.tabRows("closed") == nClosed - 1, "botón Reabrir")
+  local nGuild = #R.tabRows("guild")
+  ns.openRequests("guild")
+  click("Cancelar")
+  assert(#R.tabRows("guild") == nGuild - 1, "botón Cancelar")
+  print("pedidos: resueltos y cancelados OK")
 
   -- Lo del sitio (Plans.lua) entra solo desde el archivo; por el canal, solo si lo reenvía un revisor.
   local web = "rq1;wb1;Healz-Nightslayer;300;400;g;@web;0;Poción;1001:5"
