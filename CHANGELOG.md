@@ -13,6 +13,22 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.13.3] - 2026-11-23
+
+### Para todos
+
+- **Oficiales en cualquier rango**: si el juego te da permisos de oficial (escuchás el chat de oficiales o ves las notas de oficial), el addon te reconoce como oficial para los pedidos aunque tu rango no sea el 0 ni el 1: ves «Pendientes» y «Revisores» y tenés «Resuelto», «Cancelar», «Trasladar» y «Vence» en cada pedido.
+- **«Solicitar a la Guild» se tilda siempre**: el checkbox al lado de cada componente pide el material con un clic y lo cancela con otro, aunque tengas una interfaz que cambia cómo se ven los checkboxes. Si algo falla, ahora lo dice en el chat.
+- **/rt pedidos diag**: muestra tu rango, si el addon te ve como oficial y la receta elegida, para mandarlo si algo no anda.
+
+### Técnico
+
+- `Requests.lua`: `isReviewer` suma, además de los rangos del consejo (`RebirthTrackCouncil.ranks`, por defecto 0 y 1), los permisos propios del juego (`IsGuildLeader`/`IsGuildOfficer`/`C_GuildInfo.IsGuildOfficer`/`CanViewOfficerNote`/`CanEditOfficerNote`, todo con `pcall`); con ellos, el rango propio y los de arriba pasan a ser de oficial (`officerRanks`). El rango propio sale de `GetGuildInfo("player")`, sin esperar a que cargue la lista de la guild.
+- Para que los demás acepten los cambios de ese oficial: los rangos con «escuchar chat de oficiales» de `GuildControlGetRankFlags(i)` (3er valor), solo si el rango 0 lo tiene y el más bajo no (hay clientes que ignoran el índice y devolverían lo mismo para todos).
+- El checkbox alterna según el pedido guardado (`mineFor`) y no según `GetChecked()`: con el widget al revés, el clic «destildaba» un pedido inexistente y no se guardaba nada. El `OnClick` va en `pcall` y avisa en el chat si no hay receta, si no se pudo guardar o si hubo un error.
+- `/rt pedidos diag` (`ns.requestsDiag`). La pestaña Revisores lista los rangos de oficial efectivos.
+- Pruebas: oficial por permisos y por configuración de rangos (con el caso que ignora el índice), checkbox con el widget al revés, aviso sin receta y diagnóstico. El stub de `GetGuildInfo` devuelve el rango del personaje que la prueba simula.
+
 ## [0.13.2] - 2026-11-22
 
 ### Para todos

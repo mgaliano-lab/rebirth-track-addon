@@ -1510,3 +1510,67 @@ do
   RebirthTrackDB.vendors = nil
   print("vendedores OK")
 end
+
+-- Oficiales fuera de los rangos del consejo (0 y 1 por defecto): el juego les da permisos de
+-- oficial (chat de oficiales con corona) y el addon no los dejaba revisar. Y el checkbox de un
+-- componente que no se tildaba.
+do
+  local R = ns._requests
+  local realName, realRv = GetUnitName, R.store().reviewers
+  R.store().reviewers = nil
+  GetUnitName = function() return "Healz" end -- rango 3 en la lista
+  assert(not R.isReviewer("Healz"), "rango 3 sin permisos: no revisa")
+  IsGuildOfficer = function() return true end
+  assert(R.isReviewer("Healz"), "con permisos de oficial en el juego, revisa")
+  assert(R.officerRanks()[3] and R.officerRanks()[2], "su rango y los de arriba cuentan como oficiales")
+  assert(not R.officerRanks()[4], "los de abajo no")
+  IsGuildOfficer = nil
+  CanViewOfficerNote = function() return true end
+  assert(R.isReviewer("Healz"), "ver las notas de oficial también alcanza")
+  CanViewOfficerNote = nil
+  -- Los demás lo reconocen por la configuración de rangos (chat de oficiales), si tiene sentido.
+  GetUnitName = realName
+  GuildControlGetNumRanks = function() return 5 end
+  GuildControlGetRankFlags = function(i) return true, true, i <= 4, i <= 4 end -- rangos 0..3 escuchan
+  assert(R.isReviewer("Healz-Nightslayer"), "el rango 3 escucha el chat de oficiales: revisa")
+  assert(not R.isReviewer("Otro-Dreamscythe"), "el 4 no")
+  GuildControlGetRankFlags = function() return true, true, true, true end -- ignora el índice
+  assert(not R.isReviewer("Healz-Nightslayer"), "si todos los rangos dan lo mismo, no se usa")
+  GuildControlGetNumRanks, GuildControlGetRankFlags = nil, nil
+  -- El checkbox alterna según lo guardado, aunque el widget diga otra cosa.
+  local C = ns._bankCraft
+  RebirthTrackBank = { v = 2, at = time(), containers = {} }
+  TradeSkillFrame = TradeSkillFrame or CreateFrame("Frame"); TradeSkillFrame:Show()
+  TradeSkillReagent1 = TradeSkillReagent1 or CreateFrame("Button")
+  function GetTradeSkillSelectionIndex() return 3 end
+  function GetTradeSkillInfo() return "Hoguera básica", "medium", 1 end
+  function GetTradeSkillNumReagents() return 1 end
+  function GetTradeSkillReagentInfo() return "Madera simple", "tex", 1, 0 end
+  function GetTradeSkillReagentItemLink() return "|cffffffff|Hitem:4470::::::::|h[Madera simple]|h|r" end
+  R.updatePickers()
+  local p = R.pickers[1]
+  assert(p.id == 4470, "checkbox de la madera")
+  p.check.GetChecked = function() return false end -- una interfaz de reemplazo lo deja al revés
+  p.check.scripts.OnClick(p.check)
+  local mine = R.mineFor("Hoguera básica")
+  assert(mine and mine.items[1].id == 4470 and mine.items[1].n == 1, "el clic pide igual")
+  assert(#R.tabRows("mine") >= 1, "y aparece en Mis pedidos")
+  p.check.GetChecked = function() return true end
+  p.check.scripts.OnClick(p.check)
+  assert(not R.mineFor("Hoguera básica"), "el segundo clic lo cancela")
+  -- Si algo falla, se avisa en el chat.
+  local said = {}
+  local realSay = ns.say
+  ns.say = function(m) said[#said + 1] = m end
+  local realRecipe = ns.recipeReagents
+  R.updatePickers()
+  TradeSkillFrame:Hide()
+  p.check.scripts.OnClick(p.check)
+  assert(said[#said]:find("receta elegida", 1, true), "sin receta: lo dice")
+  TradeSkillFrame:Show()
+  local lines = ns.requestsDiag()
+  assert(#lines == 3 and lines[1]:find("rango 1", 1, true) and lines[3]:find("Hoguera", 1, true), "diagnóstico: " .. table.concat(lines, " | "))
+  ns.say, ns.recipeReagents = realSay, realRecipe
+  RebirthTrackBank, R.store().reviewers = nil, realRv
+  print("pedidos: oficiales por permisos y checkbox OK")
+end

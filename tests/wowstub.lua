@@ -58,13 +58,21 @@ function click(label) for _, f in ipairs(frames) do if type(f.text) == "string" 
 function shownWindow() return _G.__ui end
 -- Guild y canal de addons
 function IsInGuild() return true end
-function GetGuildInfo() return "Rebirth Knights", "Oficial", 1, nil end
+-- El rango del personaje que la prueba está haciendo de «player» (GetUnitName), como en el juego.
+function GetGuildInfo()
+  local me = ((GetUnitName and GetUnitName("player", true)) or "Roguebash"):gsub("%-.*$", ""):lower()
+  for _, r in ipairs(_G.__roster or {}) do
+    if r[1]:gsub("%-.*$", ""):lower() == me then return "Rebirth Knights", r[2], r[3], nil end
+  end
+  return "Rebirth Knights", nil, nil, nil
+end
 function GetNormalizedRealmName() return "Nightslayer" end
 local roster = {
   { "Roguebash-Nightslayer", "Oficial", 1, 60, "Pícaro", "Orgrimmar", "", "", true, 0, "ROGUE", 0, 0, false, false, 0, "Player-6065-044C2423" },
   { "Healz-Nightslayer", "Miembro", 3, 58, "Sacerdote", "", "Alt de Roguebash", "Nota de oficial", false, 0, "PRIEST", 0, 0, false, false, 0, "Player-6065-0411" },
   { "Otro-Dreamscythe", "Recluta", 4, 20, "Mago", "", "", "", false, 0, "MAGE", 0, 0, false, false, 0, "Player-6066-0099" },
 }
+_G.__roster = roster
 function GetNumGuildMembers() return #roster end
 function GetGuildRosterInfo(i) return table.unpack(roster[i]) end
 function GetGuildRosterLastOnline(i) return 0, 0, 2, 3 end

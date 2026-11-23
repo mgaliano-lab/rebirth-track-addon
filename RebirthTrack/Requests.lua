@@ -4,7 +4,8 @@
 -- falta para hacerla una vez, descontando bolsas y banco anotado) o la que escribas. Los componentes de
 -- una receta van juntos en el mismo pedido. El pedido viaja por el canal de
 -- addons de la guild (RTK1) y lo revisan el GM, los oficiales (los rangos del consejo que manda el
--- sitio; si no, 0 y 1) y los revisores que agregue el GM. Cuando lo trasladan a la guild, todos los
+-- sitio, si no 0 y 1, más los que el juego deja escuchar el chat de oficiales) y los revisores que
+-- agregue el GM. Cuando lo trasladan a la guild, todos los
 -- que tengan el addon ven «Requerido por» en el tooltip del ítem (bolsas, banco, subasta, enlaces) y
 -- un aviso al ir a venderlo o destruirlo. Alt+clic en el ítem abre los nombres listos para copiar.
 -- No vence salvo que un revisor le ponga vencimiento. Lo cierra quien lo pidió (destildando, o con los
@@ -47,6 +48,8 @@ local TEXTS = {
     sellWarn = "|cffff6060Ojo|r: en tus bolsas tenés materiales que pide la guild: %s.",
     deleteWarn = "|cffff4040Alguien de la guild necesita este ítem: %s.|r",
     expiryBtn = "Vence",
+    pickNoRecipe = "no encuentro la receta elegida: elegila de nuevo en la lista.",
+    pickFailed = "no se pudo guardar el pedido (escribí /rt pedidos diag y mandá lo que sale).",
     off = "los pedidos a la guild están apagados (Esc › Opciones › AddOns › Rebirth Track).",
   },
   en = {
@@ -65,6 +68,8 @@ local TEXTS = {
     sellWarn = "|cffff6060Heads up|r: your bags have materials the guild needs: %s.",
     deleteWarn = "|cffff4040Someone in the guild needs this item: %s.|r",
     expiryBtn = "Expires",
+    pickNoRecipe = "can't find the selected recipe: pick it again in the list.",
+    pickFailed = "couldn't save the request (type /rt requests diag and send what it prints).",
     off = "guild requests are turned off (Esc › Options › AddOns › Rebirth Track).",
   },
 }
@@ -112,14 +117,49 @@ local function councilRanks()
   out[0] = true -- el GM siempre
   return out, list
 end
+local function myRank()
+  if not IsInGuild or not IsInGuild() or not GetGuildInfo then return nil end
+  local _, _, rankIndex = GetGuildInfo("player")
+  return tonumber(rankIndex)
+end
 local function guildRank(name)
-  if not GetNumGuildMembers or not IsInGuild or not IsInGuild() then return nil end
+  if not IsInGuild or not IsInGuild() then return nil end
   local want = key(name)
+  -- El propio sale de GetGuildInfo: no depende de que la lista de la guild ya haya cargado.
+  if want == key(me()) and myRank() then return myRank() end
+  if not GetNumGuildMembers then return nil end
   for i = 1, GetNumGuildMembers() or 0 do
     local n, _, rankIndex = GetGuildRosterInfo(i)
     if n and key(n) == want then return rankIndex end
   end
   return nil
+end
+-- ¿El juego me da permisos de oficial? (escucha el chat de oficiales / ve las notas de oficial).
+-- Los rangos del consejo los configura el sitio (por defecto 0 y 1): una guild con los oficiales en
+-- otro rango (p. ej. el 2) los dejaba afuera aunque tuvieran corona en el canal «Oficial».
+local function call(fn, ...) if type(fn) ~= "function" then return nil end local ok, v = pcall(fn, ...) return ok and v or nil end
+local function iAmOfficer()
+  local g = rawget(_G, "C_GuildInfo") or {}
+  return (call(rawget(_G, "IsGuildLeader")) or call(rawget(_G, "IsGuildOfficer")) or call(g.IsGuildOfficer)
+    or call(rawget(_G, "CanViewOfficerNote")) or call(g.CanViewOfficerNote)
+    or call(rawget(_G, "CanEditOfficerNote")) or call(g.CanEditOfficerNote)) and true or false
+end
+-- Rangos que escuchan el chat de oficiales según la configuración de la guild (si el juego la da):
+-- así los demás reconocen los cambios de un oficial aunque su rango no esté en el consejo. Solo se
+-- usa si tiene sentido (el GM lo escucha y el rango más bajo no): hay clientes donde la función
+-- ignora el índice y devuelve lo mismo para todos los rangos.
+local function officerChatRanks(out)
+  local n = tonumber(call(rawget(_G, "GuildControlGetNumRanks"))) or 0
+  local flags = rawget(_G, "GuildControlGetRankFlags")
+  if type(flags) ~= "function" or n < 2 then return out end
+  local listen = {}
+  for i = 1, n do
+    local ok, _, _, officerListen = pcall(flags, i)
+    listen[i - 1] = ok and officerListen and true or false
+  end
+  if not listen[0] or listen[n - 1] then return out end
+  for r = 0, n - 1 do if listen[r] then out[r] = true end end
+  return out
 end
 local function reviewerList()
   local rv = store().reviewers
@@ -129,9 +169,18 @@ local function reviewerList()
   return out
 end
 local function isGM(name) return guildRank(name) == 0 end
+-- Rangos de oficial: los del consejo (sitio), los que escuchan el chat de oficiales y, si el juego
+-- me da permisos de oficial, el mío y los de arriba (índice menor = rango más alto).
+local function officerRanks()
+  local out = officerChatRanks(councilRanks())
+  local mine = myRank()
+  if mine and iAmOfficer() then for r = 0, mine do out[r] = true end end
+  return out
+end
 local function isReviewer(name)
+  if key(name) == key(me()) and iAmOfficer() then return true end
   local r = guildRank(name)
-  if r and councilRanks()[r] then return true end
+  if r and officerRanks()[r] then return true end
   local want = key(name)
   for _, n in ipairs(reviewerList()) do if key(n) == want then return true end end
   return false
@@ -630,10 +679,20 @@ local function newPicker(i)
   p.n:SetMaxLetters(4)
   p.n:SetPoint("LEFT", p.check, "RIGHT", 4, 0)
   local function count() return math.max(1, tonumber(p.n:GetText()) or 1) end
+  -- Se alterna según lo guardado, no según el estado del widget: si una interfaz de reemplazo
+  -- (o un doble disparo) dejaba el checkbox al revés, el clic «destildaba» un pedido que no existía y
+  -- no pasaba nada. Si algo falla, se avisa en el chat en vez de quedar en silencio.
   p.check:SetScript("OnClick", function(self)
-    local c = current()
-    if not c or not p.id then return end
-    setItem(c.recipe, p.id, self:GetChecked() and count() or nil)
+    local ok, err = pcall(function()
+      local c = current()
+      if not c or not p.id then say(T("pickNoRecipe")); return end
+      local cur = mineFor(c.recipe)
+      local asked = false
+      for _, it in ipairs(cur and cur.items or {}) do if it.id == p.id then asked = true end end
+      local saved = setItem(c.recipe, p.id, (not asked) and count() or nil)
+      if not asked and not saved and enabled() then say(T("pickFailed")) end
+    end)
+    if not ok then say("|cffff6060Rebirth Track|r: " .. tostring(err)) end
     pcall(p.refresh)
   end)
   p.n:SetScript("OnEnterPressed", function(self)
@@ -806,7 +865,9 @@ function refreshWin()
     { mine = T("tabMine"), pending = T("tabPending"), guild = T("tabGuild"), closed = T("tabClosed"), reviewers = T("tabReviewers") })
   local rowsData, msg = {}, nil
   if win.tab == "reviewers" then
-    local _, ranks = councilRanks()
+    local ranks = {}
+    for r in pairs(officerRanks()) do if r >= 0 then ranks[#ranks + 1] = r end end
+    table.sort(ranks)
     msg = T("reviewersIntro"):format(table.concat(ranks, ", "))
     for _, n in ipairs(reviewerList()) do rowsData[#rowsData + 1] = { reviewer = n } end
   else
@@ -893,6 +954,25 @@ function refreshWin()
 end
 listeners[#listeners + 1] = function() if win then refreshWin() end; if ns.refreshMain then ns.refreshMain() end end
 
+-- /rt pedidos diag: lo que hace falta para saber por qué no te deja pedir o revisar.
+function ns.requestsDiag()
+  local ranks = {}
+  for r in pairs(officerRanks()) do if r >= 0 then ranks[#ranks + 1] = r end end
+  table.sort(ranks)
+  local c = current()
+  local open = 0
+  for _, r in ipairs(all()) do if isOpen(r) then open = open + 1 end end
+  local lines = {
+    ("yo: %s · clave %s · rango %s · permisos de oficial %s · revisor %s"):format(me(), key(me()),
+      tostring(myRank()), iAmOfficer() and "sí" or "no", isReviewer(me()) and "sí" or "no"),
+    ("rangos de oficial: %s · miembros cargados: %d · pedidos abiertos: %d"):format(table.concat(ranks, ","),
+      GetNumGuildMembers and GetNumGuildMembers() or 0, open),
+    ("pedidos %s · receta: %s"):format(enabled() and "prendidos" or "apagados", c and (c.kind .. " " .. tostring(c.recipe)) or "ninguna"),
+  }
+  for _, l in ipairs(lines) do say(l) end
+  return lines
+end
+
 function ns.openRequests(tab)
   if not enabled() then say(T("off")); return end
   createWindow()
@@ -930,7 +1010,7 @@ end)
 
 -- Para las pruebas.
 ns._requests = { parse = parse, build = build, accept = accept, allowed = allowed, cancel = cancel,
-  setStatus = setStatus, cycleExpiry = cycleExpiry, setReviewers = setReviewers, isReviewer = isReviewer, forItem = forItem,
+  setStatus = setStatus, cycleExpiry = cycleExpiry, setReviewers = setReviewers, isReviewer = isReviewer, forItem = forItem, officerRanks = officerRanks,
   setItem = setItem, suggested = suggested, mineFor = mineFor, tabRows = tabRows, loadWeb = loadWeb, warnBags = warnBags, addLines = addLines,
   showCopy = showCopy, onDeletePopup = onDeletePopup, prune = prune, all = all, store = store, full = full,
   refreshWin = function() return refreshWin() end, pickers = pickers, updatePickers = updatePickers, reagentFrames = reagentFrames, current = current }
