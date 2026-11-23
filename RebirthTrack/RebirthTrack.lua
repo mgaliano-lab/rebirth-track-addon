@@ -1468,7 +1468,8 @@ SlashCmdList.REBIRTHTRACK = function(msg)
   elseif cmd == "professions" then
     if ns.openProfessions then ns.openProfessions() end
   elseif cmd == "requests" then
-    if ns.openRequests then ns.openRequests() end
+    if arg == "diag" and ns.requestsDiag then ns.requestsDiag()
+    elseif ns.openRequests then ns.openRequests() end
   elseif cmd == "options" then
     if ns.openOptions then ns.openOptions() end
   elseif cmd == "minimap" then
