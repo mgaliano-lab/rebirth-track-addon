@@ -707,6 +707,7 @@ for _, v in pairs(mapPins) do placed[#placed + 1] = v end
 assert(#placed == 1 and placed[1].map == 1454 and placed[1].x == 0.502 and placed[1].flag == 3, "solo Healz en el mapa (lo propio no, la vieja tampoco): " .. #placed)
 assert(placed[1].p.who.name == "Healz" and placed[1].p.who.class == "PRIEST", "con nombre y clase de la lista de la guild")
 for _, d in pairs(ns._positions.dots) do assert(d.pingAnim, "el destello se arma (SetLooping con un valor válido)") end
+for _, d in pairs(ns._positions.dots) do assert(not d.shown, "con el mapa cerrado el punto no queda flotando en la pantalla") end
 local list = ns._positions.positions()
 assert(#list == 3, "la lista tiene las 3: " .. #list)
 -- Apagar los puntos los saca del mapa.

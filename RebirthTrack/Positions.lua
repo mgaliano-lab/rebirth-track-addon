@@ -166,6 +166,9 @@ local function dot(owner)
     GameTooltip:Show()
   end)
   d:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  -- En WoW un marco nuevo arranca visible: sin esto, el punto de alguien que se conecta con el mapa
+  -- cerrado queda flotando en el medio de la pantalla (HereBeDragons lo muestra al ponerlo en el mapa).
+  d:Hide()
   dots[owner] = d
   return d
 end
@@ -182,6 +185,8 @@ end
 local function drawPins()
   if not Pins then return end
   Pins:RemoveAllWorldMapIcons(REF)
+  -- Ninguno fuera del mapa: HereBeDragons muestra los que pone en el mapa abierto.
+  for _, d in pairs(dots) do d:Hide() end
   if not pinsOn() then return end
   for _, p in ipairs(positions()) do
     -- Lo propio no: el mapa ya muestra tu flecha.
