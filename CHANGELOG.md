@@ -13,6 +13,17 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.13.5] - 2026-11-23
+
+### Para todos
+
+- **Punto flotando en la pantalla**: cuando alguien de la guild se conectaba, su punto del mapa aparecía en el medio de la pantalla aunque el mapa estuviera cerrado. Ahora solo se ve dentro del mapa.
+
+### Técnico
+
+- `Positions.lua`: `dot()` crea el marco oculto (en WoW un `CreateFrame` nuevo arranca visible y, sin anclas de HereBeDragons con el mapa cerrado, quedaba en el centro de `UIParent`); `drawPins()` oculta todos los puntos antes de volver a ponerlos. HereBeDragons los muestra al anclarlos al mapa abierto (`worldmapProviderPin:OnAcquired`).
+- Prueba: con el mapa cerrado ningún punto queda visible.
+
 ## [0.13.4] - 2026-11-23
 
 ### Para todos
