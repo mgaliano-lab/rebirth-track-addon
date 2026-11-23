@@ -1574,3 +1574,47 @@ do
   RebirthTrackBank, R.store().reviewers = nil, realRv
   print("pedidos: oficiales por permisos y checkbox OK")
 end
+
+-- Forever: el reino viene vacío. El nombre propio quedaba «Nombre-» y cada línea rearmada sumaba un
+-- guion: Mis pedidos 0, cada clic del checkbox creaba otro pedido y los botones no guardaban nada.
+do
+  local R = ns._requests
+  local realName, realNorm, realRealm = GetUnitName, GetNormalizedRealmName, GetRealmName
+  GetUnitName = function() return "Baldor Dwimorberg" end
+  GetNormalizedRealmName = function() return nil end
+  GetRealmName = function() return "" end
+  assert(R.full("Baldor Dwimorberg") == "Baldor Dwimorberg" and R.full("Baldor Dwimorberg--") == "Baldor Dwimorberg", "sin reino: el nombre solo")
+  -- Líneas viejas, con los guiones de más: siguen siendo mías.
+  for i, who in ipairs({ "Baldor Dwimorberg-", "Baldor Dwimorberg--", "Baldor Dwimorberg---" }) do
+    R.store().lines["old" .. i] = table.concat({ "rq1", "old" .. i, who, 300 + i, 300 + i, "p", who, 0, "Contraveneno", "1475:1" }, ";")
+  end
+  assert(#R.tabRows("mine") >= 3, "Mis pedidos los muestra")
+  -- Al abrir la ventana (o tildar) se dejan uno solo.
+  assert(R.dedupe() == 2, "se cierran los repetidos")
+  local open = 0
+  for _, r in ipairs(R.all()) do if r.recipe == "Contraveneno" and R.isOpen(r) then open = open + 1 end end
+  assert(open == 1, "queda uno abierto")
+  local cur = R.mineFor("Contraveneno")
+  assert(cur, "el checkbox lo reconoce")
+  -- Cerrarlo con el botón (lo pidió él) guarda.
+  local saved = R.setStatus(cur, "c", "x")
+  assert(saved and not R.mineFor("Contraveneno"), "el botón Cancelar guarda")
+  -- El checkbox: un clic pide, el otro cancela; nunca duplica.
+  assert(R.setItem("Contraveneno", 1475, 1), "pide")
+  assert(R.setItem("Contraveneno", 1475, 1), "otro clic con el mismo material no crea otro")
+  local n = 0
+  for _, r in ipairs(R.all()) do if r.recipe == "Contraveneno" and R.isOpen(r) then n = n + 1 end end
+  assert(n == 1, "un solo pedido abierto: " .. n)
+  R.setItem("Contraveneno", 1475, nil)
+  assert(not R.mineFor("Contraveneno"), "destildar lo cancela")
+  -- Admin del sitio: cuenta como GM aunque en la guild sea oficial (o no figure).
+  assert(not R.isGM("Baldor Dwimorberg"), "sin la marca de la web no es GM")
+  RebirthTrackCouncil = { at = 1, ranks = { 0, 1 }, players = { "Baldor Dwimorberg-;knight;0;0;1", "Healz-Nightslayer;recruit;0;0;" } }
+  assert(R.isGM("Baldor Dwimorberg") and R.isReviewer("Baldor Dwimorberg"), "admin de la web = GM")
+  assert(not R.isGM("Healz-Nightslayer"), "los demás no")
+  assert(R.setReviewers({ "Healz-Nightslayer" }), "como GM edita la lista de revisores")
+  R.setReviewers({})
+  RebirthTrackCouncil = nil
+  GetUnitName, GetNormalizedRealmName, GetRealmName = realName, realNorm, realRealm
+  print("pedidos: Forever sin reino, repetidos y admin = GM OK")
+end
