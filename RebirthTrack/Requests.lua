@@ -48,6 +48,7 @@ local TEXTS = {
     sellWarn = "|cffff6060Ojo|r: en tus bolsas tenés materiales que pide la guild: %s.",
     deleteWarn = "|cffff4040Alguien de la guild necesita este ítem: %s.|r",
     expiryBtn = "Vence",
+    actionFailed = "no se pudo guardar el cambio (escribí /rt pedidos diag y mandá lo que sale).",
     pickNoRecipe = "no encuentro la receta elegida: elegila de nuevo en la lista.",
     pickFailed = "no se pudo guardar el pedido (escribí /rt pedidos diag y mandá lo que sale).",
     off = "los pedidos a la guild están apagados (Esc › Opciones › AddOns › Rebirth Track).",
@@ -68,6 +69,7 @@ local TEXTS = {
     sellWarn = "|cffff6060Heads up|r: your bags have materials the guild needs: %s.",
     deleteWarn = "|cffff4040Someone in the guild needs this item: %s.|r",
     expiryBtn = "Expires",
+    actionFailed = "couldn't save the change (type /rt requests diag and send what it prints).",
     pickNoRecipe = "can't find the selected recipe: pick it again in the list.",
     pickFailed = "couldn't save the request (type /rt requests diag and send what it prints).",
     off = "guild requests are turned off (Esc › Options › AddOns › Rebirth Track).",
@@ -83,13 +85,17 @@ local function homeRealm()
   return (GetNormalizedRealmName and GetNormalizedRealmName()) or realmKey(GetRealmName and GetRealmName() or "")
 end
 -- «Nombre-Reino» con el reino sin espacios (como lo manda el juego en los mensajes de addon).
+-- En Forever el reino viene vacío: se devuelve el nombre solo. Antes quedaba «Nombre-» y cada vez
+-- que se rearmaba una línea se sumaba otro guion («Nombre--», «Nombre---»): el pedido propio no se
+-- reconocía (Mis pedidos 0, el checkbox creaba otro en cada clic) y los botones no guardaban nada.
 local function full(name)
-  name = tostring(name or "")
-  local n, r = name:match("^(.-)%-([^%-]+)$")
-  if not n or n == "" then n, r = name, homeRealm() end
-  return n .. "-" .. realmKey(r)
+  local n, r = tostring(name or ""):match("^([^%-]*)%-*(.-)%-*$")
+  n = n or ""
+  r = realmKey(r ~= "" and r or homeRealm())
+  return r ~= "" and (n .. "-" .. r) or n
 end
-local function short(name) return (full(name):gsub("%-[^%-]+$", "")) end
+-- Los nombres no llevan guiones: el nombre es lo que va antes del primero.
+local function short(name) return (tostring(name or ""):gsub("%-.*$", "")) end
 -- Quién es, sin el reino: en Forever el juego no muestra reino y el que trae el remitente de un
 -- mensaje de addon no siempre es el que da GetNormalizedRealmName (ni el de la lista de la guild);
 -- comparando con reino, el pedido de otro se descartaba en silencio. Las posiciones (Collect.lua)
@@ -168,7 +174,22 @@ local function reviewerList()
   for n in (names or ""):gmatch("[^,]+") do out[#out + 1] = n end
   return out
 end
-local function isGM(name) return guildRank(name) == 0 end
+-- Los admins del sitio cuentan como GM: la web los marca en Plans.lua (5º campo de cada personaje
+-- de RebirthTrackCouncil.players, «1»). Sirve para que el dueño de la plataforma pruebe todo aunque
+-- en la guild del juego sea oficial. Lo ven los que tengan la app (es lo que escribe Plans.lua).
+local GAME_KEYS = { [1] = "retail", [2] = "era", [5] = "anniversary", [11] = "classic", [14] = "classic", [19] = "classic", [18] = "forever" }
+local function webAdmins()
+  local src, out = rawget(_G, "RebirthTrackCouncil"), {}
+  if type(src) ~= "table" or type(src.players) ~= "table" then return out end
+  local list = src.players[GAME_KEYS[WOW_PROJECT_ID or 0] or ""] or (src.players[1] and src.players) or {}
+  for _, line in ipairs(type(list) == "table" and list or {}) do
+    local f = {}
+    for v in (tostring(line) .. ";"):gmatch("([^;]*);") do f[#f + 1] = v end
+    if f[5] == "1" and (f[1] or "") ~= "" then out[key(f[1])] = true end
+  end
+  return out
+end
+local function isGM(name) return guildRank(name) == 0 or webAdmins()[key(name)] == true end
 -- Rangos de oficial: los del consejo (sitio), los que escuchan el chat de oficiales y, si el juego
 -- me da permisos de oficial, el mío y los de arriba (índice menor = rango más alto).
 local function officerRanks()
@@ -178,6 +199,7 @@ local function officerRanks()
   return out
 end
 local function isReviewer(name)
+  if isGM(name) then return true end
   if key(name) == key(me()) and iAmOfficer() then return true end
   local r = guildRank(name)
   if r and officerRanks()[r] then return true end
@@ -345,6 +367,29 @@ local function commit(r)
   return parse(line)
 end
 
+-- Pedidos abiertos repetidos (mismo pedidor y receta; los componentes de una receta van en un solo
+-- pedido): queda el último que se tocó y los demás se cierran como cancelados. Solo los que puedo
+-- cerrar: los míos, o todos si reviso. Lo dejaba el checkbox que no reconocía el pedido propio.
+local function dedupe()
+  local groups, mine, reviewer, n = {}, key(me()), isReviewer(me()), 0
+  for _, r in ipairs(all()) do
+    if isOpen(r) and (reviewer or key(r.who) == mine) then
+      local g = key(r.who) .. "|" .. r.recipe
+      groups[g] = groups[g] or {}
+      table.insert(groups[g], r)
+    end
+  end
+  for _, list in pairs(groups) do
+    table.sort(list, function(a, b) if a.at ~= b.at then return a.at > b.at end return a.id > b.id end)
+    for i = 2, #list do
+      local r = list[i]
+      r.status, r.how = "c", "x"
+      if commit(r) then n = n + 1 end
+    end
+  end
+  return n
+end
+
 -- Lo que trasladó o cerró el sitio (Plans.lua). Si soy revisor, lo reenvío a la guild.
 local GAMES = { [1] = "retail", [2] = "era", [5] = "anniversary", [11] = "classic", [14] = "classic", [19] = "classic", [18] = "forever" }
 local function loadWeb()
@@ -361,8 +406,15 @@ local function loadWeb()
 end
 
 -- ── Acciones ─────────────────────────────────────────────────────────────────────────────
+-- Con un contador: dos pedidos en el mismo segundo podían sacar el mismo id (1 en 256) y el segundo
+-- no se guardaba.
+local idSeq = 0
 local function newId()
-  return string.format("%x%02x", time(), math.random(0, 255))
+  idSeq = (idSeq + 1) % 4096
+  local s = store().lines
+  local id
+  repeat id = string.format("%x%02x%x", time(), math.random(0, 255), idSeq); idSeq = idSeq + 1 until not s[id]
+  return id
 end
 
 local function itemsText(items, max)
@@ -395,6 +447,7 @@ end
 -- receta van en el mismo pedido; si no queda ninguno, se cierra.
 local function setItem(recipe, id, n)
   if not enabled() then say(T("off")); return nil end
+  pcall(dedupe)
   local cur = mineFor(recipe)
   local items = {}
   for _, it in ipairs(cur and cur.items or {}) do
@@ -755,7 +808,15 @@ end)
 -- ── Ventana de pedidos ───────────────────────────────────────────────────────────────────
 -- Estilo «Obsidiana» (UI.lua): pestañas con contador y una tabla con columnas Quién · Receta ·
 -- Materiales (íconos con la cantidad y el tooltip del ítem) · Estado · Vence · acciones.
-local win
+local win, refreshWin
+-- Un botón de la ventana: si falla o no se guarda, se avisa en el chat (antes no pasaba nada).
+local function safe(fn)
+  if not fn then return end
+  local ok, res = pcall(fn)
+  if not ok then say("|cffff6060Rebirth Track|r: " .. tostring(res))
+  elseif res == nil then say(T("actionFailed")) end
+  pcall(refreshWin)
+end
 local ROWS, ROW_H, WIN_W, WIN_H = 9, 36, 780, 470
 local COLS = { { "who", 130 }, { "recipe", 0 }, { "items", 136 }, { "state", 86 }, { "exp", 62 }, { "act", 270, "", "RIGHT" } }
 
@@ -785,7 +846,6 @@ function ns.requestsBadge()
   return #tabRows("pending")
 end
 
-local refreshWin
 local function createWindow()
   if win then return win end
   local U, C = ns.ui, ns.ui.C
@@ -817,10 +877,10 @@ local function createWindow()
     row.more = U.font(row, "GameFontHighlightSmall", C.muted, "LEFT"); row.more:SetPoint("LEFT", 8 + pos.items.x + 4 * 30, 0)
     row.pill = U.pill(row); row.pill:SetPoint("LEFT", 8 + pos.state.x, 0)
     row.exp = U.font(row, "GameFontHighlightSmall", C.muted, "LEFT"); row.exp:SetPoint("LEFT", 8 + pos.exp.x, 0); row.exp:SetWidth(pos.exp.w - 8)
-    row.c = U.button(row, "", "dng", function() if row.onC then row.onC() end end); row.c:SetPoint("RIGHT", -8, 0)
-    row.d = U.button(row, "", nil, function() if row.onD then row.onD() end end); row.d:SetPoint("RIGHT", row.c, "LEFT", -4, 0)
-    row.b = U.button(row, "", nil, function() if row.onB then row.onB() end end); row.b:SetPoint("RIGHT", row.d, "LEFT", -4, 0)
-    row.a = U.button(row, "", "pri", function() if row.onA then row.onA() end end); row.a:SetPoint("RIGHT", row.b, "LEFT", -4, 0)
+    row.c = U.button(row, "", "dng", function() safe(row.onC) end); row.c:SetPoint("RIGHT", -8, 0)
+    row.d = U.button(row, "", nil, function() safe(row.onD) end); row.d:SetPoint("RIGHT", row.c, "LEFT", -4, 0)
+    row.b = U.button(row, "", nil, function() safe(row.onB) end); row.b:SetPoint("RIGHT", row.d, "LEFT", -4, 0)
+    row.a = U.button(row, "", "pri", function() safe(row.onA) end); row.a:SetPoint("RIGHT", row.b, "LEFT", -4, 0)
     win.rows[i] = row
   end
 
@@ -895,7 +955,7 @@ function refreshWin()
         row.onC = function()
           local list = {}
           for _, n in ipairs(reviewerList()) do if key(n) ~= key(d.reviewer) then list[#list + 1] = n end end
-          setReviewers(list); refreshWin()
+          return setReviewers(list)
         end
       end
       row:Show()
@@ -922,17 +982,17 @@ function refreshWin()
       end
       -- Cerrar como resuelto o cancelado: quien lo pidió, el GM, los oficiales y los revisores.
       if open and (reviewer or key(r.who) == key(me())) then
-        row.c:SetLabel(T("cancelBtn")); row.c:Show(); row.onC = function() setStatus(r, "c", "x"); refreshWin() end
-        row.d:SetLabel(T("resolve")); row.d:Show(); row.onD = function() setStatus(r, "c", "r"); refreshWin() end
+        row.c:SetLabel(T("cancelBtn")); row.c:Show(); row.onC = function() return setStatus(r, "c", "x") end
+        row.d:SetLabel(T("resolve")); row.d:Show(); row.onD = function() return setStatus(r, "c", "r") end
       end
       if reviewer and open then
-        row.b:SetLabel(T("expiryBtn")); row.b:Show(); row.onB = function() cycleExpiry(r); refreshWin() end
+        row.b:SetLabel(T("expiryBtn")); row.b:Show(); row.onB = function() return cycleExpiry(r) end
       end
       if reviewer and not open then
-        row.a:SetLabel(T("reopen")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
+        row.a:SetLabel(T("reopen")); row.a:Show(); row.onA = function() return setStatus(r, "g") end
       end
       if reviewer and open and r.status == "p" then
-        row.a:SetLabel(T("promote")); row.a:Show(); row.onA = function() setStatus(r, "g"); refreshWin() end
+        row.a:SetLabel(T("promote")); row.a:Show(); row.onA = function() return setStatus(r, "g") end
       end
       -- Los botones visibles, pegados de derecha a izquierda (sin huecos de los ocultos).
       local prev
@@ -975,6 +1035,7 @@ end
 
 function ns.openRequests(tab)
   if not enabled() then say(T("off")); return end
+  pcall(dedupe)
   createWindow()
   if tab then win.tab = tab end
   win:Show()
@@ -1010,7 +1071,7 @@ end)
 
 -- Para las pruebas.
 ns._requests = { parse = parse, build = build, accept = accept, allowed = allowed, cancel = cancel,
-  setStatus = setStatus, cycleExpiry = cycleExpiry, setReviewers = setReviewers, isReviewer = isReviewer, forItem = forItem, officerRanks = officerRanks,
+  setStatus = setStatus, cycleExpiry = cycleExpiry, setReviewers = setReviewers, isReviewer = isReviewer, forItem = forItem, officerRanks = officerRanks, dedupe = dedupe, isGM = isGM, isOpen = isOpen,
   setItem = setItem, suggested = suggested, mineFor = mineFor, tabRows = tabRows, loadWeb = loadWeb, warnBags = warnBags, addLines = addLines,
   showCopy = showCopy, onDeletePopup = onDeletePopup, prune = prune, all = all, store = store, full = full,
   refreshWin = function() return refreshWin() end, pickers = pickers, updatePickers = updatePickers, reagentFrames = reagentFrames, current = current }

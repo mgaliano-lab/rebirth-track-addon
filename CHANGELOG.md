@@ -13,6 +13,24 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.13.4] - 2026-11-23
+
+### Para todos
+
+- **Pedidos en Forever**: el addon no reconocía tus propios pedidos (en Forever el juego no da el reino). Por eso «Mis pedidos» quedaba en 0, cada clic en «Solicitar a la Guild» creaba un pedido nuevo en vez de tildarse y los botones Trasladar, Vence, Resuelto y Cancelar no hacían nada. Ahora un clic pide, el siguiente cancela, y los botones funcionan.
+- **Pedidos repetidos**: al abrir /rt pedidos (o al tildar un componente) se deja uno solo por persona y receta; los repetidos se cierran como cancelados.
+- **Admins del sitio = GM**: los admins de rebirthknights.fun tienen en el addon los mismos permisos que el GM (revisar pedidos y armar la lista de revisores), aunque en la guild sean oficiales. Hace falta la app actualizada (escribe esa marca en Plans.lua).
+- Si un botón de la ventana de pedidos no puede guardar, lo dice en el chat.
+
+### Técnico
+
+- `Requests.lua`: `full()` ya no deja «Nombre-» con el reino vacío (devuelve el nombre solo y limpia guiones de más); `short()`/`key()` toman lo que va antes del primer guion. Antes `full("Nombre-")` daba «Nombre--» y cada `build` sumaba otro: `key(r.who) ~= key(me())` (Mis pedidos, `mineFor`, el checkbox) y `accept` rechazaba el cambio por «otro pedidor». Las líneas viejas con guiones de más se reconocen igual.
+- `dedupe()`: abiertos del mismo pedidor y receta (los propios, o todos si revisás) → queda el último tocado y los demás se cierran con `c;…;x`. Corre en `setItem` y al abrir la ventana.
+- `isGM` suma los admins de la web: 5º campo `1` en las líneas de `RebirthTrackCouncil.players[juego]` (lo agrega la web 0.9.59; Council.lua ignora el campo). `isReviewer` incluye a `isGM`.
+- Botones de la ventana con `pcall`: si fallan o el cambio no se guarda (`nil`), avisan en el chat; `refreshWin` declarado antes para que el refresco no quede en una global nula.
+- `newId()` suma un contador y evita ids ya usados: dos pedidos en el mismo segundo podían chocar (1 en 256) y el segundo no se guardaba (también hacía fallar las pruebas de vez en cuando).
+- Pruebas: Forever sin reino (líneas viejas con guiones, dedupe, cancelar con el botón, checkbox sin duplicar) y admin de la web como GM.
+
 ## [0.13.3] - 2026-11-23
 
 ### Para todos
