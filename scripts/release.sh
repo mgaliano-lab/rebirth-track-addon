@@ -51,6 +51,16 @@ publish_json() { # $1 = archivo local, $2 = latest | beta
   aws s3 cp --only-show-errors "$1" "s3://$BUCKET/addon/$2.json" \
     --content-type application/json --cache-control "public, max-age=60"
   aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/addon/$2.json" --query Invalidation.Id --output text
+  # Un release también mueve beta.json: la app de quien prueba guarda la URL de beta.json que le dio
+  # el sitio y no la cambia enseguida; si beta quedara atrás, seguiría viendo la versión de prueba.
+  # Si hay una de prueba más nueva que este release, beta.json se queda con esa.
+  local beta
+  beta=$(aws s3 cp --only-show-errors "s3://$BUCKET/addon/beta.json" - 2>/dev/null | sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' || true)
+  if [[ "$2" == latest && ( -z "$beta" || "$(printf '%s\n%s\n' "$beta" "$VERSION" | sort -V | tail -1)" == "$VERSION" ) ]]; then
+    aws s3 cp --only-show-errors "$1" "s3://$BUCKET/addon/beta.json" \
+      --content-type application/json --cache-control "public, max-age=60"
+    aws cloudfront create-invalidation --distribution-id "$DIST_ID" --paths "/addon/beta.json" --query Invalidation.Id --output text
+  fi
 }
 if aws s3api head-object --bucket "$BUCKET" --key "addon/$ADDON_ZIP" >/dev/null 2>&1; then
   # Ya está subida: solo vale pasar a release la que se subió como prueba.
