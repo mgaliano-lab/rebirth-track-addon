@@ -30,6 +30,10 @@
 --     gb1  pestaña;nombre;ítem:cantidad,…;casillero=ítem:cantidad,… · gbm1 balance · gx1 mensaje del día;información  (de la guild)
 --   RebirthTrackDB.events = lo que pasa una vez (la hora es la del hecho):
 --     lt1  botín en instancias (raro o mejor): quién;instancia;dificultad;ítem;cantidad;nombre de la instancia
+--     rl1  tirada de botín en instancias (poco común o mejor), al cerrarse: instancia;dificultad;nombre de la
+--          instancia;ítem;calidad;nombre del ítem;resultado (w ganó alguien, p pasaron todos, ? sin cierre);
+--          ganador;su elección;su número;jefe (si cayó hace poco);quién:elección:número,…
+--          (elección n Necesidad, g Codicia, d Desencantar, t Transfiguración, p Paso, a paso automático)
 --     bf1  buffs al empezar un jefe: encuentro;jefe;hechizo,…  (uno por jugador)
 --     ahb1 compraste en la subasta: ítem;cantidad;precio;vendedor;nombre
 --     ahi1 factura de la subasta (correo): buyer|seller;ítem;otro jugador;precio;compra;depósito;comisión;cantidad
@@ -580,6 +584,165 @@ local function onLoot(msg)
   end
 end
 
+-- ── Tiradas de botín (Necesidad / Codicia / Desencantar / Paso) ───────────────────────
+-- Lo que el juego avisa en el chat de botín mientras el grupo tira por un ítem: quién eligió qué, el
+-- número que sacó cada uno y quién lo ganó. Se arma con los textos del cliente (en su idioma, y con
+-- el orden de los argumentos que use: «%2$s … %1$d»). Al cerrarse (alguien gana o todos pasan) queda
+-- un evento rl1; lo anota cada uno del grupo que tenga el addon y el sitio lo junta en uno.
+-- Para cada texto: la elección (n Necesidad, g Codicia, d Desencantar, t Transfiguración, p Paso,
+-- a paso automático), si es el propio («Has seleccionado…») y qué es cada argumento, en el orden
+-- en que el juego se los pasa (w quién, i ítem, r número).
+local ROLL_TEXTS = {
+  { "LOOT_ROLL_NEED", "n", false, "wi" }, { "LOOT_ROLL_GREED", "g", false, "wi" },
+  { "LOOT_ROLL_DISENCHANT", "d", false, "wi" }, { "LOOT_ROLL_TRANSMOG", "t", false, "wi" },
+  { "LOOT_ROLL_PASSED", "p", false, "wi" }, { "LOOT_ROLL_PASSED_AUTO", "a", false, "wi" },
+  { "LOOT_ROLL_PASSED_AUTO_FEMALE", "a", false, "wi" },
+  { "LOOT_ROLL_NEED_SELF", "n", true, "i" }, { "LOOT_ROLL_GREED_SELF", "g", true, "i" },
+  { "LOOT_ROLL_DISENCHANT_SELF", "d", true, "i" }, { "LOOT_ROLL_TRANSMOG_SELF", "t", true, "i" },
+  { "LOOT_ROLL_PASSED_SELF", "p", true, "i" }, { "LOOT_ROLL_PASSED_SELF_AUTO", "a", true, "i" },
+  { "LOOT_ROLL_ROLLED_NEED", "n", false, "riw", "rolled" }, { "LOOT_ROLL_ROLLED_NEED_ROLE_BONUS", "n", false, "riw", "rolled" },
+  { "LOOT_ROLL_ROLLED_GREED", "g", false, "riw", "rolled" }, { "LOOT_ROLL_ROLLED_DE", "d", false, "riw", "rolled" },
+  { "LOOT_ROLL_ROLLED_TRANSMOG", "t", false, "riw", "rolled" },
+  { "LOOT_ROLL_WON_NO_SPAM_NEED", "n", false, "wri", "won" }, { "LOOT_ROLL_WON_NO_SPAM_GREED", "g", false, "wri", "won" },
+  { "LOOT_ROLL_WON_NO_SPAM_DE", "d", false, "wri", "won" }, { "LOOT_ROLL_WON_NO_SPAM_TRANSMOG", "t", false, "wri", "won" },
+  { "LOOT_ROLL_YOU_WON_NO_SPAM_NEED", "n", true, "ri", "won" }, { "LOOT_ROLL_YOU_WON_NO_SPAM_GREED", "g", true, "ri", "won" },
+  { "LOOT_ROLL_YOU_WON_NO_SPAM_DE", "d", true, "ri", "won" }, { "LOOT_ROLL_YOU_WON_NO_SPAM_TRANSMOG", "t", true, "ri", "won" },
+  { "LOOT_ROLL_WON", nil, false, "wi", "won" }, { "LOOT_ROLL_YOU_WON", nil, true, "i", "won" },
+  { "LOOT_ROLL_ALL_PASSED", nil, false, "i", "passed" },
+}
+
+-- Patrón de un texto del juego y, por cada captura (en el orden en que aparecen), qué argumento es.
+local function fmtPattern(fmt)
+  local order, n, lits = {}, 0, 0
+  local p = fmt:gsub("%%(%d?)%$?([sd])", function(pos, kind)
+    n = n + 1
+    order[#order + 1] = tonumber(pos) or n
+    return kind == "s" and "\1" or "\2"
+  end)
+  lits = #(p:gsub("[\1\2]", ""))
+  p = p:gsub("[%(%)%.%+%-%*%?%[%]%^%$%%]", "%%%0")
+  p = p:gsub("\1", "(.+)"):gsub("\2", "(%%d+)")
+  return "^" .. p .. "$", order, lits
+end
+
+local rollPatterns
+local function getRollPatterns()
+  if rollPatterns and #rollPatterns > 0 then return rollPatterns end
+  rollPatterns = {}
+  for _, x in ipairs(ROLL_TEXTS) do
+    local fmt = _G[x[1]]
+    if type(fmt) == "string" and fmt ~= "" then
+      local pat, order, lits = fmtPattern(fmt)
+      rollPatterns[#rollPatterns + 1] = { pat = pat, order = order, lits = lits, choice = x[2], self = x[3], roles = x[4], what = x[5] or "chose" }
+    end
+  end
+  -- El más específico primero: «Has ganado: %s» antes que «%s ha ganado: %s».
+  table.sort(rollPatterns, function(a, b) return a.lits > b.lits end)
+  return rollPatterns
+end
+
+local MAX_ROLL_AGE = 15 * 60 -- una tirada sin cierre (te fuiste del grupo) se anota igual a los 15 min
+local rolls, lastBoss = {}, nil
+
+local function rollLine(r, result, winner, wc, wn)
+  local list = {}
+  for _, who in ipairs(r.order) do
+    local c = r.choices[who]
+    list[#list + 1] = tok(who) .. ":" .. (c.c or "") .. ":" .. (c.n or "")
+  end
+  local boss = ""
+  if lastBoss and lastBoss.instanceId == r.instanceId and r.at >= lastBoss.at - 60 and r.at - lastBoss.at <= 300 then boss = lastBoss.name end
+  event("rl1", me() or "", J(r.instanceId, r.difficulty, tok(r.instance), r.item, r.quality, tok(r.name), result, tok(winner or ""),
+    wc or "", wn or "", tok(boss), table.concat(list, ",")), r.at)
+end
+
+local function closeRoll(r, result, winner)
+  for i, x in ipairs(rolls) do if x == r then table.remove(rolls, i) break end end
+  local c = winner and r.choices[winner]
+  rollLine(r, result, winner, c and c.c, c and c.n)
+end
+
+local function flushStaleRolls()
+  local now = time()
+  for i = #rolls, 1, -1 do
+    local r = rolls[i]
+    if now - r.at > MAX_ROLL_AGE then closeRoll(r, "?") end
+  end
+end
+
+local function openRoll(link)
+  local id = link:match("item:(%d+)")
+  if not id or quality(link) < 2 then return nil end
+  local name, _, difficulty, _, _, _, _, instanceId = GetInstanceInfo()
+  local r = { link = link, item = tonumber(id), quality = quality(link), name = link:match("%[(.-)%]") or "", at = time(),
+    instance = name or "", difficulty = difficulty or 0, instanceId = instanceId or 0, choices = {}, order = {} }
+  rolls[#rolls + 1] = r
+  return r
+end
+
+-- La tirada abierta de ese ítem que cumple «ok» (puede haber dos iguales a la vez: va a la primera).
+local function findRoll(link, ok)
+  for _, r in ipairs(rolls) do if r.link == link and (not ok or ok(r)) then return r end end
+end
+
+local function setChoice(r, who, c, n)
+  local x = r.choices[who]
+  if not x then x = {}; r.choices[who] = x; r.order[#r.order + 1] = who end
+  if c then x.c = c end
+  if n then x.n = n end
+end
+
+local function onRollMsg(msg)
+  if type(msg) ~= "string" or not inInstance() then return end
+  for _, p in ipairs(getRollPatterns()) do
+    local caps = { msg:match(p.pat) }
+    if caps[1] then
+      local args = {}
+      for k, pos in ipairs(p.order) do args[pos] = caps[k] end
+      local who, link, n
+      for k = 1, #p.roles do
+        local role, v = p.roles:sub(k, k), args[k]
+        if role == "w" then who = v elseif role == "i" then link = v elseif role == "r" then n = tonumber(v) end
+      end
+      if p.self then who = UnitName("player") end
+      if not link or not link:match("item:%d+") then return end
+      flushStaleRolls()
+      if p.what == "chose" then
+        local r = findRoll(link, function(x) return not x.choices[who] end) or openRoll(link)
+        if r then setChoice(r, who, p.choice) end
+      elseif p.what == "rolled" then
+        local r = findRoll(link, function(x) return x.choices[who] and not x.choices[who].n end)
+          or findRoll(link, function(x) return not x.choices[who] end) or openRoll(link)
+        if r then setChoice(r, who, p.choice, n) end
+      elseif p.what == "won" then
+        local r = findRoll(link, function(x) local c = x.choices[who]; return c and (not n or not c.n or c.n == n) end)
+          or findRoll(link) or openRoll(link)
+        if r then
+          setChoice(r, who, p.choice, n)
+          closeRoll(r, "w", who)
+        end
+      else
+        local r = findRoll(link) or openRoll(link)
+        if r then closeRoll(r, "p") end
+      end
+      return
+    end
+  end
+end
+
+-- Al empezar una tirada (la ventana de Necesidad/Codicia): queda abierta desde ahora.
+local function onStartRoll(rollID)
+  if not inInstance() or not GetLootRollItemLink then return end
+  local link = GetLootRollItemLink(rollID)
+  if type(link) == "string" then flushStaleRolls(); openRoll(link) end
+end
+
+local function onEncounterEnd(encounterId, encounterName, _, _, success)
+  if success ~= 1 and success ~= true then return end
+  local _, _, _, _, _, _, _, instanceId = GetInstanceInfo()
+  lastBoss = { name = encounterName or "", id = encounterId, instanceId = instanceId or 0, at = time() }
+end
+
 local function auraIds(unit)
   local ids = {}
   for i = 1, 40 do
@@ -895,8 +1058,10 @@ local ON = {
   AUCTION_OWNED_LIST_UPDATE = function() soon("owned", collectOwnedAuctions, 1) end,
   OWNED_AUCTIONS_UPDATED = function() soon("owned", collectOwnedAuctions, 1) end,
   MAIL_INBOX_UPDATE = function() soon("mail", collectInvoices, 1) end,
-  CHAT_MSG_LOOT = function(msg) pcall(onLoot, msg) end,
+  CHAT_MSG_LOOT = function(msg) pcall(onLoot, msg); pcall(onRollMsg, msg) end,
+  START_LOOT_ROLL = function(rollID) pcall(onStartRoll, rollID) end,
   ENCOUNTER_START = function(id, name) onEncounterStart(id, name) end,
+  ENCOUNTER_END = function(...) pcall(onEncounterEnd, ...) end,
   INSPECT_READY = function(guid) pcall(onInspectReady, guid) end,
   GUILDBANKFRAME_OPENED = function()
     pcall(queryGuildBank); pcall(queryMoneyLog)
@@ -938,4 +1103,5 @@ end
 ns._collect = { put = put, collectPosition = collectPosition, resetPosition = function() last.at = -math.huge end, putPeer = putPeer, share = share, pattern = pattern,
   collectTalentTree = collectTalentTree, collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
+  onRollMsg = onRollMsg, onStartRoll = onStartRoll, onEncounterEnd = onEncounterEnd, flushStaleRolls = flushStaleRolls, fmtPattern = fmtPattern, openRolls = function() return rolls end,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }
