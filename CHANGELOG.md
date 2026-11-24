@@ -13,6 +13,19 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.14.0] - 2026-11-24
+
+### Para todos
+
+- **Tiradas de botín en mazmorras**: cuando sale un ítem y el grupo tira dados, el addon anota quién eligió Necesidad, Codicia, Desencantar o Paso, qué número sacó cada uno y quién lo ganó (también lo verde). Al subirlo con la app se ve en el sitio, por corrida de mazmorra y en la ficha de cada personaje.
+
+### Técnico
+
+- `Collect.lua`: nuevo evento `rl1` (instancia;dificultad;nombre;ítem;calidad;nombre del ítem;resultado w/p/?;ganador;su elección;su número;jefe;`quién:elección:número,…`), que se anota al cerrarse cada tirada. Se arma leyendo `CHAT_MSG_LOOT` con los textos globales del cliente (`LOOT_ROLL_NEED`, `LOOT_ROLL_ROLLED_*`, `LOOT_ROLL_WON*`, `LOOT_ROLL_ALL_PASSED`, `…_SELF`, `…_NO_SPAM_*`, etc.) en el idioma y el orden de argumentos del cliente (`fmtPattern` respeta `%2$s`); los más específicos se prueban primero. `START_LOOT_ROLL` abre la tirada (`GetLootRollItemLink`) y `ENCOUNTER_END` con éxito deja el jefe, que se asocia si la tirada empezó hasta 5 min después.
+- Dos ítems iguales a la vez: cada elección y cada número van a la primera tirada abierta de ese ítem en la que esa persona no figura todavía. Una tirada sin cierre (te fuiste del grupo) se anota a los 15 min con resultado `?`. Solo dentro de mazmorras y bandas, calidad ≥ 2.
+- Cada miembro del grupo con el addon anota la misma tirada; el sitio las junta en una.
+- Prueba en `tests/run.lua` con los textos en español (uno con argumentos reordenados), todos pasan, ítems repetidos y tirada sin cierre.
+
 ## [0.13.5] - 2026-11-23
 
 ### Para todos

@@ -296,6 +296,72 @@ assert(has(RebirthTrackDB.events, "^bf1;Player%-6065%-044C2423;%d+;663;Lucifron;
 function IsInInstance() return false end
 print("banda OK")
 
+-- Tiradas de botín en mazmorras: quién eligió qué, qué sacó y quién ganó (textos del cliente en español,
+-- uno con los argumentos en otro orden).
+LOOT_ROLL_NEED = "%s ha seleccionado Necesidad para: %s"
+LOOT_ROLL_GREED = "%s ha seleccionado Codicia para: %s"
+LOOT_ROLL_DISENCHANT = "%s ha seleccionado Desencantar para: %s"
+LOOT_ROLL_PASSED = "%s ha pasado de: %s"
+LOOT_ROLL_PASSED_AUTO = "%s ha pasado automáticamente de: %s porque no puede despojar ese objeto."
+LOOT_ROLL_NEED_SELF = "Has seleccionado Necesidad para: %s"
+LOOT_ROLL_GREED_SELF = "Has seleccionado Codicia para: %s"
+LOOT_ROLL_PASSED_SELF = "Has pasado de: %s"
+LOOT_ROLL_ROLLED_NEED = "Tirada de Necesidad - %d por %s de %s"
+LOOT_ROLL_ROLLED_GREED = "Tirada de Codicia - %3$s saca %1$d por %2$s"
+LOOT_ROLL_WON = "%s gana: %s"
+LOOT_ROLL_YOU_WON = "Has ganado: %s"
+LOOT_ROLL_ALL_PASSED = "Todos han pasado de: %s"
+function IsInInstance() return true, "party" end
+function GetInstanceInfo() return "Minas de la Muerte", "party", 1, "Normal", 5, 0, false, 36 end
+local ring = "|cff1eff00|Hitem:2039:0:0:0:0:0:1017|h[Anillo de la Bestia del mono]|h|r"
+local cloak = "|cff0070dd|Hitem:5193:0:0:0|h[Capa del mar]|h|r"
+local linen = "|cffffffff|Hitem:2589:0:0:0|h[Lino]|h|r"
+assert(select(2, C.fmtPattern("%1$s gana: %3$s (Necesidad - %2$d)"))[3] == 2)
+fire("ENCOUNTER_END", 1144, "Edwin VanCleef", 1, 5, 1)
+fire("CHAT_MSG_LOOT", "Has seleccionado Codicia para: " .. ring)
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Necesidad para: " .. ring)
+fire("CHAT_MSG_LOOT", "Tankz ha pasado de: " .. ring)
+fire("CHAT_MSG_LOOT", "Tirada de Codicia - Roguebash saca 40 por " .. ring)
+fire("CHAT_MSG_LOOT", "Tirada de Necesidad - 87 por " .. ring .. " de Healz")
+fire("CHAT_MSG_LOOT", "Healz gana: " .. ring)
+fire("CHAT_MSG_LOOT", "Healz recibe botín: " .. ring .. ".")
+-- Todos pasan; y lo blanco no entra.
+fire("CHAT_MSG_LOOT", "Has pasado de: " .. cloak)
+fire("CHAT_MSG_LOOT", "Healz ha pasado automáticamente de: " .. cloak .. " porque no puede despojar ese objeto.")
+fire("CHAT_MSG_LOOT", "Todos han pasado de: " .. cloak)
+fire("CHAT_MSG_LOOT", "Has seleccionado Necesidad para: " .. linen)
+-- Dos iguales a la vez: cada número va a su tirada y el ganador cierra la suya.
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Codicia para: " .. ring)
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Codicia para: " .. ring)
+fire("CHAT_MSG_LOOT", "Tirada de Codicia - Healz saca 12 por " .. ring)
+fire("CHAT_MSG_LOOT", "Tirada de Codicia - Healz saca 99 por " .. ring)
+fire("CHAT_MSG_LOOT", "Has ganado: " .. ring)
+local rl = events("^rl1;")
+assert(#rl == 3, #rl)
+assert(rl[1]:match("^rl1;Player%-6065%-044C2423;%d+;36;1;Minas de la Muerte;2039;2;Anillo de la Bestia del mono;w;Healz;n;87;Edwin VanCleef;Roguebash:g:40,Healz:n:87,Tankz:p:$"), rl[1])
+assert(rl[2]:match("^rl1;[^;]*;%d+;36;1;Minas de la Muerte;5193;3;Capa del mar;p;;;;Edwin VanCleef;Roguebash:p:,Healz:a:$"), rl[2])
+-- «Has ganado» sin haber elegido: cierra la primera que encuentra; el otro, la que queda.
+assert(rl[3]:match(";w;Roguebash;;;Edwin VanCleef;Healz:g:12,Roguebash::$"), rl[3])
+assert(#C.openRolls() == 1)
+fire("CHAT_MSG_LOOT", "Healz gana: " .. ring)
+rl = events("^rl1;")
+assert(#rl == 4 and rl[4]:match(";w;Healz;g;99;"), rl[4])
+assert(#C.openRolls() == 0)
+-- Sin cierre (te fuiste del grupo): a los 15 minutos se anota igual, sin ganador.
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Necesidad para: " .. cloak)
+local realTime = time
+time = function() return realTime() + 3600 end
+fire("CHAT_MSG_LOOT", "Has pasado de: " .. ring)
+time = realTime
+rl = events("^rl1;")
+assert(#rl == 5 and rl[5]:match(";5193;3;Capa del mar;%?;;;;Edwin VanCleef;Healz:n:$"), rl[5])
+assert(#C.openRolls() == 1)
+C.openRolls()[1] = nil
+function IsInInstance() return false end
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Necesidad para: " .. ring)
+assert(#C.openRolls() == 0, "fuera de instancias no se anota")
+print("tiradas OK")
+
 -- Guild: banco (pestañas que se pueden ver), mensaje del día e historial sin repetir.
 function GetNumGuildBankTabs() return 2 end
 function GetGuildBankTabInfo(t) return t == 1 and "Mats" or "Oficiales", "", t == 1 end
