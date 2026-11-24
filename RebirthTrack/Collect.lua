@@ -48,12 +48,17 @@
 -- Por el canal (mensajes de hasta 255 caracteres):
 --   "D;id;parte;partes;texto"  una línea, en partes de 200 caracteres
 --   "E;desde"                  al entrar: «mandenme lo que cambió desde esta hora»
+-- Las tiradas (rl1) y el botín de instancias (lt1) también viajan por el canal y se reenvían a quien
+-- entra (ver «Reenvío»): así llegan al sitio aunque quien estuvo en la instancia no tenga la app.
 local ADDON, ns = ...
 ns = ns or {}
 
 local SHARED = { p1 = true, sk1 = true, r1 = true, cd1 = true, eq1 = true, t1 = true, pos1 = true, tt1 = true, rd1 = true }
 local KEYED = { r1 = true, cd1 = true, gb1 = true, tt1 = true, rd1 = true } -- una por profesión, rama o pestaña
 local MAX_EVENTS, MAX_PEERS, MAX_REPLY, CHUNK = 1500, 400, 40, 200
+-- Hechos que viajan de addon en addon (ver «Reenvío» más abajo): las tiradas y el botín de instancias.
+local RELAY = { rl1 = true, lt1 = true }
+local RELAY_FOR, MAX_RELAY, MAX_RELAY_REPLY = 14 * 86400, 400, 20
 local INSPECT_EVERY = 6 * 3600
 
 local function tok(s) return (tostring(s == nil and "" or s):gsub("[|;,=/~:@\n\r\"]", " ")) end
@@ -96,10 +101,69 @@ local function put(owner, t, payload, doShare, force)
   return true
 end
 
+-- ── Reenvío ────────────────────────────────────────────────────────────────────────────
+-- Las tiradas (rl1) y el botín de instancias (lt1) no tienen que esperar a que quien estuvo ahí tenga
+-- la app: salen por el canal de la guild y cada addon que las recibe las guarda (con «@remitente;»
+-- adelante, como lo demás recibido) y las vuelve a mandar cuando entra alguien que no las vio. Así
+-- llegan al sitio con la app de cualquiera que se cruce con ellas, aunque no haya ido a la instancia.
+-- RebirthTrackDB.relay[línea] = cuándo la conoció este addon (la anotó o la recibió): al que entra
+-- se le manda lo conocido después de su última salida. Se olvidan a los 14 días.
+local function relayIndex()
+  local d = store()
+  if not d.relay then
+    d.relay = {}
+    -- Lo anotado antes de esta versión (0.14.0) también viaja.
+    for _, l in ipairs(d.events) do
+      local t, _, at = split4(l)
+      if RELAY[t] then d.relay[body(l)] = tonumber(at) end
+    end
+  end
+  return d.relay
+end
+
+local function pruneRelay()
+  local idx, now, n, oldest, oldestAt = relayIndex(), time(), 0, nil, math.huge
+  for line, known in pairs(idx) do
+    local at = tonumber((select(3, split4(line)))) or 0
+    if at < now - RELAY_FOR then idx[line] = nil
+    else
+      n = n + 1
+      if known < oldestAt then oldest, oldestAt = line, known end
+    end
+  end
+  if n > MAX_RELAY and oldest then idx[oldest] = nil; pruneRelay() end
+end
+
 local function event(t, owner, payload, at)
   local ev = store().events
-  ev[#ev + 1] = t .. ";" .. (owner or "") .. ";" .. math.floor(at or time()) .. ";" .. payload
+  local line = t .. ";" .. (owner or "") .. ";" .. math.floor(at or time()) .. ";" .. payload
+  ev[#ev + 1] = line
   while #ev > MAX_EVENTS do table.remove(ev, 1) end
+  if RELAY[t] then
+    relayIndex()[line] = time()
+    pruneRelay()
+    share(line)
+  end
+end
+
+-- Un hecho que mandó otro: se guarda una vez (lo mismo puede llegar de varios) y se devuelve su
+-- clave para no reenviarlo si otro ya lo mandó.
+local function putRelay(line, sender)
+  line = body(line)
+  local t, owner, at = split4(line)
+  at = tonumber(at)
+  local now = time()
+  if not t or not RELAY[t] or not at or at < now - RELAY_FOR or at > now + 86400 then return nil end
+  if owner ~= "" and not owner:match("^Player%-[%w%-]+$") then return nil end
+  local idx = relayIndex()
+  if not idx[line] then
+    idx[line] = now
+    local ev = store().events
+    ev[#ev + 1] = "@" .. tok(sender) .. ";" .. line
+    while #ev > MAX_EVENTS do table.remove(ev, 1) end
+    pruneRelay()
+  end
+  return "ev/" .. line
 end
 
 -- ── Canal de addons ────────────────────────────────────────────────────────────────────
@@ -129,6 +193,7 @@ end
 -- Una línea que mandó otro miembro: se guarda si es de un tipo que se comparte y más nueva que la que había.
 local function putPeer(line, sender)
   local t, owner, at, payload = split4(line)
+  if t and RELAY[t] then return putRelay(line, sender) end
   at = tonumber(at)
   if not t or not SHARED[t] or not at or not owner:match("^Player%-[%w%-]+$") or owner == me() then return nil end
   local d = store()
@@ -170,6 +235,15 @@ local function onHello(rest)
   if not since then return end
   local asked = GetTime()
   C_Timer.After(2 + math.random() * 6, function()
+    -- Tiradas y botín conocidos después de su última salida (de a pocos, sin repetir lo que ya mandó otro).
+    local relayed = 0
+    for line, known in pairs(relayIndex()) do
+      if relayed >= MAX_RELAY_REPLY then break end
+      if known > since and not ((heardAt["ev/" .. line] or -1) >= asked) then
+        share(line)
+        relayed = relayed + 1
+      end
+    end
     local sent = 0
     for owner, c in pairs(store().data) do
       for key, line in pairs(c) do
@@ -1021,6 +1095,7 @@ local ON = {
     for _, c in pairs(store().data) do
       for key in pairs(c) do if key == "mo1" or key:match("^inv1") then c[key] = nil end end
     end
+    pcall(pruneRelay)
     C_Timer.After(15, function()
       for _, fn in ipairs({ collectPlayer, collectSkills, collectGear, collectTalents, collectTalentTree, collectReputation, collectQuests }) do pcall(fn) end
       if ns.send then ns.send("E;" .. math.max(0, (store().syncAt or 0) - 86400)) end
@@ -1103,5 +1178,5 @@ end
 ns._collect = { put = put, collectPosition = collectPosition, resetPosition = function() last.at = -math.huge end, putPeer = putPeer, share = share, pattern = pattern,
   collectTalentTree = collectTalentTree, collectOwnedAuctions = collectOwnedAuctions, collectInvoices = collectInvoices, readTradeSkill = readTradeSkill,
   readCraft = readCraft, collectGuildBank = collectGuildBank, collectGuildEvents = collectGuildEvents, collectGuildMoneyLog = collectGuildMoneyLog, onLoot = onLoot,
-  onRollMsg = onRollMsg, onStartRoll = onStartRoll, onEncounterEnd = onEncounterEnd, flushStaleRolls = flushStaleRolls, fmtPattern = fmtPattern, openRolls = function() return rolls end,
+  onRollMsg = onRollMsg, putRelay = putRelay, relayIndex = relayIndex, pruneRelay = pruneRelay, onStartRoll = onStartRoll, onEncounterEnd = onEncounterEnd, flushStaleRolls = flushStaleRolls, fmtPattern = fmtPattern, openRolls = function() return rolls end,
   onEncounterStart = onEncounterStart, inspectNext = inspectNext, onInspectReady = onInspectReady }
