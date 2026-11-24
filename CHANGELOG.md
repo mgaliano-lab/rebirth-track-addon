@@ -13,6 +13,19 @@ Al taggear `vX.Y.Z` la versión tiene que estar arriba de todo y coincidir con `
 `.toc`. La 0.2.0 es el inicio de este changelog: resume todo lo que hace el addon hasta ahí. Lo
 anterior está en [docs/CHANGELOG-anterior.md](docs/CHANGELOG-anterior.md).
 
+## [0.14.1] - 2026-11-24
+
+### Para todos
+
+- **Tiradas de botín en mazmorras**: cuando sale un ítem y el grupo tira dados, el addon anota quién eligió Necesidad, Codicia, Desencantar o Paso, qué número sacó cada uno y quién lo ganó (también lo verde). Se ve en el sitio, en Botín → «Tiradas en mazmorras» (por corrida) y en la ficha de cada personaje.
+- **Ya no hace falta tener la app**: las tiradas y el botín de las instancias viajan de addon en addon por la guild hasta llegar a alguien que sí tenga la app, y de ahí al sitio. Alcanza con cruzarse conectado con otro de la guild que tenga el addon (dentro de los 14 días).
+
+### Técnico
+
+- `Collect.lua`: `rl1` y `lt1` se comparten por el canal (`D;…`) al anotarse. Lo recibido va a `events` con `@remitente;` una sola vez (índice `RebirthTrackDB.relay[línea] = cuándo se conoció`), y en cada `E;desde` se reenvía lo conocido después de `desde` (hasta 20 por pedido, sin repetir lo que otro mandó durante la espera). Se descarta lo de más de 14 días, lo del futuro y lo que no sea de un jugador; tope de 400 en el índice. Lo anotado con la 0.14.0 entra al índice la primera vez.
+- El sitio ya lee `@remitente;` en cualquier línea y junta la misma tirada aunque llegue por varios caminos (web 0.9.60).
+- Pruebas del reenvío en `tests/run.lua` (sale por el canal, guardado único, descartes, respuesta al `E;`, olvido a los 14 días).
+
 ## [0.14.0] - 2026-11-24
 
 ### Para todos

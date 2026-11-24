@@ -362,6 +362,46 @@ fire("CHAT_MSG_LOOT", "Healz ha seleccionado Necesidad para: " .. ring)
 assert(#C.openRolls() == 0, "fuera de instancias no se anota")
 print("tiradas OK")
 
+-- Reenvío: las tiradas y el botín salen por el canal; lo recibido se guarda una vez con quién lo mandó
+-- y se le reenvía al que entra si lo conocimos después de su última salida.
+function IsInInstance() return true, "party" end
+sentAddon = {}
+fire("CHAT_MSG_LOOT", "Healz ha seleccionado Necesidad para: " .. cloak)
+fire("CHAT_MSG_LOOT", "Healz gana: " .. cloak)
+assert(sentWith("^D;%x+;1;%d;rl1;Player%-6065%-044C2423;%d+;36;1;Minas de la Muerte;5193;"), "la tirada sale por el canal")
+function IsInInstance() return false end
+local before = #RebirthTrackDB.events
+local far = "rl1;Player-6065-0411;1792529000;43;1;Cuevas de los Lamentos;6505;2;Botas;w;Healz;n;55;;Healz:n:55"
+fire("CHAT_MSG_ADDON", "RTK1", "D;7a;1;1;" .. far, "GUILD", "Healz-Nightslayer")
+fire("CHAT_MSG_ADDON", "RTK1", "D;7b;1;1;" .. far, "GUILD", "Otro-Nightslayer") -- repetida: no se guarda otra vez
+assert(#RebirthTrackDB.events == before + 1, #RebirthTrackDB.events - before)
+assert(RebirthTrackDB.events[#RebirthTrackDB.events] == "@Healz;" .. far, RebirthTrackDB.events[#RebirthTrackDB.events])
+assert(C.relayIndex()[far], "queda para reenviar")
+-- Vieja (más de 14 días), del futuro o con dueño raro: no.
+fire("CHAT_MSG_ADDON", "RTK1", "D;7c;1;1;rl1;Player-6065-0411;1790000000;43;1;X;6505;2;B;p;;;;;", "GUILD", "Healz-Nightslayer")
+fire("CHAT_MSG_ADDON", "RTK1", "D;7d;1;1;lt1;guild:Otra;1792529000;Healz;409;9;19019;1;MC", "GUILD", "Healz-Nightslayer")
+assert(#RebirthTrackDB.events == before + 1, "descarta lo viejo y lo que no es de un jugador")
+-- El botín sin GUID (lt1 con dueño vacío) sí viaja.
+fire("CHAT_MSG_ADDON", "RTK1", "D;7e;1;1;lt1;;1792529500;Tankz;409;9;19019;1;Núcleo de Magma", "GUILD", "Tankz-Nightslayer")
+assert(#RebirthTrackDB.events == before + 2)
+-- Entra alguien que salió antes: se le manda lo propio y lo recibido.
+sentAddon = {}
+fire("CHAT_MSG_ADDON", "RTK1", "E;1792500000", "GUILD", "Nuevo-Nightslayer")
+assert(sentWith("^D;%x+;%d;%d;rl1;Player%-6065%-0411;1792529000;43;"), "reenvía la tirada recibida")
+assert(sentWith("^D;%x+;%d;%d;rl1;Player%-6065%-044C2423;"), "y la propia")
+assert(sentWith(";lt1;;1792529500;Tankz;"), "y el botín recibido")
+-- El que salió después de conocerlas no las recibe de nuevo.
+sentAddon = {}
+fire("CHAT_MSG_ADDON", "RTK1", "E;1792540000", "GUILD", "Nuevo-Nightslayer")
+assert(not sentWith(";rl1;"), "ya las tiene")
+-- A los 14 días se olvidan.
+local realTime2 = time
+time = function() return realTime2() + 15 * 86400 end
+C.pruneRelay()
+time = realTime2
+assert(next(C.relayIndex()) == nil, "se olvidan a los 14 días")
+print("reenvío OK")
+
 -- Guild: banco (pestañas que se pueden ver), mensaje del día e historial sin repetir.
 function GetNumGuildBankTabs() return 2 end
 function GetGuildBankTabInfo(t) return t == 1 and "Mats" or "Oficiales", "", t == 1 end
